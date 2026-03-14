@@ -1,0 +1,92 @@
+You are a full-stack AI development agent. I will describe a complete SaaS product. Your job is to generate a production-ready codebase with all necessary files, architecture, database schema, APIs, frontend, deployment scripts, and documentation.
+
+**Product Overview**
+We are building a multi-tenant SaaS web application for hostel and PG owners to manage rent tracking and occupancy planning. The core product is lean, simple, visually clear, and useful for small operators. The primary feature is a dynamic room grid showing occupancy and payment status. The app must support irregular usage patterns and backfilled data entries.
+
+**Users and Roles**
+1. **Owner (Admin)** – full access to their tenant scope.
+2. (Future, NOT now) Staff, Renter logins – do not implement but design the system to support future extensibility.
+
+**High-Level Features**
+- Multi-tenant tenancy model (each owner’s data isolated).
+- Owner signup/login/authentication (JWT).
+- Create multiple hostel sites.
+- Each hostel site has rooms and optionally beds.
+- Visual room grid view with color coding for:
+  * Occupied & paid
+  * Occupied & partial
+  * Occupied & overdue
+  * Vacant
+  * Vacating soon
+- Tenant registration & approval workflow:
+  * Public QR-link form
+  * Owner reviews and approves
+  * Owner assigns room and sets rent and deposit
+- Rent & deposit tracking:
+  * Manual payment entry (cash/online)
+  * Payment ledger
+  * Outstanding balance
+  * Dashboard insights
+- Tenant notices submitted by tenant (via tenant portal)
+- Tenant portal (simple, limited UI):
+  * View ledger
+  * Submit payment proof (screenshot upload)
+  * Submit notice to vacate
+  * Owner must approve entries
+- Clean and responsive UI (desktop + mobile + tablet)
+- API must be well-structured, documented, and secure
+
+**Tech Stack Considerations**
+- Backend: Go with Echo (or a modern Go web framework)
+- Database: PostgreSQL with proper multi-tenant design
+- Auth: JWT with hashed passwords (bcrypt or similar)
+- Frontend: Next.js with React and TailwindCSS (open to alternatives but must be modern and efficient)
+- Storage: S3 compatible for file uploads (tenant photos, ID proofs) (open to alternatives again)
+- Deployment: Render, Fly.io, or Railway (simple SaaS hosting)
+- Use environment configuration for deployment
+
+**Database Schema Requirements**
+Model the following entities:
+- Owner
+- HostelSite
+- Room
+- Bed
+- Tenant/Renter
+- Stay (history)
+- Payment
+Ensure relationships and constraints are defined.
+
+**UI Screens / Components**
+1. Public landing + owner signup/login
+2. Owner dashboard with summary cards
+3. Multi-tenant navigation
+4. Hostel site management
+5. Room grid view with dynamic color coding
+6. Room detail + tenant list
+7. Tenant profile modal/page with ledger
+8. Add/Edit payment UI
+9. Pending registrations list
+10. Tenant portal (login + limited actions)
+
+Include a modern design system with consistent styles and responsive layouts.
+
+**Nonfunctional Requirements**
+- Multi-tenant data isolation
+- Role-based security
+- Clear error handling and validation
+- Accessible UI
+- Scalable folder structure
+- API documentation (OpenAPI/Swagger)
+- Logging and basic monitoring
+- Testing (unit + integration skeletons)
+
+**Deliverables**
+- Full code repository (backend + frontend)
+- README with setup, environment variables, deployment steps
+- Database migration scripts
+- API documentation
+- Basic test suite
+
+Generate all files, structure, imports, routing, types, models, UIs, and config for a deployable SaaS product.
+
+Begin by outlining the architecture directory structure and the database schema, then compute APIs, then generate all code.
