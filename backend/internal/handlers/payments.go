@@ -105,6 +105,65 @@ func (h *PaymentHandler) Create(c echo.Context) error {
 	return c.JSON(http.StatusCreated, payment)
 }
 
+type pendingPayment struct {
+	models.Payment
+	TenantName string `db:"tenant_name" json:"tenant_name"`
+	BedName    string `db:"bed_name" json:"bed_name"`
+	RoomName   string `db:"room_name" json:"room_name"`
+	SiteName   string `db:"site_name" json:"site_name"`
+}
+
+func (h *PaymentHandler) ListPending(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+
+	var payments []pendingPayment
+	err := h.db.Select(&payments,
+		`SELECT p.id, p.stay_id, p.amount, p.payment_type, p.payment_date,
+		        p.proof_url, p.notes, p.is_approved, p.created_at,
+		        t.name AS tenant_name,
+		        b.name AS bed_name, r.name AS room_name, hs.name AS site_name
+		 FROM payments p
+		 JOIN stays s ON s.id = p.stay_id
+		 JOIN tenants t ON t.id = s.tenant_id
+		 JOIN beds b ON b.id = s.bed_id
+		 JOIN rooms r ON r.id = b.room_id
+		 JOIN hostel_sites hs ON hs.id = r.site_id
+		 WHERE t.owner_id = $1 AND p.is_approved = false
+		 ORDER BY p.created_at DESC`,
+		ownerID,
+	)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch pending payments"))
+	}
+	if payments == nil {
+		payments = []pendingPayment{}
+	}
+	return c.JSON(http.StatusOK, payments)
+}
+
+func (h *PaymentHandler) Approve(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	paymentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid payment id"))
+	}
+
+	result, err := h.db.Exec(
+		`UPDATE payments p SET is_approved = true
+		 FROM stays s, tenants t
+		 WHERE p.id = $1 AND p.stay_id = s.id AND s.tenant_id = t.id AND t.owner_id = $2`,
+		paymentID, ownerID,
+	)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errorResponse("failed to approve payment"))
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.JSON(http.StatusNotFound, errorResponse("payment not found"))
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "approved"})
+}
+
 func (h *PaymentHandler) Delete(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 	paymentID, err := strconv.ParseInt(c.Param("id"), 10, 64)

@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
-
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: GridIcon },
-  { label: "Sites", href: "/sites", icon: BuildingIcon },
-  { label: "Tenants", href: "/tenants", icon: UsersIcon },
-];
+import { tenantsApi } from "@/lib/api";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, owner, logout } = useAuth();
+  const { isAuthenticated, isLoading, owner, logout, token } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;
+    tenantsApi.list(token, true).then((t) => setPendingCount(t.length)).catch(() => {});
+  }, [token, pathname]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -39,7 +40,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 space-y-0.5 px-3 py-3">
-          {navItems.map(({ label, href, icon: Icon }) => {
+          {[
+            { label: "Dashboard", href: "/dashboard", icon: GridIcon },
+            { label: "Sites", href: "/sites", icon: BuildingIcon },
+            { label: "Tenants", href: "/tenants", icon: UsersIcon },
+          ].map(({ label, href, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
@@ -56,6 +61,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             );
           })}
+          {/* Pending registrations */}
+          <Link
+            href="/pending"
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              pathname === "/pending"
+                ? "bg-indigo-50 text-indigo-700"
+                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            <ClockIcon className="h-4 w-4 shrink-0" />
+            Pending
+            {pendingCount > 0 && (
+              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-700">
+                {pendingCount}
+              </span>
+            )}
+          </Link>
         </nav>
 
         <div className="border-t border-gray-100 p-4">
@@ -98,6 +120,14 @@ function UsersIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }

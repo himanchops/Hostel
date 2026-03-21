@@ -10,7 +10,10 @@ import (
 
 type contextKey string
 
-const OwnerIDKey contextKey = "owner_id"
+const (
+	OwnerIDKey  contextKey = "owner_id"
+	TenantIDKey contextKey = "tenant_id"
+)
 
 func AuthMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -45,4 +48,29 @@ func AuthMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 // GetOwnerID extracts the owner ID from the context
 func GetOwnerID(c echo.Context) int64 {
 	return c.Get(string(OwnerIDKey)).(int64)
+}
+
+func TenantAuthMiddleware(authService *auth.Service) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader == "" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing authorization header"})
+			}
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid authorization header format"})
+			}
+			claims, err := authService.ValidateTenantToken(parts[1])
+			if err != nil {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			}
+			c.Set(string(TenantIDKey), claims.TenantID)
+			return next(c)
+		}
+	}
+}
+
+func GetTenantID(c echo.Context) int64 {
+	return c.Get(string(TenantIDKey)).(int64)
 }

@@ -172,14 +172,89 @@ export interface Tenant {
 }
 
 export const tenantsApi = {
-  list: (token: string) => request<Tenant[]>("/api/tenants", {}, token),
+  list: (token: string, pending?: boolean) =>
+    request<Tenant[]>(`/api/tenants${pending ? "?pending=true" : ""}`, {}, token),
   get: (token: string, id: number) => request<Tenant>(`/api/tenants/${id}`, {}, token),
   create: (token: string, data: { name: string; phone: string; email?: string }) =>
     request<Tenant>("/api/tenants", { method: "POST", body: JSON.stringify(data) }, token),
   update: (token: string, id: number, data: { name: string; phone: string; email?: string }) =>
     request<Tenant>(`/api/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),
+  approve: (token: string, id: number, data: {
+    bed_id?: number;
+    rent_amount?: number;
+    deposit_amount?: number;
+    rent_cycle?: string;
+    rent_due_day?: number;
+    start_date?: string;
+  }) => request<Tenant>(`/api/tenants/${id}/approve`, { method: "POST", body: JSON.stringify(data) }, token),
+  reject: (token: string, id: number) =>
+    request<void>(`/api/tenants/${id}/reject`, { method: "DELETE" }, token),
   stays: (token: string, id: number) =>
     request<Stay[]>(`/api/tenants/${id}/stays`, {}, token),
+};
+
+// ─── Public Registration ──────────────────────────────────────────────────────
+
+export const registrationApi = {
+  register: (ownerId: number, data: { name: string; phone: string; email?: string; password: string }) =>
+    request<Tenant>(`/public/register/${ownerId}`, { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ─── Tenant Auth ──────────────────────────────────────────────────────────────
+
+export interface TenantAuthResponse {
+  token: string;
+  tenant: Tenant;
+}
+
+export const tenantAuthApi = {
+  login: (data: { phone: string; password: string }) =>
+    request<TenantAuthResponse>("/tenant-auth/login", { method: "POST", body: JSON.stringify(data) }),
+  me: (token: string) => request<Tenant>("/tenant/me", {}, token),
+};
+
+// ─── Tenant Portal ────────────────────────────────────────────────────────────
+
+export interface TenantStay {
+  id: number;
+  bed_id: number;
+  bed_name: string;
+  room_name: string;
+  site_name: string;
+  rent_amount: number;
+  deposit_amount: number;
+  rent_cycle: "daily" | "weekly" | "monthly";
+  rent_due_day: number;
+  start_date: string;
+  end_date?: string;
+  notice_date?: string;
+  created_at: string;
+  payments: Payment[];
+}
+
+export const tenantPortalApi = {
+  stays: (token: string) => request<TenantStay[]>("/tenant/stays", {}, token),
+  submitPayment: (token: string, stayId: number, data: { amount: number; notes?: string }) =>
+    request<Payment>(`/tenant/stays/${stayId}/payments`, { method: "POST", body: JSON.stringify(data) }, token),
+  submitNotice: (token: string, stayId: number) =>
+    request<Stay>(`/tenant/stays/${stayId}/notice`, { method: "PUT", body: JSON.stringify({}) }, token),
+};
+
+// ─── Pending Payments (owner) ─────────────────────────────────────────────────
+
+export interface PendingPayment extends Payment {
+  tenant_name: string;
+  bed_name: string;
+  room_name: string;
+  site_name: string;
+}
+
+export const pendingPaymentsApi = {
+  list: (token: string) => request<PendingPayment[]>("/api/payments/pending", {}, token),
+  approve: (token: string, id: number) =>
+    request<void>(`/api/payments/${id}/approve`, { method: "POST", body: JSON.stringify({}) }, token),
+  reject: (token: string, id: number) =>
+    request<void>(`/api/payments/${id}`, { method: "DELETE" }, token),
 };
 
 // ─── Stays ───────────────────────────────────────────────────────────────────

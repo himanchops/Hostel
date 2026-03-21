@@ -55,16 +55,17 @@ const (
 
 // Tenant represents a person renting a bed
 type Tenant struct {
-	ID          int64     `db:"id" json:"id"`
-	OwnerID     int64     `db:"owner_id" json:"owner_id"` // For multi-tenant isolation
-	Name        string    `db:"name" json:"name"`
-	Phone       string    `db:"phone" json:"phone"`
-	Email       string    `db:"email" json:"email,omitempty"`
-	IDProofURL  string    `db:"id_proof_url" json:"id_proof_url,omitempty"`
-	PhotoURL    string    `db:"photo_url" json:"photo_url,omitempty"`
-	IsApproved  bool      `db:"is_approved" json:"is_approved"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+	ID           int64     `db:"id" json:"id"`
+	OwnerID      int64     `db:"owner_id" json:"owner_id"` // For multi-tenant isolation
+	Name         string    `db:"name" json:"name"`
+	Phone        string    `db:"phone" json:"phone"`
+	Email        string    `db:"email" json:"email,omitempty"`
+	IDProofURL   string    `db:"id_proof_url" json:"id_proof_url,omitempty"`
+	PhotoURL     string    `db:"photo_url" json:"photo_url,omitempty"`
+	PasswordHash string    `db:"password_hash" json:"-"`
+	IsApproved   bool      `db:"is_approved" json:"is_approved"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Stay represents a tenant's occupancy of a bed

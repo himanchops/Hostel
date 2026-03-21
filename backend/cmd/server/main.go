@@ -41,7 +41,9 @@ func main() {
 	authHandler := handlers.NewAuthHandler(db, authService)
 	siteHandler := handlers.NewSiteHandler(db)
 	roomHandler := handlers.NewRoomHandler(db)
-	tenantHandler := handlers.NewTenantHandler(db)
+	tenantHandler := handlers.NewTenantHandler(db, authService)
+	tenantAuthHandler := handlers.NewTenantAuthHandler(db, authService)
+	tenantPortalHandler := handlers.NewTenantPortalHandler(db)
 	stayHandler := handlers.NewStayHandler(db)
 	paymentHandler := handlers.NewPaymentHandler(db)
 	gridHandler := handlers.NewGridHandler(db)
@@ -65,6 +67,18 @@ func main() {
 	// Public auth routes
 	e.POST("/auth/signup", authHandler.Signup)
 	e.POST("/auth/login", authHandler.Login)
+
+	// Public tenant self-registration + auth
+	e.POST("/public/register/:ownerId", tenantHandler.PublicRegister)
+	e.POST("/tenant-auth/login", tenantAuthHandler.Login)
+
+	// Tenant portal (tenant JWT required)
+	portal := e.Group("/tenant")
+	portal.Use(appMiddleware.TenantAuthMiddleware(authService))
+	portal.GET("/me", tenantAuthHandler.Me)
+	portal.GET("/stays", tenantPortalHandler.GetStays)
+	portal.POST("/stays/:stayId/payments", tenantPortalHandler.SubmitPayment)
+	portal.PUT("/stays/:stayId/notice", tenantPortalHandler.SubmitNotice)
 
 	// Protected routes
 	api := e.Group("/api")
@@ -100,6 +114,8 @@ func main() {
 	api.POST("/tenants", tenantHandler.Create)
 	api.GET("/tenants/:id", tenantHandler.Get)
 	api.PUT("/tenants/:id", tenantHandler.Update)
+	api.POST("/tenants/:id/approve", tenantHandler.Approve)
+	api.DELETE("/tenants/:id/reject", tenantHandler.Reject)
 	api.GET("/tenants/:id/stays", stayHandler.ListByTenant)
 
 	// Stays
@@ -111,6 +127,8 @@ func main() {
 	api.GET("/stays/:stayId/payments", paymentHandler.List)
 	api.POST("/stays/:stayId/payments", paymentHandler.Create)
 	api.DELETE("/payments/:id", paymentHandler.Delete)
+	api.GET("/payments/pending", paymentHandler.ListPending)
+	api.POST("/payments/:id/approve", paymentHandler.Approve)
 
 	port := getEnv("PORT", "8080")
 	log.Printf("Starting server on :%s", port)
