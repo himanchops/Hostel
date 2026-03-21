@@ -29,3 +29,5 @@ Thumbs.db
 coverage/
 *.cover
 *.out
+
+.claude
