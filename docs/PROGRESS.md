@@ -71,39 +71,79 @@ _Committed: `a047e85`_
 
 ---
 
-## Phase 3 — Tenant Self-Registration (QR Flow) 🔜
+## Phase 3 — Tenant Self-Registration + Tenant Portal ✅
 
-Planned:
-- Public endpoint `GET /register/:ownerSlug` — no auth required
-- Tenant submits: name, phone, email, ID proof photo upload
-- Owner sees pending registrations list in dashboard
-- Owner approves → assigns room/bed/rent → creates stay
-- Owner generates QR code linking to their registration URL
-- `owner_slug` field on `owners` table (new migration needed)
+_Committed: `8481bb4`_
 
----
+**Backend**
+- `POST /public/register/:ownerId` — public self-registration with name/phone/email/password
+- `POST /tenant-auth/login` — tenant login (phone + password)
+- Tenant JWT middleware (separate from owner JWT)
+- `GET /tenant/me`, `GET /tenant/stays`, `POST /tenant/stays/:id/payments`, `PUT /tenant/stays/:id/notice`
+- `POST /tenants/:id/approve` — assign bed/rent/cycle/start, auto-creates stay
+- `DELETE /tenants/:id/reject` — reject pending registration
+- `GET /payments/pending`, `POST /payments/:id/approve` — owner review of tenant-submitted payments
+- Migration `002_tenant_auth` — adds `password_hash` to tenants table
 
-## Phase 4 — Dashboard Insights 🔜
-
-Planned:
-- Occupancy rate per site (occupied beds / total beds)
-- Total rent collected this month vs expected
-- Overdue count + total overdue amount
-- Upcoming vacations (notice given, ending within 30 days)
-- Recent payment activity feed
-- `GET /api/dashboard` summary endpoint
+**Frontend**
+- `/register/[ownerId]` — public registration form (no auth required)
+- `/my/login`, `/my` — tenant portal: view ledger, submit payments, give notice
+- `/pending` — owner review page: Registrations tab + Payment Proofs tab
+- Tenant auth context (separate from owner auth)
 
 ---
 
-## Phase 5 — Tenant Portal 🔜
+## Phase 4 — Dashboard Insights ✅
+
+**Backend**
+- `GET /api/dashboard` — single endpoint returning: per-site occupancy, revenue summary (expected/collected this month, overdue total), alert counts (pending registrations + payments), vacating-soon list, recent payments feed
+- `cyclesElapsed` extracted to `handlers/helpers.go` (shared between grid and dashboard)
+
+**Frontend**
+- Dashboard page fully rewritten: alert banners, 4 stat cards, vacating-soon + recent-payments panels, per-site occupancy bars
+
+---
+
+## Phase 5 — File Uploads (ID Proofs + Payment Screenshots) ✅
+
+**Backend**
+- `StorageService` interface at `internal/storage/` — swappable local vs S3
+- `LocalStorage` impl: saves files to `./uploads/`, served at `/uploads/*`
+- `POST /public/upload` — no auth, used by tenant registration (images + PDF, max 10 MB)
+- `POST /tenant/upload` — tenant JWT, used by payment proof uploads
+- `POST /public/register/:ownerId` now accepts `id_proof_url`
+- `POST /tenant/stays/:stayId/payments` now accepts `proof_url`
+- `BASE_URL` env var (default `http://localhost:8080`) controls file URL prefix
+
+**Frontend**
+- Registration form: optional ID proof file picker — uploads first, then includes URL in registration call
+- Tenant portal payment form: optional screenshot file picker — same two-step pattern
+- `/pending` page: "View ID proof →" link on registrations, "View screenshot →" link on payment submissions
+
+**For production**: swap `LocalStorage` for S3/R2 implementation — set `BASE_URL` + S3 env vars
+
+---
+
+## Phase 6 — E2E Testing + AI Design Review 🔜
 
 Planned:
-- Separate tenant login (email/phone + OTP or password)
-- Tenant views their own payment ledger
-- Tenant submits payment proof (screenshot upload to S3)
-- Tenant submits notice to vacate
-- All tenant-submitted entries flagged `is_approved = false`, owner reviews
-- Minimal, mobile-first UI separate from owner dashboard
+- Playwright e2e tests for all key owner + tenant flows
+- Custom failure reporter writing `test-results/failures.json`
+- `make test-e2e`, `make test-e2e-ui`, `make fix-tests` targets
+- `scripts/review-design.ts` — screenshots every page, Claude vision API writes `test-results/design-review.md`
+- `make review-design` (requires `ANTHROPIC_API_KEY`)
+
+---
+
+## Phase 7 — Deployment 🔜
+
+Planned:
+- Backend: Render Web Service (or Fly.io)
+- Database: Render Managed Postgres (or Supabase)
+- File storage: Cloudflare R2 (S3-compatible, free egress)
+- Frontend: Vercel (Next.js native) or Render Static Site
+- Environment variable checklist for production
+- S3Storage implementation for `internal/storage/`
 
 ---
 

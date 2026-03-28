@@ -96,10 +96,11 @@ func (h *TenantHandler) Create(c echo.Context) error {
 }
 
 type publicRegisterRequest struct {
-	Name     string `json:"name"`
-	Phone    string `json:"phone"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Name        string `json:"name"`
+	Phone       string `json:"phone"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	IDProofURL  string `json:"id_proof_url"`
 }
 
 func (h *TenantHandler) PublicRegister(c echo.Context) error {
@@ -132,12 +133,20 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to process password"))
 	}
 
+	var idProofURL *string
+	if req.IDProofURL != "" {
+		if !ValidateUploadedURL(req.IDProofURL) {
+			return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_url"))
+		}
+		idProofURL = &req.IDProofURL
+	}
+
 	var tenant models.Tenant
 	err = h.db.QueryRowx(
-		`INSERT INTO tenants (owner_id, name, phone, email, password_hash, is_approved, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, false, $6, $6)
+		`INSERT INTO tenants (owner_id, name, phone, email, password_hash, id_proof_url, is_approved, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, false, $7, $7)
 		 RETURNING id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at`,
-		ownerID, req.Name, req.Phone, req.Email, hash, time.Now(),
+		ownerID, req.Name, req.Phone, req.Email, hash, idProofURL, time.Now(),
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to register"))

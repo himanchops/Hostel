@@ -193,10 +193,33 @@ export const tenantsApi = {
     request<Stay[]>(`/api/tenants/${id}/stays`, {}, token),
 };
 
+// ─── File Uploads ─────────────────────────────────────────────────────────────
+
+async function uploadFile(endpoint: string, file: File, token?: string): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", headers, body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Upload failed" }));
+    throw new ApiError(res.status, body.error || "Upload failed");
+  }
+  const { url } = await res.json();
+  return url as string;
+}
+
+export const uploadApi = {
+  /** Upload an ID proof during tenant self-registration (no auth required). */
+  publicUpload: (file: File) => uploadFile("/public/upload", file),
+  /** Upload a payment proof screenshot from the tenant portal. */
+  tenantUpload: (file: File, token: string) => uploadFile("/tenant/upload", file, token),
+};
+
 // ─── Public Registration ──────────────────────────────────────────────────────
 
 export const registrationApi = {
-  register: (ownerId: number, data: { name: string; phone: string; email?: string; password: string }) =>
+  register: (ownerId: number, data: { name: string; phone: string; email?: string; password: string; id_proof_url?: string }) =>
     request<Tenant>(`/public/register/${ownerId}`, { method: "POST", body: JSON.stringify(data) }),
 };
 
@@ -234,7 +257,7 @@ export interface TenantStay {
 
 export const tenantPortalApi = {
   stays: (token: string) => request<TenantStay[]>("/tenant/stays", {}, token),
-  submitPayment: (token: string, stayId: number, data: { amount: number; notes?: string }) =>
+  submitPayment: (token: string, stayId: number, data: { amount: number; notes?: string; proof_url?: string }) =>
     request<Payment>(`/tenant/stays/${stayId}/payments`, { method: "POST", body: JSON.stringify(data) }, token),
   submitNotice: (token: string, stayId: number) =>
     request<Stay>(`/tenant/stays/${stayId}/notice`, { method: "PUT", body: JSON.stringify({}) }, token),
@@ -316,6 +339,67 @@ export interface Payment {
 export const paymentsApi = {
   delete: (token: string, id: number) =>
     request<void>(`/api/payments/${id}`, { method: "DELETE" }, token),
+};
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export interface SiteOccupancy {
+  site_id: number;
+  site_name: string;
+  total_beds: number;
+  occupied_beds: number;
+  percentage: number;
+}
+
+export interface OccupancySummary {
+  sites: SiteOccupancy[];
+  total_beds: number;
+  occupied_beds: number;
+  percentage: number;
+}
+
+export interface RevenueSummary {
+  expected_this_month: number;  // paise
+  collected_this_month: number; // paise
+  overdue_amount: number;       // paise
+}
+
+export interface AlertsSummary {
+  pending_tenants: number;
+  pending_payments: number;
+}
+
+export interface VacatingTenant {
+  tenant_name: string;
+  tenant_phone: string;
+  bed_name: string;
+  room_name: string;
+  site_name: string;
+  notice_date?: string;
+  end_date?: string;
+}
+
+export interface RecentPayment {
+  id: number;
+  amount: number;
+  payment_type: "cash" | "online";
+  payment_date: string;
+  tenant_name: string;
+  bed_name: string;
+  room_name: string;
+  site_name: string;
+}
+
+export interface DashboardData {
+  occupancy: OccupancySummary;
+  revenue: RevenueSummary;
+  alerts: AlertsSummary;
+  vacating_soon: VacatingTenant[];
+  recent_payments: RecentPayment[];
+}
+
+export const dashboardApi = {
+  get: (token: string) => request<DashboardData>("/api/dashboard", {}, token),
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

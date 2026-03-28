@@ -394,6 +394,16 @@ export default function PendingPage() {
                         day: "numeric", month: "short", year: "numeric",
                       })}
                     </p>
+                    {t.id_proof_url && (
+                      <a
+                        href={t.id_proof_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        View ID proof →
+                      </a>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -448,6 +458,16 @@ export default function PendingPage() {
                         day: "numeric", month: "short", year: "numeric",
                       })}
                     </p>
+                    {p.proof_url && (
+                      <a
+                        href={p.proof_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        View screenshot →
+                      </a>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button

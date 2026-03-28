@@ -13,6 +13,7 @@ import (
 	"github.com/winnow/hostel/internal/database"
 	"github.com/winnow/hostel/internal/handlers"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
+	"github.com/winnow/hostel/internal/storage"
 )
 
 func main() {
@@ -37,6 +38,12 @@ func main() {
 	jwtSecret := getEnv("JWT_SECRET", "dev-secret-change-in-production")
 	authService := auth.NewService(jwtSecret, 24*time.Hour)
 
+	// Storage
+	storageSvc := storage.NewLocalStorage(
+		"./uploads",
+		getEnv("BASE_URL", "http://localhost:8080"),
+	)
+
 	// Handlers
 	authHandler := handlers.NewAuthHandler(db, authService)
 	siteHandler := handlers.NewSiteHandler(db)
@@ -47,6 +54,8 @@ func main() {
 	stayHandler := handlers.NewStayHandler(db)
 	paymentHandler := handlers.NewPaymentHandler(db)
 	gridHandler := handlers.NewGridHandler(db)
+	dashboardHandler := handlers.NewDashboardHandler(db)
+	uploadHandler := handlers.NewUploadHandler(storageSvc)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -59,6 +68,9 @@ func main() {
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 	}))
 
+	// Serve uploaded files (local dev only; in production files are on S3/R2)
+	e.Static("/uploads", "./uploads")
+
 	// Health
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"status": "ok"})
@@ -68,8 +80,9 @@ func main() {
 	e.POST("/auth/signup", authHandler.Signup)
 	e.POST("/auth/login", authHandler.Login)
 
-	// Public tenant self-registration + auth
+	// Public tenant self-registration + auth + upload
 	e.POST("/public/register/:ownerId", tenantHandler.PublicRegister)
+	e.POST("/public/upload", uploadHandler.PublicUpload)
 	e.POST("/tenant-auth/login", tenantAuthHandler.Login)
 
 	// Tenant portal (tenant JWT required)
@@ -79,6 +92,7 @@ func main() {
 	portal.GET("/stays", tenantPortalHandler.GetStays)
 	portal.POST("/stays/:stayId/payments", tenantPortalHandler.SubmitPayment)
 	portal.PUT("/stays/:stayId/notice", tenantPortalHandler.SubmitNotice)
+	portal.POST("/upload", uploadHandler.TenantUpload)
 
 	// Protected routes
 	api := e.Group("/api")
@@ -105,6 +119,9 @@ func main() {
 	api.POST("/sites/:siteId/rooms/:roomId/beds", roomHandler.CreateBed)
 	api.PUT("/sites/:siteId/rooms/:roomId/beds/:id", roomHandler.UpdateBed)
 	api.DELETE("/sites/:siteId/rooms/:roomId/beds/:id", roomHandler.DeleteBed)
+
+	// Dashboard
+	api.GET("/dashboard", dashboardHandler.GetDashboard)
 
 	// Grid
 	api.GET("/sites/:siteId/grid", gridHandler.GetGrid)

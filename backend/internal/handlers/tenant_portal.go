@@ -78,8 +78,9 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 }
 
 type tenantSubmitPaymentRequest struct {
-	Amount int64  `json:"amount"` // in paise
-	Notes  string `json:"notes"`
+	Amount   int64  `json:"amount"` // in paise
+	Notes    string `json:"notes"`
+	ProofURL string `json:"proof_url"`
 }
 
 func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
@@ -104,12 +105,20 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("amount must be positive"))
 	}
 
+	var proofURL *string
+	if req.ProofURL != "" {
+		if !ValidateUploadedURL(req.ProofURL) {
+			return c.JSON(http.StatusBadRequest, errorResponse("invalid proof_url"))
+		}
+		proofURL = &req.ProofURL
+	}
+
 	var payment models.Payment
 	err = h.db.QueryRowx(
-		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, notes, is_approved, created_at)
-		 VALUES ($1, $2, 'online', $3, $4, false, $3)
+		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at)
+		 VALUES ($1, $2, 'online', $3, $4, $5, false, $3)
 		 RETURNING id, stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at`,
-		stayID, req.Amount, time.Now(), req.Notes,
+		stayID, req.Amount, time.Now(), proofURL, req.Notes,
 	).StructScan(&payment)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to submit payment"))

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTenantAuth } from "@/contexts/tenantAuth";
 import {
   tenantPortalApi,
+  uploadApi,
   TenantStay,
   Payment,
   ApiError,
@@ -66,6 +67,7 @@ function StayCard({ stay, token, onUpdate }: {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [screenshot, setScreenshot] = useState<File | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [noticeLoading, setNoticeLoading] = useState(false);
@@ -76,13 +78,19 @@ function StayCard({ stay, token, onUpdate }: {
     setPaymentError("");
     setPaymentLoading(true);
     try {
+      let proofUrl: string | undefined;
+      if (screenshot) {
+        proofUrl = await uploadApi.tenantUpload(screenshot, token);
+      }
       const payment = await tenantPortalApi.submitPayment(token, stay.id, {
         amount: Math.round(parseFloat(amount) * 100),
         notes: notes || undefined,
+        proof_url: proofUrl,
       });
       onUpdate({ ...stay, payments: [payment, ...stay.payments] });
       setAmount("");
       setNotes("");
+      setScreenshot(null);
       setShowPaymentForm(false);
     } catch (err) {
       setPaymentError(err instanceof ApiError ? err.message : "Failed to submit");
@@ -189,6 +197,20 @@ function StayCard({ stay, token, onUpdate }: {
                   className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Payment screenshot <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-2 file:py-0.5 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                />
+                {screenshot && (
+                  <p className="mt-0.5 text-xs text-gray-400">{screenshot.name}</p>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -199,7 +221,7 @@ function StayCard({ stay, token, onUpdate }: {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowPaymentForm(false); setPaymentError(""); }}
+                  onClick={() => { setShowPaymentForm(false); setPaymentError(""); setScreenshot(null); }}
                   className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100"
                 >
                   Cancel

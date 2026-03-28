@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { use } from "react";
-import { registrationApi, ApiError } from "@/lib/api";
+import { registrationApi, uploadApi, ApiError } from "@/lib/api";
 
 export default function RegisterPage({ params }: { params: Promise<{ ownerId: string }> }) {
   const { ownerId } = use(params);
@@ -12,6 +12,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [idProof, setIdProof] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -29,7 +30,17 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
     setError("");
     setLoading(true);
     try {
-      await registrationApi.register(ownerIdNum, { name, phone, email: email || undefined, password });
+      let idProofUrl: string | undefined;
+      if (idProof) {
+        idProofUrl = await uploadApi.publicUpload(idProof);
+      }
+      await registrationApi.register(ownerIdNum, {
+        name,
+        phone,
+        email: email || undefined,
+        password,
+        id_proof_url: idProofUrl,
+      });
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
@@ -126,6 +137,21 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
               />
               <p className="mt-1 text-xs text-gray-400">You'll use this to log in to your tenant portal after approval.</p>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                ID proof <span className="text-gray-400 font-normal">(optional — photo/scan of Aadhaar, passport, etc.)</span>
+              </label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => setIdProof(e.target.files?.[0] ?? null)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              />
+              {idProof && (
+                <p className="mt-1 text-xs text-gray-400">{idProof.name} ({(idProof.size / 1024).toFixed(0)} KB)</p>
+              )}
             </div>
 
             <button
