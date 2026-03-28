@@ -1,0 +1,16 @@
+{
+  "name": "hostel-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fix-tests": "tsx fix-tests.ts",
+    "review-design": "tsx review-design.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.35.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "@types/node": "^20"
+  }
+}

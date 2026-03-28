@@ -1,6 +1,6 @@
 export PATH := /opt/homebrew/opt/node/bin:/opt/homebrew/bin:$(PATH)
 
-.PHONY: dev setup db-up db-down migrate backend frontend
+.PHONY: dev setup db-up db-down migrate backend frontend test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -58,3 +58,34 @@ build-backend:
 test:
 	cd backend && go test ./...
 	cd frontend && npm test
+
+# ── E2E ────────────────────────────────────────────────────────────────────────
+
+test-e2e:
+	cd frontend && npx playwright test
+
+test-e2e-ui:
+	cd frontend && npx playwright test --ui
+
+test-e2e-debug:
+	cd frontend && npx playwright test --debug
+
+# ── Fix report from test failures ──────────────────────────────────────────────
+
+fix-tests:
+	@test -f test-results/failures.json || (echo "Error: test-results/failures.json not found. Run 'make test-e2e' first." && exit 1)
+	cd scripts && npm install --silent && npx tsx fix-tests.ts
+
+# ── Design review via Claude Vision ───────────────────────────────────────────
+
+review-design:
+	@test -n "$$ANTHROPIC_API_KEY" || (echo "Error: ANTHROPIC_API_KEY is not set" && exit 1)
+	cd scripts && npm install --silent && npx tsx review-design.ts
+	@echo "→ Design review written to test-results/design-review.md"
+
+# ── Clean e2e test data ─────────────────────────────────────────────────────────
+
+clean-e2e-data:
+	docker compose exec -T db psql -U hostel -c \
+	  "DELETE FROM owners WHERE email LIKE 'e2e-%@test.local';"
+	@echo "→ E2E test data cleaned"

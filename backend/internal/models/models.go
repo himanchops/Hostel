@@ -60,8 +60,8 @@ type Tenant struct {
 	Name         string    `db:"name" json:"name"`
 	Phone        string    `db:"phone" json:"phone"`
 	Email        string    `db:"email" json:"email,omitempty"`
-	IDProofURL   string    `db:"id_proof_url" json:"id_proof_url,omitempty"`
-	PhotoURL     string    `db:"photo_url" json:"photo_url,omitempty"`
+	IDProofURL   *string   `db:"id_proof_url" json:"id_proof_url,omitempty"`
+	PhotoURL     *string   `db:"photo_url" json:"photo_url,omitempty"`
 	PasswordHash string    `db:"password_hash" json:"-"`
 	IsApproved   bool      `db:"is_approved" json:"is_approved"`
 	CreatedAt    time.Time `db:"created_at" json:"created_at"`
@@ -99,8 +99,8 @@ type Payment struct {
 	Amount       int64       `db:"amount" json:"amount"` // In paise
 	PaymentType  PaymentType `db:"payment_type" json:"payment_type"`
 	PaymentDate  time.Time   `db:"payment_date" json:"payment_date"`
-	ProofURL     string      `db:"proof_url" json:"proof_url,omitempty"`
-	Notes        string      `db:"notes" json:"notes,omitempty"`
+	ProofURL     *string     `db:"proof_url" json:"proof_url,omitempty"`
+	Notes        *string     `db:"notes" json:"notes,omitempty"`
 	IsApproved   bool        `db:"is_approved" json:"is_approved"` // For tenant-submitted proofs
 	CreatedAt    time.Time   `db:"created_at" json:"created_at"`
 }

@@ -31,3 +31,13 @@ coverage/
 *.out
 
 .claude
+# Test results
+test-results/
+frontend/test-results/
+frontend/playwright-report/
+
+# Scripts deps
+scripts/node_modules/
+
+# Uploaded files (local dev only)
+backend/uploads/
