@@ -124,14 +124,24 @@ _Committed: `8481bb4`_
 
 ---
 
-## Phase 6 — E2E Testing + AI Design Review 🔜
+## Phase 6 — E2E Testing + AI Design Review ✅
 
-Planned:
-- Playwright e2e tests for all key owner + tenant flows
-- Custom failure reporter writing `test-results/failures.json`
-- `make test-e2e`, `make test-e2e-ui`, `make fix-tests` targets
-- `scripts/review-design.ts` — screenshots every page, Claude vision API writes `test-results/design-review.md`
-- `make review-design` (requires `ANTHROPIC_API_KEY`)
+- Playwright config with custom failure reporter → `test-results/failures.json`
+- `make test-e2e`, `make test-e2e-ui`, `make test-e2e-debug`, `make fix-tests` targets
+- `scripts/fix-tests.ts` — categorizes failures (api-error, navigation, missing-element, etc.) → `test-results/fix-report.md`
+- `scripts/review-design.ts` + `make review-design` — screenshots every page, Claude vision API → `test-results/design-review.md`
+- `tests/e2e/helpers/api.ts` — typed API helpers for seeding test data
+- `tests/e2e/owner/tenant-management.test.ts` — tenant creation API + UI; caught + fixed NULL scan bug in models
+- **Convention**: new features get a Playwright test alongside the implementation
+
+**Remaining test coverage** (to be added per feature):
+- `owner/auth.test.ts` — signup, duplicate email, login, logout
+- `owner/site-setup.test.ts` — site/room/bed CRUD, grid shows vacant
+- `owner/tenant-review.test.ts` — pending registration, approve, reject
+- `owner/payments.test.ts` — direct payment, approve proof, reject proof
+- `owner/dashboard.test.ts` — stat cards after seeded data
+- `tenant/registration.test.ts` — public form → success screen
+- `tenant/portal.test.ts` — portal view, submit payment, give notice
 
 ---
 
