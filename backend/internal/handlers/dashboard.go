@@ -164,6 +164,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		LEFT JOIN payments p ON p.stay_id = s.id
 		WHERE t.owner_id = $1
 		  AND s.end_date IS NULL
+		  AND s.bed_id IS NOT NULL
 		GROUP BY s.id, s.rent_amount, s.rent_cycle, s.start_date
 	`, ownerID)
 	if err != nil {
@@ -226,11 +227,12 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			TO_CHAR(s.end_date,   'YYYY-MM-DD') AS end_date
 		FROM stays s
 		JOIN tenants t       ON t.id = s.tenant_id
-		JOIN beds b          ON b.id = s.bed_id
-		JOIN rooms r         ON r.id = b.room_id
-		JOIN hostel_sites hs ON hs.id = r.site_id
+		LEFT JOIN beds b          ON b.id = s.bed_id
+		LEFT JOIN rooms r         ON r.id = b.room_id
+		LEFT JOIN hostel_sites hs ON hs.id = r.site_id
 		WHERE t.owner_id = $1
 		  AND s.end_date IS NULL
+		  AND s.bed_id IS NOT NULL
 		  AND (
 		      s.notice_date IS NOT NULL
 		      OR s.end_date <= CURRENT_DATE + INTERVAL '30 days'
@@ -278,16 +280,16 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			p.amount,
 			p.payment_type::text AS payment_type,
 			TO_CHAR(p.payment_date, 'YYYY-MM-DD') AS payment_date,
-			t.name        AS tenant_name,
-			b.name        AS bed_name,
-			r.name        AS room_name,
-			hs.name       AS site_name
+			t.name                     AS tenant_name,
+			COALESCE(b.name, 'Unassigned') AS bed_name,
+			COALESCE(r.name, '')           AS room_name,
+			COALESCE(hs.name, '')          AS site_name
 		FROM payments p
 		JOIN stays s        ON s.id = p.stay_id
 		JOIN tenants t      ON t.id = s.tenant_id
-		JOIN beds b         ON b.id = s.bed_id
-		JOIN rooms r        ON r.id = b.room_id
-		JOIN hostel_sites hs ON hs.id = r.site_id
+		LEFT JOIN beds b         ON b.id = s.bed_id
+		LEFT JOIN rooms r        ON r.id = b.room_id
+		LEFT JOIN hostel_sites hs ON hs.id = r.site_id
 		WHERE t.owner_id = $1
 		  AND p.is_approved = true
 		ORDER BY p.payment_date DESC, p.created_at DESC

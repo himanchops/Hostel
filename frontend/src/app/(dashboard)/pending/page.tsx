@@ -15,7 +15,181 @@ import {
   ApiError,
   today,
   formatCurrency,
+  maskAadhaar,
 } from "@/lib/api";
+
+const selectCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  "bg-indigo-100 text-indigo-700",
+  "bg-violet-100 text-violet-700",
+  "bg-pink-100 text-pink-700",
+  "bg-amber-100 text-amber-700",
+  "bg-teal-100 text-teal-700",
+  "bg-sky-100 text-sky-700",
+];
+
+function avatarColor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function Avatar({ name, photoUrl, size = "md" }: { name: string; photoUrl?: string | null; size?: "sm" | "md" | "lg" }) {
+  const dim = size === "lg" ? "h-16 w-16 text-2xl" : size === "sm" ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm";
+  if (photoUrl) {
+    return <img src={photoUrl} alt={name} className={`${dim} rounded-full object-cover flex-shrink-0`} />;
+  }
+  return (
+    <div className={`${dim} ${avatarColor(name)} flex flex-shrink-0 items-center justify-center rounded-full font-bold`}>
+      {name[0]?.toUpperCase()}
+    </div>
+  );
+}
+
+// ── Profile Drawer ────────────────────────────────────────────────────────────
+
+function ProfileDrawer({
+  tenant, token, onApprove, onReject, onClose, rejectingId,
+}: {
+  tenant: Tenant;
+  token: string;
+  onApprove: () => void;
+  onReject: (id: number) => void;
+  onClose: () => void;
+  rejectingId: number | null;
+}) {
+  const idFront = tenant.id_proof_front_url ?? tenant.id_proof_url;
+  const idBack = tenant.id_proof_back_url;
+  const isImage = (url: string) => /\.(jpe?g|png|webp)(\?|$)/i.test(url);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Registration details</h2>
+          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+          {/* Identity */}
+          <div className="flex items-center gap-4">
+            <Avatar name={tenant.name} photoUrl={tenant.photo_url} size="lg" />
+            <div>
+              <p className="text-lg font-bold text-gray-900">{tenant.name}</p>
+              <p className="text-sm text-gray-500">{tenant.phone}</p>
+              {tenant.email && <p className="text-sm text-gray-400">{tenant.email}</p>}
+            </div>
+          </div>
+
+          {/* Details grid */}
+          <div className="space-y-3 rounded-xl bg-gray-50 px-4 py-4">
+            {tenant.workplace && (
+              <Row icon="📍" label="Workplace / College" value={tenant.workplace} />
+            )}
+            {tenant.address && (
+              <Row icon="🏠" label="Home address" value={tenant.address} />
+            )}
+            {(tenant.emergency_contact_name || tenant.emergency_contact_phone) && (
+              <Row icon="🆘" label="Emergency contact"
+                value={[tenant.emergency_contact_name, tenant.emergency_contact_phone].filter(Boolean).join("  ·  ")} />
+            )}
+            {tenant.aadhaar_number && (
+              <Row icon="🪪" label="Aadhaar" value={maskAadhaar(tenant.aadhaar_number)} />
+            )}
+            <Row icon="📅" label="Registered"
+              value={new Date(tenant.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} />
+          </div>
+
+          {/* ID proof */}
+          {(idFront || idBack) && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">ID Proof</p>
+              <div className="flex gap-3">
+                {idFront && (
+                  <IdProofTile label="Front" url={idFront} isImage={isImage(idFront)} />
+                )}
+                {idBack && (
+                  <IdProofTile label="Back" url={idBack} isImage={isImage(idBack)} />
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="border-t border-gray-100 px-5 py-4 flex gap-2">
+          <button
+            onClick={() => onReject(tenant.id)}
+            disabled={rejectingId === tenant.id}
+            className="flex-1 rounded-lg border border-red-200 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+          >
+            {rejectingId === tenant.id ? "Removing…" : "Reject"}
+          </button>
+          <button
+            onClick={onApprove}
+            className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-500"
+          >
+            Approve →
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Row({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="mt-0.5 text-base leading-none">{icon}</span>
+      <div>
+        <p className="text-xs font-medium text-gray-400">{label}</p>
+        <p className="text-sm text-gray-700">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function IdProofTile({ label, url, isImage }: { label: string; url: string; isImage: boolean }) {
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="group flex-1">
+      {isImage ? (
+        <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 aspect-[3/2]">
+          <img src={url} alt={`ID ${label}`} className="h-full w-full object-cover transition group-hover:opacity-80" />
+          <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition">
+            <span className="px-2 py-1 text-xs font-semibold text-white">Open ↗</span>
+          </div>
+          <div className="absolute top-1.5 left-1.5 rounded bg-black/50 px-1.5 py-0.5 text-xs font-medium text-white">{label}</div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 transition group-hover:bg-gray-100">
+          <svg className="h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+          </svg>
+          <span className="text-xs font-medium text-gray-700">ID {label} (PDF)</span>
+          <svg className="ml-auto h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </div>
+      )}
+    </a>
+  );
+}
+
+// ── Approve Modal ─────────────────────────────────────────────────────────────
 
 interface ApproveModalProps {
   tenant: Tenant;
@@ -24,8 +198,10 @@ interface ApproveModalProps {
   onClose: () => void;
 }
 
+type ApproveMode = "approve_only" | "assign_bed" | "collect_deposit";
+
 function ApproveModal({ tenant, token, onDone, onClose }: ApproveModalProps) {
-  const [assignBed, setAssignBed] = useState(false);
+  const [mode, setMode] = useState<ApproveMode>("approve_only");
   const [sites, setSites] = useState<Site[]>([]);
   const [siteId, setSiteId] = useState<number | "">("");
   const [rooms, setRooms] = useState<GridRoom[]>([]);
@@ -40,11 +216,13 @@ function ApproveModal({ tenant, token, onDone, onClose }: ApproveModalProps) {
   const [sitesLoading, setSitesLoading] = useState(false);
   const [roomsLoading, setRoomsLoading] = useState(false);
 
+  const rentLabel = rentCycle === "monthly" ? "Monthly rent (₹)" : rentCycle === "weekly" ? "Weekly rent (₹)" : "Daily rent (₹)";
+
   useEffect(() => {
-    if (!assignBed) return;
+    if (mode !== "assign_bed") return;
     setSitesLoading(true);
     sitesApi.list(token).then(setSites).finally(() => setSitesLoading(false));
-  }, [assignBed, token]);
+  }, [mode, token]);
 
   useEffect(() => {
     if (!siteId) { setRooms([]); setSelectedBed(null); return; }
@@ -62,9 +240,10 @@ function ApproveModal({ tenant, token, onDone, onClose }: ApproveModalProps) {
     setLoading(true);
     try {
       const payload: Parameters<typeof tenantsApi.approve>[2] = {};
-      if (assignBed && selectedBed) {
-        if (!rentAmount || !startDate) {
-          setError("Rent amount and start date are required for bed assignment.");
+
+      if (mode === "assign_bed") {
+        if (!selectedBed || !rentAmount || !startDate) {
+          setError("Select a bed, enter rent amount and start date.");
           setLoading(false);
           return;
         }
@@ -74,7 +253,19 @@ function ApproveModal({ tenant, token, onDone, onClose }: ApproveModalProps) {
         payload.rent_cycle = rentCycle;
         payload.rent_due_day = parseInt(rentDueDay, 10) || 1;
         payload.start_date = startDate;
+      } else if (mode === "collect_deposit") {
+        if (!rentAmount) {
+          setError("Enter an advance/deposit amount.");
+          setLoading(false);
+          return;
+        }
+        payload.rent_amount = Math.round(parseFloat(rentAmount) * 100);
+        payload.deposit_amount = Math.round(parseFloat(depositAmount || "0") * 100);
+        payload.rent_cycle = rentCycle;
+        payload.rent_due_day = parseInt(rentDueDay, 10) || 1;
+        payload.start_date = startDate;
       }
+
       const approved = await tenantsApi.approve(token, tenant.id, payload);
       onDone(approved);
     } catch (err) {
@@ -85,162 +276,99 @@ function ApproveModal({ tenant, token, onDone, onClose }: ApproveModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="border-b border-gray-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Approve registration</h2>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="border-b border-gray-100 px-6 py-4 flex items-center gap-3">
+          <Avatar name={tenant.name} photoUrl={tenant.photo_url} size="sm" />
+          <div className="flex-1">
+            <h2 className="text-base font-semibold text-gray-900">{tenant.name}</h2>
+            <p className="text-xs text-gray-400">{tenant.phone}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Tenant info */}
-          <div className="rounded-xl bg-gray-50 px-4 py-3 space-y-1">
-            <p className="font-medium text-gray-900">{tenant.name}</p>
-            <p className="text-sm text-gray-500">{tenant.phone}{tenant.email ? ` · ${tenant.email}` : ""}</p>
-          </div>
-
           {error && (
             <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>
           )}
 
-          {/* Assign bed toggle */}
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={assignBed}
-              onChange={(e) => setAssignBed(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span className="text-sm font-medium text-gray-700">Assign to a bed now</span>
-          </label>
+          {/* Mode selection */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">What would you like to do?</p>
+            {(["approve_only", "assign_bed", "collect_deposit"] as ApproveMode[]).map((m) => (
+              <label key={m} className="flex items-start gap-3 cursor-pointer rounded-lg border border-gray-200 p-3 hover:bg-gray-50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
+                <input
+                  type="radio"
+                  name="approve_mode"
+                  value={m}
+                  checked={mode === m}
+                  onChange={() => setMode(m)}
+                  className="mt-0.5 h-4 w-4 text-indigo-600"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    {m === "approve_only" && "Approve only"}
+                    {m === "assign_bed" && "Approve & assign bed"}
+                    {m === "collect_deposit" && "Approve & collect deposit (assign bed later)"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
+                    {m === "assign_bed" && "Approve and assign to a specific bed now."}
+                    {m === "collect_deposit" && "Collect a deposit/advance now. Bed assigned when tenant moves in."}
+                  </p>
+                </div>
+              </label>
+            ))}
+          </div>
 
-          {assignBed && (
+          {/* Assign bed flow */}
+          {mode === "assign_bed" && (
             <div className="space-y-4 rounded-xl border border-gray-200 p-4">
-              {/* Site */}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700">Site</label>
-                {sitesLoading ? (
-                  <p className="text-sm text-gray-400">Loading…</p>
-                ) : (
-                  <select
-                    value={siteId}
-                    onChange={(e) => setSiteId(e.target.value ? parseInt(e.target.value) : "")}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                  >
+                {sitesLoading ? <p className="text-sm text-gray-400">Loading…</p> : (
+                  <select value={siteId} onChange={(e) => setSiteId(e.target.value ? parseInt(e.target.value) : "")} className={selectCls}>
                     <option value="">Select a site…</option>
-                    {sites.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
+                    {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
               </div>
-
-              {/* Bed */}
               {siteId && (
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700">Bed</label>
-                  {roomsLoading ? (
-                    <p className="text-sm text-gray-400">Loading…</p>
-                  ) : vacantBeds.length === 0 ? (
+                  {roomsLoading ? <p className="text-sm text-gray-400">Loading…</p> : vacantBeds.length === 0 ? (
                     <p className="text-sm text-gray-400">No vacant beds at this site.</p>
                   ) : (
-                    <select
-                      value={selectedBed?.id ?? ""}
-                      onChange={(e) => {
-                        const bed = vacantBeds.find((b) => b.id === parseInt(e.target.value));
-                        setSelectedBed(bed ?? null);
-                      }}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    >
+                    <select value={selectedBed?.id ?? ""} onChange={(e) => setSelectedBed(vacantBeds.find((b) => b.id === parseInt(e.target.value)) ?? null)} className={selectCls}>
                       <option value="">Select a bed…</option>
-                      {vacantBeds.map((b) => (
-                        <option key={b.id} value={b.id}>{b.roomName} — {b.name}</option>
-                      ))}
+                      {vacantBeds.map((b) => <option key={b.id} value={b.id}>{b.roomName} — {b.name}</option>)}
                     </select>
                   )}
                 </div>
               )}
+              {selectedBed && <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} rentDueDay={rentDueDay} setRentDueDay={setRentDueDay} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />}
+            </div>
+          )}
 
-              {/* Rent details */}
-              {selectedBed && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                      Rent (₹) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="e.g. 5000"
-                      value={rentAmount}
-                      onChange={(e) => setRentAmount(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Deposit (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="e.g. 10000"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Rent cycle</label>
-                    <select
-                      value={rentCycle}
-                      onChange={(e) => setRentCycle(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="daily">Daily</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Due day</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={rentDueDay}
-                      onChange={(e) => setRentDueDay(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                      Move-in date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    />
-                  </div>
-                </div>
-              )}
+          {/* Collect deposit flow */}
+          {mode === "collect_deposit" && (
+            <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
+              <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} rentDueDay={rentDueDay} setRentDueDay={setRentDueDay} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />
             </div>
           )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="rounded-lg px-4 py-2 text-sm text-gray-500 transition hover:bg-gray-100 disabled:opacity-60"
-          >
+          <button onClick={onClose} disabled={loading} className="rounded-lg px-4 py-2 text-sm text-gray-500 transition hover:bg-gray-100 disabled:opacity-60">
             Cancel
           </button>
           <button
             onClick={handleApprove}
-            disabled={loading || (assignBed && (!siteId || !selectedBed))}
+            disabled={loading || (mode === "assign_bed" && (!siteId || !selectedBed))}
             className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-500 disabled:opacity-60"
           >
-            {loading ? "Approving…" : assignBed && selectedBed ? "Approve & assign" : "Approve"}
+            {loading ? "Approving…" : mode === "assign_bed" ? "Approve & assign" : mode === "collect_deposit" ? "Approve & record deposit" : "Approve"}
           </button>
         </div>
       </div>
@@ -248,24 +376,61 @@ function ApproveModal({ tenant, token, onDone, onClose }: ApproveModalProps) {
   );
 }
 
+function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, depositAmount, setDepositAmount, rentDueDay, setRentDueDay, startDate, setStartDate, rentLabel }: {
+  rentCycle: string; setRentCycle: (v: string) => void;
+  rentAmount: string; setRentAmount: (v: string) => void;
+  depositAmount: string; setDepositAmount: (v: string) => void;
+  rentDueDay: string; setRentDueDay: (v: string) => void;
+  startDate: string; setStartDate: (v: string) => void;
+  rentLabel: string;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Billing cycle</label>
+        <select value={rentCycle} onChange={(e) => setRentCycle(e.target.value)} className={selectCls}>
+          <option value="monthly">Monthly</option>
+          <option value="weekly">Weekly</option>
+          <option value="daily">Daily</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Due day</label>
+        <input type="number" min="1" max="31" value={rentDueDay} onChange={(e) => setRentDueDay(e.target.value)} className={inputCls} />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">{rentLabel} <span className="text-red-500">*</span></label>
+        <input type="number" min="0" placeholder="e.g. 5000" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)} className={inputCls} />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Deposit (₹)</label>
+        <input type="number" min="0" placeholder="e.g. 10000" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={inputCls} />
+      </div>
+      <div className="col-span-2">
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">Start date <span className="text-red-500">*</span></label>
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function PendingPage() {
   const { token, owner } = useAuth();
   const [tab, setTab] = useState<"registrations" | "payments">("registrations");
 
-  // Registrations state
   const [pending, setPending] = useState<Tenant[]>([]);
   const [regLoading, setRegLoading] = useState(true);
+  const [drawerTenant, setDrawerTenant] = useState<Tenant | null>(null);
   const [approvingTenant, setApprovingTenant] = useState<Tenant | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
 
-  // Payments state
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [payLoading, setPayLoading] = useState(true);
   const [actioningPayId, setActioningPayId] = useState<number | null>(null);
 
-  const registrationUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/register/${owner?.id}`
-    : "";
+  const registrationUrl = typeof window !== "undefined" ? `${window.location.origin}/register/${owner?.id}` : "";
 
   const loadRegistrations = useCallback(() => {
     if (!token) return;
@@ -285,16 +450,14 @@ export default function PendingPage() {
     try {
       await tenantsApi.reject(token, id);
       setPending((prev) => prev.filter((t) => t.id !== id));
-    } catch {
-      // ignore
-    } finally {
-      setRejectingId(null);
-    }
+      if (drawerTenant?.id === id) setDrawerTenant(null);
+    } catch { /* ignore */ } finally { setRejectingId(null); }
   }
 
   function handleApproved(approved: Tenant) {
     setPending((prev) => prev.filter((t) => t.id !== approved.id));
     setApprovingTenant(null);
+    setDrawerTenant(null);
   }
 
   async function handleApprovePayment(id: number) {
@@ -303,11 +466,7 @@ export default function PendingPage() {
     try {
       await pendingPaymentsApi.approve(token, id);
       setPendingPayments((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      // ignore
-    } finally {
-      setActioningPayId(null);
-    }
+    } catch { /* ignore */ } finally { setActioningPayId(null); }
   }
 
   async function handleRejectPayment(id: number) {
@@ -316,11 +475,7 @@ export default function PendingPage() {
     try {
       await pendingPaymentsApi.reject(token, id);
       setPendingPayments((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      // ignore
-    } finally {
-      setActioningPayId(null);
-    }
+    } catch { /* ignore */ } finally { setActioningPayId(null); }
   }
 
   return (
@@ -330,7 +485,6 @@ export default function PendingPage() {
         <p className="mt-1 text-sm text-gray-500">Review registrations and payment submissions.</p>
       </div>
 
-      {/* Tabs */}
       <div className="mb-6 flex gap-1 rounded-xl bg-gray-100 p-1 w-fit">
         {(["registrations", "payments"] as const).map((t) => (
           <button
@@ -353,27 +507,18 @@ export default function PendingPage() {
 
       {tab === "registrations" && (
         <>
-          {/* Registration link */}
           <div className="mb-6 rounded-xl bg-indigo-50 px-5 py-4 ring-1 ring-indigo-100">
             <p className="mb-1.5 text-sm font-medium text-indigo-900">Tenant registration link</p>
             <p className="mb-3 text-xs text-indigo-600">Share this link (or a QR code pointing to it) with prospective tenants.</p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs text-gray-700 ring-1 ring-indigo-200">
-                {registrationUrl}
-              </code>
-              <button
-                onClick={() => navigator.clipboard.writeText(registrationUrl)}
-                className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500"
-              >
-                Copy
-              </button>
+              <code className="flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs text-gray-700 ring-1 ring-indigo-200">{registrationUrl}</code>
+              <button onClick={() => navigator.clipboard.writeText(registrationUrl)} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500">Copy</button>
             </div>
           </div>
 
           {regLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-400">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-              Loading…
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />Loading…
             </div>
           ) : pending.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
@@ -384,41 +529,50 @@ export default function PendingPage() {
               {pending.map((t) => (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-200"
+                  className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-indigo-200"
                 >
-                  <div>
-                    <p className="font-medium text-gray-900">{t.name}</p>
-                    <p className="text-sm text-gray-500">{t.phone}{t.email ? ` · ${t.email}` : ""}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">
-                      Registered {new Date(t.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric", month: "short", year: "numeric",
-                      })}
-                    </p>
-                    {t.id_proof_url && (
-                      <a
-                        href={t.id_proof_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                  <div className="flex items-center gap-3 px-4 py-4">
+                    {/* Avatar — click opens drawer */}
+                    <button
+                      onClick={() => setDrawerTenant(t)}
+                      className="flex-shrink-0 focus:outline-none"
+                      aria-label={`View ${t.name}'s profile`}
+                    >
+                      <Avatar name={t.name} photoUrl={t.photo_url} size="md" />
+                    </button>
+
+                    {/* Info — click opens drawer */}
+                    <button
+                      onClick={() => setDrawerTenant(t)}
+                      className="min-w-0 flex-1 text-left focus:outline-none"
+                    >
+                      <p className="font-medium text-gray-900">{t.name}</p>
+                      <p className="text-sm text-gray-500">{t.phone}{t.email ? ` · ${t.email}` : ""}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        {t.workplace && <span className="text-xs text-gray-400">📍 {t.workplace}</span>}
+                        {t.aadhaar_number && <span className="text-xs text-gray-400">🪪 {maskAadhaar(t.aadhaar_number)}</span>}
+                        <span className="text-xs text-gray-300">
+                          {new Date(t.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Quick actions */}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        onClick={() => handleReject(t.id)}
+                        disabled={rejectingId === t.id}
+                        className="rounded-lg px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-60"
                       >
-                        View ID proof →
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleReject(t.id)}
-                      disabled={rejectingId === t.id}
-                      className="rounded-lg px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-60"
-                    >
-                      Reject
-                    </button>
-                    <button
-                      onClick={() => setApprovingTenant(t)}
-                      className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-500"
-                    >
-                      Approve
-                    </button>
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => setApprovingTenant(t)}
+                        className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-500"
+                      >
+                        Approve
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -431,8 +585,7 @@ export default function PendingPage() {
         <>
           {payLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-400">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-              Loading…
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />Loading…
             </div>
           ) : pendingPayments.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
@@ -441,49 +594,26 @@ export default function PendingPage() {
           ) : (
             <div className="space-y-3">
               {pendingPayments.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-200"
-                >
+                <div key={p.id} className="flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-200">
                   <div>
-                    <p className="font-medium text-gray-900">
-                      {p.tenant_name} · {formatCurrency(p.amount)}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {p.site_name} · {p.room_name} · {p.bed_name}
-                    </p>
+                    <p className="font-medium text-gray-900">{p.tenant_name} · {formatCurrency(p.amount)}</p>
+                    <p className="text-sm text-gray-500">{p.site_name} · {p.room_name} · {p.bed_name}</p>
                     {p.notes && <p className="mt-0.5 text-xs text-gray-400">"{p.notes}"</p>}
                     <p className="mt-0.5 text-xs text-gray-400">
-                      Submitted {new Date(p.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric", month: "short", year: "numeric",
-                      })}
+                      Submitted {new Date(p.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                     {p.proof_url && (
-                      <a
-                        href={p.proof_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500"
-                      >
+                      <a href={p.proof_url} target="_blank" rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500">
                         View screenshot →
                       </a>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleRejectPayment(p.id)}
-                      disabled={actioningPayId === p.id}
-                      className="rounded-lg px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-60"
-                    >
-                      Reject
-                    </button>
-                    <button
-                      onClick={() => handleApprovePayment(p.id)}
-                      disabled={actioningPayId === p.id}
-                      className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-500 disabled:opacity-60"
-                    >
-                      Approve
-                    </button>
+                    <button onClick={() => handleRejectPayment(p.id)} disabled={actioningPayId === p.id}
+                      className="rounded-lg px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-60">Reject</button>
+                    <button onClick={() => handleApprovePayment(p.id)} disabled={actioningPayId === p.id}
+                      className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-500 disabled:opacity-60">Approve</button>
                   </div>
                 </div>
               ))}
@@ -492,13 +622,21 @@ export default function PendingPage() {
         </>
       )}
 
-      {approvingTenant && token && (
-        <ApproveModal
-          tenant={approvingTenant}
+      {/* Profile drawer */}
+      {drawerTenant && token && (
+        <ProfileDrawer
+          tenant={drawerTenant}
           token={token}
-          onDone={handleApproved}
-          onClose={() => setApprovingTenant(null)}
+          onApprove={() => { setApprovingTenant(drawerTenant); setDrawerTenant(null); }}
+          onReject={handleReject}
+          onClose={() => setDrawerTenant(null)}
+          rejectingId={rejectingId}
         />
+      )}
+
+      {/* Approve modal */}
+      {approvingTenant && token && (
+        <ApproveModal tenant={approvingTenant} token={token} onDone={handleApproved} onClose={() => setApprovingTenant(null)} />
       )}
     </div>
   );

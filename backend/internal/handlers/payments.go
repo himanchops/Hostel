@@ -121,13 +121,15 @@ func (h *PaymentHandler) ListPending(c echo.Context) error {
 		`SELECT p.id, p.stay_id, p.amount, p.payment_type, p.payment_date,
 		        p.proof_url, p.notes, p.is_approved, p.created_at,
 		        t.name AS tenant_name,
-		        b.name AS bed_name, r.name AS room_name, hs.name AS site_name
+		        COALESCE(b.name, 'Unassigned') AS bed_name,
+		        COALESCE(r.name, '') AS room_name,
+		        COALESCE(hs.name, '') AS site_name
 		 FROM payments p
 		 JOIN stays s ON s.id = p.stay_id
 		 JOIN tenants t ON t.id = s.tenant_id
-		 JOIN beds b ON b.id = s.bed_id
-		 JOIN rooms r ON r.id = b.room_id
-		 JOIN hostel_sites hs ON hs.id = r.site_id
+		 LEFT JOIN beds b ON b.id = s.bed_id
+		 LEFT JOIN rooms r ON r.id = b.room_id
+		 LEFT JOIN hostel_sites hs ON hs.id = r.site_id
 		 WHERE t.owner_id = $1 AND p.is_approved = false
 		 ORDER BY p.created_at DESC`,
 		ownerID,

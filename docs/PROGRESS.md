@@ -145,7 +145,39 @@ _Committed: `8481bb4`_
 
 ---
 
-## Phase 7 — Deployment 🔜
+## Phase 7 — Tenant Profile Enrichment + Registration UX ✅
+
+**DB**
+- Migration `003_tenant_profile` — 7 new columns on `tenants` (address, emergency contact name/phone, workplace, aadhaar_number, id_proof_front_url, id_proof_back_url); `stays.bed_id` made nullable (pending bed assignment)
+- Partial index `idx_stays_active_tenant` for one-active-stay enforcement
+
+**Backend**
+- `Tenant` model: 7 new `*string` fields
+- `Stay.BedID`: `int64` → `*int64` (null = deposit collected, bed TBD)
+- All 6 tenant query sites updated to include new columns
+- `Approve` handler: 3-path approval — approve only / assign bed / collect deposit without bed
+- One-active-stay guard on `Approve` and `Stay.Create` (409 if active stay exists)
+- `AssignBed` handler: `PUT /api/stays/:id/assign-bed`
+- `Summary` handler: `GET /api/tenants/:id/summary` — aggregate totals (total_paid, total_expected, balance, duration_days)
+- `tenant_portal.go`, `dashboard.go`, `payments.go`, `grid.go`: LEFT JOINs + COALESCE throughout for nullable `bed_id`
+
+**Frontend**
+- Self-registration form: address, workplace, emergency contact, Aadhaar, ID front + back
+- Pending page — registration cards: circular avatar (photo or initials, deterministic color), click card body → **profile side drawer** with full details + ID proof tiles + Approve/Reject
+- Pending page — approval modal: 3-mode radio (approve only / assign bed / collect deposit)
+- Tenant detail page:
+  - Profile card (all new fields, masked Aadhaar, ID proof links) + "Edit profile" inline form with file uploads
+  - Financial summary bar (total paid / duration / balance, color-coded)
+  - End-stay **date picker** (replaces `confirm()` + hard-coded today)
+  - Unassigned stay: amber "Bed unassigned" badge + "Assign bed" → modal with vacant bed picker
+- `maskAadhaar()` helper: `XXXX-XXXX-1234`
+
+**Tests**
+- `tests/e2e/owner/tenant-profile-enrichment.test.ts` — 8 tests: public registration with profile fields, deposit-only approval, assign-bed, one-active-stay enforcement, summary endpoint, profile update, UI profile card, UI end-stay date picker
+
+---
+
+## Phase 8 — Deployment 🔜
 
 Planned:
 - Backend: Render Web Service (or Fly.io)

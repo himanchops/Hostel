@@ -4,6 +4,27 @@ import { useState } from "react";
 import { use } from "react";
 import { registrationApi, uploadApi, ApiError } from "@/lib/api";
 
+const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+const fileCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+const labelCls = "mb-1.5 block text-sm font-medium text-gray-700";
+const optionalSpan = <span className="text-gray-400 font-normal">(optional)</span>;
+
+function FileInput({ label, onChange, file, hint }: { label: React.ReactNode; onChange: (f: File | null) => void; file: File | null; hint?: string }) {
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+        className={fileCls}
+      />
+      {file && <p className="mt-1 text-xs text-gray-400">{file.name} ({(file.size / 1024).toFixed(0)} KB)</p>}
+      {hint && !file && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+    </div>
+  );
+}
+
 export default function RegisterPage({ params }: { params: Promise<{ ownerId: string }> }) {
   const { ownerId } = use(params);
   const ownerIdNum = parseInt(ownerId, 10);
@@ -12,7 +33,13 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [idProof, setIdProof] = useState<File | null>(null);
+  const [address, setAddress] = useState("");
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
+  const [workplace, setWorkplace] = useState("");
+  const [aadhaarNumber, setAadhaarNumber] = useState("");
+  const [idProofFront, setIdProofFront] = useState<File | null>(null);
+  const [idProofBack, setIdProofBack] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -30,16 +57,24 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
     setError("");
     setLoading(true);
     try {
-      let idProofUrl: string | undefined;
-      if (idProof) {
-        idProofUrl = await uploadApi.publicUpload(idProof);
-      }
+      let idProofFrontUrl: string | undefined;
+      let idProofBackUrl: string | undefined;
+      if (idProofFront) idProofFrontUrl = await uploadApi.publicUpload(idProofFront);
+      if (idProofBack) idProofBackUrl = await uploadApi.publicUpload(idProofBack);
+
       await registrationApi.register(ownerIdNum, {
         name,
         phone,
         email: email || undefined,
         password,
-        id_proof_url: idProofUrl,
+        id_proof_url: idProofFrontUrl,       // legacy fallback
+        id_proof_front_url: idProofFrontUrl,
+        id_proof_back_url: idProofBackUrl,
+        address: address || undefined,
+        emergency_contact_name: emergencyName || undefined,
+        emergency_contact_phone: emergencyPhone || undefined,
+        workplace: workplace || undefined,
+        aadhaar_number: aadhaarNumber || undefined,
       });
       setSubmitted(true);
     } catch (err) {
@@ -69,7 +104,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-gray-900">Tenant Registration</h1>
           <p className="mt-2 text-sm text-gray-500">
@@ -82,76 +117,81 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* ── Personal details ── */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Full name <span className="text-red-500">*</span>
-              </label>
-              <input
-                required
-                type="text"
-                placeholder="Your full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              <label className={labelCls}>Full name <span className="text-red-500">*</span></label>
+              <input required type="text" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Phone <span className="text-red-500">*</span></label>
+                <input required type="tel" placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Email {optionalSpan}</label>
+                <input type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>Home address {optionalSpan}</label>
+              <textarea
+                placeholder="Full home / permanent address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                rows={2}
+                className={inputCls + " resize-none"}
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Phone number <span className="text-red-500">*</span>
-              </label>
-              <input
-                required
-                type="tel"
-                placeholder="10-digit mobile number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              <label className={labelCls}>Workplace / College {optionalSpan}</label>
+              <input type="text" placeholder="Company or college name" value={workplace} onChange={(e) => setWorkplace(e.target.value)} className={inputCls} />
+            </div>
+
+            {/* ── Emergency contact ── */}
+            <div>
+              <p className="mb-2 text-sm font-semibold text-gray-700">Emergency contact {optionalSpan}</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Name</label>
+                  <input type="text" placeholder="Parent / guardian name" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Phone</label>
+                  <input type="tel" placeholder="Contact number" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* ── ID details ── */}
+            <div>
+              <label className={labelCls}>Aadhaar number {optionalSpan}</label>
+              <input type="text" placeholder="12-digit Aadhaar number" value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value)} maxLength={12} className={inputCls} />
+              <p className="mt-1 text-xs text-gray-400">Your Aadhaar number is stored securely and only visible to the property owner.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FileInput
+                label={<>ID proof — front {optionalSpan}</>}
+                onChange={setIdProofFront}
+                file={idProofFront}
+                hint="Aadhaar, passport, driving licence…"
+              />
+              <FileInput
+                label={<>ID proof — back {optionalSpan}</>}
+                onChange={setIdProofBack}
+                file={idProofBack}
               />
             </div>
 
+            {/* ── Portal password ── */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Email address <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Password <span className="text-red-500">*</span>
-              </label>
-              <input
-                required
-                type="password"
-                placeholder="Min. 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              />
+              <label className={labelCls}>Password <span className="text-red-500">*</span></label>
+              <input required type="password" placeholder="Min. 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} />
               <p className="mt-1 text-xs text-gray-400">You'll use this to log in to your tenant portal after approval.</p>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                ID proof <span className="text-gray-400 font-normal">(optional — photo/scan of Aadhaar, passport, etc.)</span>
-              </label>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                onChange={(e) => setIdProof(e.target.files?.[0] ?? null)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              />
-              {idProof && (
-                <p className="mt-1 text-xs text-gray-400">{idProof.name} ({(idProof.size / 1024).toFixed(0)} KB)</p>
-              )}
             </div>
 
             <button

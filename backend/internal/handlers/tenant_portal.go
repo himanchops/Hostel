@@ -21,7 +21,7 @@ func NewTenantPortalHandler(db *sqlx.DB) *TenantPortalHandler {
 
 type tenantStay struct {
 	ID            int64      `db:"id" json:"id"`
-	BedID         int64      `db:"bed_id" json:"bed_id"`
+	BedID         *int64     `db:"bed_id" json:"bed_id,omitempty"`
 	BedName       string     `db:"bed_name" json:"bed_name"`
 	RoomName      string     `db:"room_name" json:"room_name"`
 	SiteName      string     `db:"site_name" json:"site_name"`
@@ -42,13 +42,15 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 	var stays []tenantStay
 	err := h.db.Select(&stays,
 		`SELECT s.id, s.bed_id,
-		        b.name AS bed_name, r.name AS room_name, hs.name AS site_name,
+		        COALESCE(b.name, 'Unassigned') AS bed_name,
+		        COALESCE(r.name, '') AS room_name,
+		        COALESCE(hs.name, '') AS site_name,
 		        s.rent_amount, s.deposit_amount, s.rent_cycle, s.rent_due_day,
 		        s.start_date, s.end_date, s.notice_date, s.created_at
 		 FROM stays s
-		 JOIN beds b ON b.id = s.bed_id
-		 JOIN rooms r ON r.id = b.room_id
-		 JOIN hostel_sites hs ON hs.id = r.site_id
+		 LEFT JOIN beds b        ON b.id = s.bed_id
+		 LEFT JOIN rooms r       ON r.id = b.room_id
+		 LEFT JOIN hostel_sites hs ON hs.id = r.site_id
 		 WHERE s.tenant_id = $1
 		 ORDER BY s.start_date DESC`,
 		tenantID,

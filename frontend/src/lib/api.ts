@@ -166,9 +166,38 @@ export interface Tenant {
   email?: string;
   id_proof_url?: string;
   photo_url?: string;
+  address?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  workplace?: string;
+  aadhaar_number?: string;
+  id_proof_front_url?: string;
+  id_proof_back_url?: string;
   is_approved: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface TenantUpdateData {
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  workplace?: string;
+  aadhaar_number?: string;
+  id_proof_url?: string;
+  id_proof_front_url?: string;
+  id_proof_back_url?: string;
+  photo_url?: string;
+}
+
+export interface TenantSummary {
+  total_paid: number;      // paise
+  total_expected: number;  // paise
+  balance: number;         // paise (positive = owes)
+  duration_days: number;
 }
 
 export const tenantsApi = {
@@ -177,7 +206,7 @@ export const tenantsApi = {
   get: (token: string, id: number) => request<Tenant>(`/api/tenants/${id}`, {}, token),
   create: (token: string, data: { name: string; phone: string; email?: string }) =>
     request<Tenant>("/api/tenants", { method: "POST", body: JSON.stringify(data) }, token),
-  update: (token: string, id: number, data: { name: string; phone: string; email?: string }) =>
+  update: (token: string, id: number, data: TenantUpdateData) =>
     request<Tenant>(`/api/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),
   approve: (token: string, id: number, data: {
     bed_id?: number;
@@ -191,6 +220,8 @@ export const tenantsApi = {
     request<void>(`/api/tenants/${id}/reject`, { method: "DELETE" }, token),
   stays: (token: string, id: number) =>
     request<Stay[]>(`/api/tenants/${id}/stays`, {}, token),
+  summary: (token: string, id: number) =>
+    request<TenantSummary>(`/api/tenants/${id}/summary`, {}, token),
 };
 
 // ─── File Uploads ─────────────────────────────────────────────────────────────
@@ -210,7 +241,7 @@ async function uploadFile(endpoint: string, file: File, token?: string): Promise
 }
 
 export const uploadApi = {
-  /** Upload an ID proof during tenant self-registration (no auth required). */
+  /** Upload a file (no auth required) — used for tenant self-registration. */
   publicUpload: (file: File) => uploadFile("/public/upload", file),
   /** Upload a payment proof screenshot from the tenant portal. */
   tenantUpload: (file: File, token: string) => uploadFile("/tenant/upload", file, token),
@@ -218,8 +249,23 @@ export const uploadApi = {
 
 // ─── Public Registration ──────────────────────────────────────────────────────
 
+export interface PublicRegisterData {
+  name: string;
+  phone: string;
+  email?: string;
+  password: string;
+  id_proof_url?: string;        // legacy
+  id_proof_front_url?: string;
+  id_proof_back_url?: string;
+  address?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  workplace?: string;
+  aadhaar_number?: string;
+}
+
 export const registrationApi = {
-  register: (ownerId: number, data: { name: string; phone: string; email?: string; password: string; id_proof_url?: string }) =>
+  register: (ownerId: number, data: PublicRegisterData) =>
     request<Tenant>(`/public/register/${ownerId}`, { method: "POST", body: JSON.stringify(data) }),
 };
 
@@ -240,7 +286,7 @@ export const tenantAuthApi = {
 
 export interface TenantStay {
   id: number;
-  bed_id: number;
+  bed_id?: number;
   bed_name: string;
   room_name: string;
   site_name: string;
@@ -285,7 +331,7 @@ export const pendingPaymentsApi = {
 export interface Stay {
   id: number;
   tenant_id: number;
-  bed_id: number;
+  bed_id: number | null;  // null = pending bed assignment
   rent_amount: number;   // paise
   deposit_amount: number; // paise
   rent_cycle: "daily" | "weekly" | "monthly";
@@ -300,7 +346,7 @@ export interface Stay {
 export const staysApi = {
   create: (token: string, data: {
     tenant_id: number;
-    bed_id: number;
+    bed_id?: number;      // optional: null = pending assignment
     rent_amount: number;
     deposit_amount: number;
     rent_cycle: string;
@@ -310,6 +356,9 @@ export const staysApi = {
 
   update: (token: string, id: number, data: { end_date?: string; notice_date?: string }) =>
     request<Stay>(`/api/stays/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),
+
+  assignBed: (token: string, stayId: number, data: { bed_id: number }) =>
+    request<Stay>(`/api/stays/${stayId}/assign-bed`, { method: "PUT", body: JSON.stringify(data) }, token),
 
   payments: (token: string, stayId: number) =>
     request<Payment[]>(`/api/stays/${stayId}/payments`, {}, token),
@@ -418,4 +467,11 @@ export function formatCurrency(paise: number): string {
 /** YYYY-MM-DD of today */
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Mask aadhaar to show only last 4 digits: XXXX-XXXX-1234 */
+export function maskAadhaar(aadhaar: string): string {
+  const digits = aadhaar.replace(/\D/g, "");
+  if (digits.length < 4) return "XXXX-XXXX-XXXX";
+  return `XXXX-XXXX-${digits.slice(-4)}`;
 }

@@ -55,24 +55,31 @@ const (
 
 // Tenant represents a person renting a bed
 type Tenant struct {
-	ID           int64     `db:"id" json:"id"`
-	OwnerID      int64     `db:"owner_id" json:"owner_id"` // For multi-tenant isolation
-	Name         string    `db:"name" json:"name"`
-	Phone        string    `db:"phone" json:"phone"`
-	Email        string    `db:"email" json:"email,omitempty"`
-	IDProofURL   *string   `db:"id_proof_url" json:"id_proof_url,omitempty"`
-	PhotoURL     *string   `db:"photo_url" json:"photo_url,omitempty"`
-	PasswordHash string    `db:"password_hash" json:"-"`
-	IsApproved   bool      `db:"is_approved" json:"is_approved"`
-	CreatedAt    time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
+	ID                   int64     `db:"id" json:"id"`
+	OwnerID              int64     `db:"owner_id" json:"owner_id"` // For multi-tenant isolation
+	Name                 string    `db:"name" json:"name"`
+	Phone                string    `db:"phone" json:"phone"`
+	Email                string    `db:"email" json:"email,omitempty"`
+	IDProofURL           *string   `db:"id_proof_url" json:"id_proof_url,omitempty"`
+	PhotoURL             *string   `db:"photo_url" json:"photo_url,omitempty"`
+	Address              *string   `db:"address" json:"address,omitempty"`
+	EmergencyContactName *string   `db:"emergency_contact_name" json:"emergency_contact_name,omitempty"`
+	EmergencyContactPhone *string  `db:"emergency_contact_phone" json:"emergency_contact_phone,omitempty"`
+	Workplace            *string   `db:"workplace" json:"workplace,omitempty"`
+	AadhaarNumber        *string   `db:"aadhaar_number" json:"aadhaar_number,omitempty"`
+	IDProofFrontURL      *string   `db:"id_proof_front_url" json:"id_proof_front_url,omitempty"`
+	IDProofBackURL       *string   `db:"id_proof_back_url" json:"id_proof_back_url,omitempty"`
+	PasswordHash         string    `db:"password_hash" json:"-"`
+	IsApproved           bool      `db:"is_approved" json:"is_approved"`
+	CreatedAt            time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt            time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Stay represents a tenant's occupancy of a bed
 type Stay struct {
 	ID           int64      `db:"id" json:"id"`
 	TenantID     int64      `db:"tenant_id" json:"tenant_id"`
-	BedID        int64      `db:"bed_id" json:"bed_id"`
+	BedID        *int64     `db:"bed_id" json:"bed_id"` // Null if pending bed assignment
 	RentAmount   int64      `db:"rent_amount" json:"rent_amount"`     // In paise (INR * 100)
 	DepositAmount int64     `db:"deposit_amount" json:"deposit_amount"` // In paise
 	RentCycle    RentCycle  `db:"rent_cycle" json:"rent_cycle"`

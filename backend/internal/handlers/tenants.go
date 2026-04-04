@@ -22,17 +22,31 @@ func NewTenantHandler(db *sqlx.DB, authService *auth.Service) *TenantHandler {
 	return &TenantHandler{db: db, authService: authService}
 }
 
+// tenantCols is the SELECT column list for all tenant queries.
+const tenantCols = `id, owner_id, name, phone, email, id_proof_url, photo_url,
+	address, emergency_contact_name, emergency_contact_phone,
+	workplace, aadhaar_number, id_proof_front_url, id_proof_back_url,
+	is_approved, created_at, updated_at`
+
 type tenantRequest struct {
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
-	Email string `json:"email"`
+	Name                  string  `json:"name"`
+	Phone                 string  `json:"phone"`
+	Email                 string  `json:"email"`
+	Address               *string `json:"address"`
+	EmergencyContactName  *string `json:"emergency_contact_name"`
+	EmergencyContactPhone *string `json:"emergency_contact_phone"`
+	Workplace             *string `json:"workplace"`
+	AadhaarNumber         *string `json:"aadhaar_number"`
+	IDProofURL            *string `json:"id_proof_url"`
+	IDProofFrontURL       *string `json:"id_proof_front_url"`
+	IDProofBackURL        *string `json:"id_proof_back_url"`
+	PhotoURL              *string `json:"photo_url"`
 }
 
 func (h *TenantHandler) List(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 
-	query := `SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at
-		 FROM tenants WHERE owner_id = $1`
+	query := `SELECT ` + tenantCols + ` FROM tenants WHERE owner_id = $1`
 	if c.QueryParam("pending") == "true" {
 		query += " AND is_approved = false ORDER BY created_at DESC"
 	} else {
@@ -59,8 +73,7 @@ func (h *TenantHandler) Get(c echo.Context) error {
 
 	var tenant models.Tenant
 	err = h.db.QueryRowx(
-		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at
-		 FROM tenants WHERE id = $1 AND owner_id = $2`,
+		`SELECT `+tenantCols+` FROM tenants WHERE id = $1 AND owner_id = $2`,
 		tenantID, ownerID,
 	).StructScan(&tenant)
 	if err != nil {
@@ -84,10 +97,16 @@ func (h *TenantHandler) Create(c echo.Context) error {
 
 	var tenant models.Tenant
 	err := h.db.QueryRowx(
-		`INSERT INTO tenants (owner_id, name, phone, email, is_approved, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, true, $5, $5)
-		 RETURNING id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at`,
-		ownerID, req.Name, req.Phone, req.Email, time.Now(),
+		`INSERT INTO tenants (owner_id, name, phone, email,
+			address, emergency_contact_name, emergency_contact_phone,
+			workplace, aadhaar_number, id_proof_url, id_proof_front_url, id_proof_back_url, photo_url,
+			is_approved, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, $14, $14)
+		 RETURNING `+tenantCols,
+		ownerID, req.Name, req.Phone, req.Email,
+		req.Address, req.EmergencyContactName, req.EmergencyContactPhone,
+		req.Workplace, req.AadhaarNumber, req.IDProofURL, req.IDProofFrontURL, req.IDProofBackURL, req.PhotoURL,
+		time.Now(),
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create tenant"))
@@ -96,11 +115,18 @@ func (h *TenantHandler) Create(c echo.Context) error {
 }
 
 type publicRegisterRequest struct {
-	Name        string `json:"name"`
-	Phone       string `json:"phone"`
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	IDProofURL  string `json:"id_proof_url"`
+	Name                  string `json:"name"`
+	Phone                 string `json:"phone"`
+	Email                 string `json:"email"`
+	Password              string `json:"password"`
+	IDProofURL            string `json:"id_proof_url"` // legacy
+	IDProofFrontURL       string `json:"id_proof_front_url"`
+	IDProofBackURL        string `json:"id_proof_back_url"`
+	Address               string `json:"address"`
+	EmergencyContactName  string `json:"emergency_contact_name"`
+	EmergencyContactPhone string `json:"emergency_contact_phone"`
+	Workplace             string `json:"workplace"`
+	AadhaarNumber         string `json:"aadhaar_number"`
 }
 
 func (h *TenantHandler) PublicRegister(c echo.Context) error {
@@ -133,20 +159,57 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to process password"))
 	}
 
-	var idProofURL *string
+	// Validate upload URLs
+	var idProofURL, idProofFrontURL, idProofBackURL *string
 	if req.IDProofURL != "" {
 		if !ValidateUploadedURL(req.IDProofURL) {
 			return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_url"))
 		}
 		idProofURL = &req.IDProofURL
 	}
+	if req.IDProofFrontURL != "" {
+		if !ValidateUploadedURL(req.IDProofFrontURL) {
+			return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_front_url"))
+		}
+		idProofFrontURL = &req.IDProofFrontURL
+	}
+	if req.IDProofBackURL != "" {
+		if !ValidateUploadedURL(req.IDProofBackURL) {
+			return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_back_url"))
+		}
+		idProofBackURL = &req.IDProofBackURL
+	}
+
+	var address, emergencyName, emergencyPhone, workplace, aadhaar *string
+	if req.Address != "" {
+		address = &req.Address
+	}
+	if req.EmergencyContactName != "" {
+		emergencyName = &req.EmergencyContactName
+	}
+	if req.EmergencyContactPhone != "" {
+		emergencyPhone = &req.EmergencyContactPhone
+	}
+	if req.Workplace != "" {
+		workplace = &req.Workplace
+	}
+	if req.AadhaarNumber != "" {
+		aadhaar = &req.AadhaarNumber
+	}
 
 	var tenant models.Tenant
 	err = h.db.QueryRowx(
-		`INSERT INTO tenants (owner_id, name, phone, email, password_hash, id_proof_url, is_approved, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, false, $7, $7)
-		 RETURNING id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at`,
-		ownerID, req.Name, req.Phone, req.Email, hash, idProofURL, time.Now(),
+		`INSERT INTO tenants (owner_id, name, phone, email, password_hash,
+			id_proof_url, id_proof_front_url, id_proof_back_url,
+			address, emergency_contact_name, emergency_contact_phone,
+			workplace, aadhaar_number,
+			is_approved, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, false, $14, $14)
+		 RETURNING `+tenantCols,
+		ownerID, req.Name, req.Phone, req.Email, hash,
+		idProofURL, idProofFrontURL, idProofBackURL,
+		address, emergencyName, emergencyPhone, workplace, aadhaar,
+		time.Now(),
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to register"))
@@ -179,39 +242,63 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 	err = h.db.QueryRowx(
 		`UPDATE tenants SET is_approved = true, updated_at = $1
 		 WHERE id = $2 AND owner_id = $3
-		 RETURNING id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at`,
+		 RETURNING `+tenantCols,
 		time.Now(), tenantID, ownerID,
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
 
-	if req.BedID != nil {
-		// Validate bed belongs to this owner
-		var ownerCheck int64
-		err = h.db.QueryRow(
-			`SELECT hs.owner_id FROM beds b
-			 JOIN rooms r ON r.id = b.room_id
-			 JOIN hostel_sites hs ON hs.id = r.site_id
-			 WHERE b.id = $1`,
-			*req.BedID,
-		).Scan(&ownerCheck)
-		if err != nil || ownerCheck != ownerID {
-			return c.JSON(http.StatusForbidden, errorResponse("bed not found"))
+	// Create stay if either a bed is provided (full assignment) or a deposit is being collected (pending assignment)
+	if req.BedID != nil || req.RentAmount > 0 {
+		if req.RentCycle != "daily" && req.RentCycle != "weekly" && req.RentCycle != "monthly" {
+			req.RentCycle = "monthly"
+		}
+		if req.RentDueDay == 0 {
+			req.RentDueDay = 1
 		}
 
-		if req.RentCycle != "daily" && req.RentCycle != "weekly" && req.RentCycle != "monthly" {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid rent cycle"))
+		startDate := time.Now()
+		if req.StartDate != "" {
+			startDate, err = time.Parse("2006-01-02", req.StartDate)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, errorResponse("invalid start date"))
+			}
 		}
-		startDate, err := time.Parse("2006-01-02", req.StartDate)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid start date"))
+
+		if req.BedID != nil {
+			// Validate bed belongs to this owner
+			var ownerCheck int64
+			err = h.db.QueryRow(
+				`SELECT hs.owner_id FROM beds b
+				 JOIN rooms r ON r.id = b.room_id
+				 JOIN hostel_sites hs ON hs.id = r.site_id
+				 WHERE b.id = $1`,
+				*req.BedID,
+			).Scan(&ownerCheck)
+			if err != nil || ownerCheck != ownerID {
+				return c.JSON(http.StatusForbidden, errorResponse("bed not found"))
+			}
+
+			// Check bed is not already occupied
+			var activeStays int
+			h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, *req.BedID)
+			if activeStays > 0 {
+				return c.JSON(http.StatusConflict, errorResponse("bed is already occupied"))
+			}
+		}
+
+		// Check tenant doesn't already have an active stay
+		var activeTenantStays int
+		h.db.Get(&activeTenantStays, `SELECT COUNT(*) FROM stays WHERE tenant_id = $1 AND end_date IS NULL`, tenantID)
+		if activeTenantStays > 0 {
+			return c.JSON(http.StatusConflict, errorResponse("tenant already has an active stay"))
 		}
 
 		_, err = h.db.Exec(
 			`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, rent_due_day, start_date, created_at, updated_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
-			tenantID, *req.BedID, req.RentAmount, req.DepositAmount, req.RentCycle, req.RentDueDay, startDate, time.Now(),
+			tenantID, req.BedID, req.RentAmount, req.DepositAmount, req.RentCycle, req.RentDueDay, startDate, time.Now(),
 		)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errorResponse("tenant approved but failed to create stay: "+err.Error()))
@@ -259,15 +346,94 @@ func (h *TenantHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
 	}
 
+	// Validate upload URLs if provided
+	if req.IDProofURL != nil && *req.IDProofURL != "" && !ValidateUploadedURL(*req.IDProofURL) {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_url"))
+	}
+	if req.IDProofFrontURL != nil && *req.IDProofFrontURL != "" && !ValidateUploadedURL(*req.IDProofFrontURL) {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_front_url"))
+	}
+	if req.IDProofBackURL != nil && *req.IDProofBackURL != "" && !ValidateUploadedURL(*req.IDProofBackURL) {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_back_url"))
+	}
+	if req.PhotoURL != nil && *req.PhotoURL != "" && !ValidateUploadedURL(*req.PhotoURL) {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid photo_url"))
+	}
+
 	var tenant models.Tenant
 	err = h.db.QueryRowx(
-		`UPDATE tenants SET name = $1, phone = $2, email = $3, updated_at = $4
-		 WHERE id = $5 AND owner_id = $6
-		 RETURNING id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at`,
-		req.Name, req.Phone, req.Email, time.Now(), tenantID, ownerID,
+		`UPDATE tenants
+		 SET name = $1, phone = $2, email = $3,
+		     address = $4, emergency_contact_name = $5, emergency_contact_phone = $6,
+		     workplace = $7, aadhaar_number = $8,
+		     id_proof_url = COALESCE($9, id_proof_url),
+		     id_proof_front_url = COALESCE($10, id_proof_front_url),
+		     id_proof_back_url = COALESCE($11, id_proof_back_url),
+		     photo_url = COALESCE($12, photo_url),
+		     updated_at = $13
+		 WHERE id = $14 AND owner_id = $15
+		 RETURNING `+tenantCols,
+		req.Name, req.Phone, req.Email,
+		req.Address, req.EmergencyContactName, req.EmergencyContactPhone,
+		req.Workplace, req.AadhaarNumber,
+		req.IDProofURL, req.IDProofFrontURL, req.IDProofBackURL, req.PhotoURL,
+		time.Now(), tenantID, ownerID,
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
 	return c.JSON(http.StatusOK, tenant)
+}
+
+// TenantSummary holds aggregate stats for a tenant's stays and payments.
+type TenantSummary struct {
+	TotalPaid    int64 `db:"total_paid" json:"total_paid"`
+	TotalExpected int64 `db:"total_expected" json:"total_expected"`
+	Balance      int64 `json:"balance"`
+	DurationDays int64 `db:"duration_days" json:"duration_days"`
+}
+
+func (h *TenantHandler) Summary(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	tenantID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid tenant id"))
+	}
+
+	// Verify tenant belongs to owner
+	var count int
+	h.db.Get(&count, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID)
+	if count == 0 {
+		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+	}
+
+	var summary TenantSummary
+	err = h.db.QueryRowx(`
+		SELECT
+			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true), 0) AS total_paid,
+			COALESCE(SUM(
+				CASE
+					WHEN s.rent_cycle = 'monthly' THEN
+						s.rent_amount * GREATEST(1,
+							EXTRACT(YEAR FROM AGE(COALESCE(s.end_date, CURRENT_DATE), s.start_date::date))::int * 12 +
+							EXTRACT(MONTH FROM AGE(COALESCE(s.end_date, CURRENT_DATE), s.start_date::date))::int
+						)
+					WHEN s.rent_cycle = 'weekly' THEN
+						s.rent_amount * GREATEST(1, (COALESCE(s.end_date, CURRENT_DATE) - s.start_date::date) / 7)
+					ELSE
+						s.rent_amount * GREATEST(1, (COALESCE(s.end_date, CURRENT_DATE) - s.start_date::date))
+				END
+			), 0) AS total_expected,
+			COALESCE(SUM(COALESCE(s.end_date, CURRENT_DATE) - s.start_date::date), 0) AS duration_days
+		FROM stays s
+		LEFT JOIN payments p ON p.stay_id = s.id
+		WHERE s.tenant_id = $1`,
+		tenantID,
+	).StructScan(&summary)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, errorResponse("failed to compute summary"))
+	}
+
+	summary.Balance = summary.TotalExpected - summary.TotalPaid
+	return c.JSON(http.StatusOK, summary)
 }

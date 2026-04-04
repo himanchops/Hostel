@@ -134,11 +134,13 @@ func main() {
 	api.POST("/tenants/:id/approve", tenantHandler.Approve)
 	api.DELETE("/tenants/:id/reject", tenantHandler.Reject)
 	api.GET("/tenants/:id/stays", stayHandler.ListByTenant)
+	api.GET("/tenants/:id/summary", tenantHandler.Summary)
 
 	// Stays
 	api.POST("/stays", stayHandler.Create)
 	api.GET("/stays/:id", stayHandler.Get)
 	api.PUT("/stays/:id", stayHandler.Update)
+	api.PUT("/stays/:id/assign-bed", stayHandler.AssignBed)
 
 	// Payments (nested under stays)
 	api.GET("/stays/:stayId/payments", paymentHandler.List)
