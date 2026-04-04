@@ -177,7 +177,28 @@ _Committed: `8481bb4`_
 
 ---
 
-## Phase 8 — Deployment 🔜
+## Phase 8 — Tenant UX Polish 🔜
+
+### 8a — Approval drawer: inline rent/stay fields
+
+Currently the profile drawer (click on pending registration card) shows personal details but the rent/stay configuration lives in a separate approval modal that opens after clicking "Approve →". The flow works, but the drawer itself should surface any missing required inputs earlier:
+
+- When "Approve & assign bed" or "Approve & collect deposit" is selected in the modal, validate that start date, rent amount, billing cycle and due day are all filled before submitting
+- Consider collapsing the two-step drawer → modal into a **single drawer** that expands inline: profile section at top, approval config section at bottom — avoids two overlapping layers
+
+### 8b — Add Tenant: full profile form
+
+The `/tenants` page "Add tenant" inline form only has name / phone / email. This predates the profile enrichment work. Options to discuss:
+
+1. **Expand the inline form** — add all profile fields (address, workplace, emergency contact, Aadhaar, ID upload) to the existing quick-add panel. Pro: stays on-page. Con: the form becomes very long.
+2. **Full-page create flow** — "+ Add tenant" navigates to `/tenants/new` which reuses the same form components as the tenant detail edit view. After save, redirect to the new tenant's detail page. Pro: clean, full space. Con: extra navigation step.
+3. **Modal / slide-over** — same full form but in a right-side drawer, similar to the registration profile drawer. Pro: stays in context. Con: lots of fields in a narrow panel.
+
+**Recommended**: option 2 (full-page `/tenants/new`) — keeps `/tenants` list page clean and gives the full edit form a single canonical home. The "Edit profile" form on `/tenants/[id]` can share the same component.
+
+---
+
+## Phase 9 — Deployment 🔜
 
 Planned:
 - Backend: Render Web Service (or Fly.io)
