@@ -37,6 +37,19 @@ hostel/
 └── docker-compose.yml       # PostgreSQL
 ```
 
+## Current Status
+
+**See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
+
+Current state: **Phase 7 complete** (tenant profile enrichment, registration UX, profile drawer). Next: **Phase 8** — approval drawer UX polish + full Add Tenant form (`/tenants/new`). Details in `docs/PROGRESS.md` under Phase 8.
+
+Key conventions to carry forward:
+- Every new feature ships with a Playwright e2e test in `frontend/tests/e2e/`
+- Amounts stored in **paise** (₹1 = 100 paise), displayed via `formatCurrency()`
+- Go binary and Node are not in default PATH in Claude's shell — use `~/sdk/go1.24.6/bin/go` and `/opt/homebrew/opt/node/bin/npm` etc.
+
+---
+
 ## Project Overview
 
 Multi-tenant SaaS web application for hostel and PG (paying guest) owners to manage rent tracking and occupancy planning. Core value is a dynamic room grid showing occupancy and payment status with support for irregular usage patterns and backfilled data entries.
