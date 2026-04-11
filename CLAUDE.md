@@ -48,6 +48,17 @@ Key conventions to carry forward:
 - Amounts stored in **paise** (₹1 = 100 paise), displayed via `formatCurrency()`
 - Go binary and Node are not in default PATH in Claude's shell — use `~/sdk/go1.24.6/bin/go` and `/opt/homebrew/opt/node/bin/npm` etc.
 
+## Git Remote
+
+Remote: `git@github-personal:himanchops/Hostel.git`
+
+Uses SSH host alias `github-personal` (defined in `~/.ssh/config` → `~/.ssh/github_personal` key). Always use this alias in remote URLs — **not** `git@github.com`.
+
+```bash
+git remote add origin git@github-personal:himanchops/Hostel.git
+git push -u origin master
+```
+
 ---
 
 ## Project Overview
