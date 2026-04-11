@@ -3,21 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
-import { tenantsApi, Tenant, ApiError } from "@/lib/api";
+import { tenantsApi, Tenant } from "@/lib/api";
 
 export default function TenantsPage() {
   const { token } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-
-  // Create form
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [formError, setFormError] = useState("");
-  const [formLoading, setFormLoading] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -31,25 +23,6 @@ export default function TenantsPage() {
       (t.email || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!token) return;
-    setFormError("");
-    setFormLoading(true);
-    try {
-      const t = await tenantsApi.create(token, { name, phone, email: email || undefined });
-      setTenants((prev) => [...prev, t].sort((a, b) => a.name.localeCompare(b.name)));
-      setName("");
-      setPhone("");
-      setEmail("");
-      setShowForm(false);
-    } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Failed to create tenant");
-    } finally {
-      setFormLoading(false);
-    }
-  }
-
   return (
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
@@ -57,61 +30,13 @@ export default function TenantsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Tenants</h1>
           <p className="mt-1 text-sm text-gray-500">All registered tenants across your properties</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
+        <Link
+          href="/tenants/new"
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500"
         >
           + Add tenant
-        </button>
+        </Link>
       </div>
-
-      {/* Create form */}
-      {showForm && (
-        <div className="mb-6 rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
-          <h3 className="mb-4 text-base font-semibold text-gray-900">New tenant</h3>
-          {formError && (
-            <div className="mb-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{formError}</div>
-          )}
-          <form onSubmit={handleCreate} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <input
-              required
-              placeholder="Full name *"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            />
-            <input
-              required
-              placeholder="Phone *"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            />
-            <input
-              placeholder="Email (optional)"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            />
-            <div className="flex gap-2 sm:col-span-3">
-              <button
-                type="submit"
-                disabled={formLoading}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
-              >
-                {formLoading ? "Creating…" : "Create"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowForm(false); setFormError(""); }}
-                className="rounded-lg px-4 py-2 text-sm text-gray-500 transition hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* Search */}
       {tenants.length > 0 && (

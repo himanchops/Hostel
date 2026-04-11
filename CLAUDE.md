@@ -41,7 +41,7 @@ hostel/
 
 **See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
 
-Current state: **Phase 7 complete** (tenant profile enrichment, registration UX, profile drawer). Next: **Phase 8** — approval drawer UX polish + full Add Tenant form (`/tenants/new`). Details in `docs/PROGRESS.md` under Phase 8.
+Current state: **Phase 8 complete** (unified approval drawer, full Add Tenant form at `/tenants/new`). Next: **Phase 9** — deployment. Details in `docs/PROGRESS.md`.
 
 Key conventions to carry forward:
 - Every new feature ships with a Playwright e2e test in `frontend/tests/e2e/`

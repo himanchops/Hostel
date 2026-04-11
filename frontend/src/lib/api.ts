@@ -204,7 +204,7 @@ export const tenantsApi = {
   list: (token: string, pending?: boolean) =>
     request<Tenant[]>(`/api/tenants${pending ? "?pending=true" : ""}`, {}, token),
   get: (token: string, id: number) => request<Tenant>(`/api/tenants/${id}`, {}, token),
-  create: (token: string, data: { name: string; phone: string; email?: string }) =>
+  create: (token: string, data: TenantUpdateData) =>
     request<Tenant>("/api/tenants", { method: "POST", body: JSON.stringify(data) }, token),
   update: (token: string, id: number, data: TenantUpdateData) =>
     request<Tenant>(`/api/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),

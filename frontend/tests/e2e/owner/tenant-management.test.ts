@@ -59,26 +59,21 @@ test.describe("Tenant management", () => {
     await page.evaluate((t) => localStorage.setItem("hostel_token", t), token);
     await page.goto("/tenants");
 
-    // Open the create form
-    await page.getByRole("button", { name: "+ Add tenant" }).click();
-    await expect(page.getByText("New tenant")).toBeVisible();
+    // Click "+ Add tenant" link → navigates to /tenants/new
+    await page.getByRole("link", { name: "+ Add tenant" }).click();
+    await expect(page.getByText("Add new tenant")).toBeVisible();
 
     // Fill the form
     const uiName = `UI Tenant ${RUN_ID}`;
     const uiPhone = `7${RUN_ID.slice(-9)}`;
-    await page.getByPlaceholder("Full name *").fill(uiName);
-    await page.getByPlaceholder("Phone *").fill(uiPhone);
-    await page.getByPlaceholder("Email (optional)").fill(`ui-tenant-${RUN_ID}@test.local`);
+    await page.getByPlaceholder("e.g. Rahul Sharma").fill(uiName);
+    await page.getByPlaceholder("e.g. 9876543210").fill(uiPhone);
 
     // Submit
-    await page.getByRole("button", { name: "Create" }).click();
+    await page.getByRole("button", { name: "Create tenant" }).click();
 
-    // Should NOT show an error
-    await expect(page.locator(".bg-red-50")).not.toBeVisible();
-
-    // Tenant should appear in the list
-    await expect(page.getByText(uiName)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(uiPhone)).toBeVisible();
+    // Should redirect to the tenant detail page
+    await expect(page.getByRole("heading", { name: uiName })).toBeVisible({ timeout: 5000 });
   });
 
   test("create form shows validation error for missing name", async ({ page, request }) => {
@@ -89,13 +84,12 @@ test.describe("Tenant management", () => {
 
     await page.goto("/");
     await page.evaluate((t) => localStorage.setItem("hostel_token", t), token);
-    await page.goto("/tenants");
+    await page.goto("/tenants/new");
 
-    await page.getByRole("button", { name: "+ Add tenant" }).click();
-    await page.getByPlaceholder("Phone *").fill("9999999999");
-    await page.getByRole("button", { name: "Create" }).click();
+    await page.getByPlaceholder("e.g. 9876543210").fill("9999999999");
+    await page.getByRole("button", { name: "Create tenant" }).click();
 
     // Browser native required validation prevents submission — form stays open
-    await expect(page.getByText("New tenant")).toBeVisible();
+    await expect(page.getByText("Add new tenant")).toBeVisible();
   });
 });
