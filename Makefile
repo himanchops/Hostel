@@ -1,6 +1,6 @@
 export PATH := /opt/homebrew/opt/node/bin:/opt/homebrew/bin:$(PATH)
 
-.PHONY: dev setup db-up db-down migrate backend frontend test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
+.PHONY: dev setup db-up db-down migrate backend frontend import-data import-data-dry test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -53,6 +53,18 @@ frontend:
 # Build backend
 build-backend:
 	cd backend && go build -o bin/server cmd/server/main.go
+
+# Bulk-import tenants/stays/payments from a JSON file (see docs/import-prompt.md)
+# Usage: make import-data OWNER=you@example.com FILE=ledger.json
+import-data:
+	@test -n "$(OWNER)" || (echo "Error: OWNER=<email> required" && exit 1)
+	@test -n "$(FILE)" || (echo "Error: FILE=<path.json> required" && exit 1)
+	cd backend && go run ./cmd/import --owner $(OWNER) --file ../$(FILE)
+
+import-data-dry:
+	@test -n "$(OWNER)" || (echo "Error: OWNER=<email> required" && exit 1)
+	@test -n "$(FILE)" || (echo "Error: FILE=<path.json> required" && exit 1)
+	cd backend && go run ./cmd/import --owner $(OWNER) --file ../$(FILE) --dry-run
 
 # Run all tests
 test:
