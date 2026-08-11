@@ -346,6 +346,52 @@ refund. Currently done on a hand calculator; money mistakes happen there.
 
 ---
 
+## Known Issues
+
+Found while verifying the billing fixes (Aug 2026). None are fixed yet.
+
+### `rent_due_day` is stored but never used 🐞
+`stays.rent_due_day` is written on create/approve (defaulting to 1), returned by
+the API, and exposed in the models — but **no billing code reads it**.
+`cyclesElapsed` takes only `(startDate, today, cycle)`. Billing is anchored to
+the stay's `start_date`, so the column is dead weight that looks meaningful.
+Either wire it into the cycle math or drop it; leaving it is a trap.
+
+### Month-end move-ins skip a cycle 🐞
+`cyclesElapsed` rolls over when `today.Day() >= startDate.Day()`. For a stay
+starting on the 31st, no day in February satisfies that, so February never
+rolls over and the tenant is not billed for it. Same for the 29th/30th.
+Covered (as current behaviour, not endorsed) by
+`TestCyclesElapsed_MonthEndMoveIn`. Fix would clamp the anchor day to the
+last day of a short month.
+
+### `PUT /api/stays/:id` clobbers the field you didn't send 🐞
+`Update` runs `SET end_date = $1, notice_date = $2` unconditionally from the
+request body. Sending only `end_date` writes `notice_date = NULL`, silently
+erasing a recorded notice. Should use `COALESCE`-style partial updates, or
+distinguish "absent" from "explicitly null".
+
+### `start_date` cannot be corrected 🐞
+`updateStayRequest` accepts only `end_date` and `notice_date`. If a stay is
+recorded with the wrong start date, every derived number (cycles due, balance,
+duration) is wrong with no way to fix it from the UI. Owners need to edit
+`start_date`, `rent_amount`, and `rent_cycle` on an existing stay.
+
+### Vacate-from-grid can't backfill a date 🐞
+The tenant detail page ends a stay via a date picker (so a departure can be
+recorded days later), but the grid's vacate path uses `confirm()` and hardcodes
+today — see `handleVacate` in `sites/[id]/grid/page.tsx`. The two paths disagree.
+Design Phase D already plans to replace it with a `ConfirmDialog` plus date
+picker; until then, backfilling only works from the tenant page.
+
+### Collapsed stay cards show "Paid ₹0" 🐞 (cosmetic)
+On the tenant detail page the ledger is lazy-loaded on expand, but the card's
+"Paid ₹X" total is computed from the not-yet-loaded payments array, so a
+collapsed stay always reads ₹0. Either load totals up front or omit the figure
+until expanded.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
