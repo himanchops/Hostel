@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -19,17 +21,25 @@ import (
 func main() {
 	godotenv.Load()
 
-	dbPort, _ := strconv.Atoi(getEnv("DB_PORT", "5432"))
-	dbConfig := database.Config{
-		Host:     getEnv("DB_HOST", "localhost"),
-		Port:     dbPort,
-		User:     getEnv("DB_USER", "hostel"),
-		Password: getEnv("DB_PASSWORD", "hostel_dev"),
-		DBName:   getEnv("DB_NAME", "hostel"),
-		SSLMode:  getEnv("DB_SSLMODE", "disable"),
+	// In production, hosted Postgres providers (Neon, Render, Supabase, Fly)
+	// hand out a single DATABASE_URL. Locally we keep the per-field DB_* vars.
+	var (
+		db  *sqlx.DB
+		err error
+	)
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		db, err = database.ConnectURL(dbURL)
+	} else {
+		dbPort, _ := strconv.Atoi(getEnv("DB_PORT", "5432"))
+		db, err = database.Connect(database.Config{
+			Host:     getEnv("DB_HOST", "localhost"),
+			Port:     dbPort,
+			User:     getEnv("DB_USER", "hostel"),
+			Password: getEnv("DB_PASSWORD", "hostel_dev"),
+			DBName:   getEnv("DB_NAME", "hostel"),
+			SSLMode:  getEnv("DB_SSLMODE", "disable"),
+		})
 	}
-
-	db, err := database.Connect(dbConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -38,11 +48,11 @@ func main() {
 	jwtSecret := getEnv("JWT_SECRET", "dev-secret-change-in-production")
 	authService := auth.NewService(jwtSecret, 24*time.Hour)
 
-	// Storage
-	storageSvc := storage.NewLocalStorage(
-		"./uploads",
-		getEnv("BASE_URL", "http://localhost:8080"),
-	)
+	// Storage backend selected by STORAGE_BACKEND env var (s3 or local).
+	storageSvc, err := storage.NewFromEnv(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to initialize storage backend: %v", err)
+	}
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(db, authService)

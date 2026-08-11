@@ -41,7 +41,9 @@ hostel/
 
 **See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
 
-Current state: **Phase 8 complete** (unified approval drawer, full Add Tenant form at `/tenants/new`). Next: **Phase 9** — deployment. Details in `docs/PROGRESS.md`.
+Current state: **Phase 9.1 done on `phase-9-deploy-prep` branch** (uncommitted — awaiting local `go build`/`go test` verify before commit + PR) — S3Storage, storage selector + unit tests, `render.yaml`, `backend/.env.example`, `docs/DEPLOYMENT.md`, `cmd/storage-check` smoke-test CLI.
+
+**Roadmap decision (Apr 2026): deployment is deferred until after the UI modernization and two value features.** Execution order: design Phases A–B (`docs/DESIGN_PLAN.md`) → Phase 10 Collections & WhatsApp nudges (`docs/PROGRESS.md`) → design Phases C–E → Phase 11 Settlement calculator → deploy (Phase 9.2–9.6, `docs/DEPLOYMENT.md`).
 
 Key conventions to carry forward:
 - Every new feature ships with a Playwright e2e test in `frontend/tests/e2e/`
