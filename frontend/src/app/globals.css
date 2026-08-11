@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ── Design tokens ─────────────────────────────────────────────────────────
+   "Calm ledger" — warm neutral surfaces, one accent (indigo), and the five
+   bed-status colors as the loudest thing on any screen.
+
+   Status colors are defined here as the SINGLE source of truth. The grid,
+   legend, badges, and dashboard must all read these tokens — never raw
+   green-/amber-/red-/orange- utilities. Status hues are reserved for bed
+   status only; do not reuse them decoratively.
+
+   Usage: bg-paid-100, border-paid-200, text-paid-800, bg-overdue-500, etc.
+   ------------------------------------------------------------------------ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* vacant — stone */
+  --color-vacant-50: #fafaf9;
+  --color-vacant-100: #f5f5f4;
+  --color-vacant-200: #e7e5e4;
+  --color-vacant-500: #78716c;
+  --color-vacant-700: #44403c;
+  --color-vacant-800: #292524;
+
+  /* paid — emerald */
+  --color-paid-50: #ecfdf5;
+  --color-paid-100: #d1fae5;
+  --color-paid-200: #a7f3d0;
+  --color-paid-500: #10b981;
+  --color-paid-700: #047857;
+  --color-paid-800: #065f46;
+
+  /* partial — amber */
+  --color-partial-50: #fffbeb;
+  --color-partial-100: #fef3c7;
+  --color-partial-200: #fde68a;
+  --color-partial-500: #f59e0b;
+  --color-partial-700: #b45309;
+  --color-partial-800: #92400e;
+
+  /* overdue — red */
+  --color-overdue-50: #fef2f2;
+  --color-overdue-100: #fee2e2;
+  --color-overdue-200: #fecaca;
+  --color-overdue-500: #ef4444;
+  --color-overdue-700: #b91c1c;
+  --color-overdue-800: #991b1b;
+
+  /* vacating soon — orange */
+  --color-vacating-50: #fff7ed;
+  --color-vacating-100: #ffedd5;
+  --color-vacating-200: #fed7aa;
+  --color-vacating-500: #f97316;
+  --color-vacating-700: #c2410c;
+  --color-vacating-800: #9a3412;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #fafaf9; /* stone-50 — app background */
+  --foreground: #1c1917; /* stone-900 */
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Money and counts must not jitter as digits change — use Tailwind's
+   `tabular-nums` utility on any numeric cell. */

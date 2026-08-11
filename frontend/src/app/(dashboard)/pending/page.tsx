@@ -18,8 +18,8 @@ import {
   maskAadhaar,
 } from "@/lib/api";
 
-const selectCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
-const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+const selectCls = "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+const inputCls = "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -57,8 +57,8 @@ function Row({ icon, label, value }: { icon: string; label: string; value: strin
     <div className="flex items-start gap-2">
       <span className="mt-0.5 text-base leading-none">{icon}</span>
       <div>
-        <p className="text-xs font-medium text-gray-400">{label}</p>
-        <p className="text-sm text-gray-700">{value}</p>
+        <p className="text-xs font-medium text-stone-400">{label}</p>
+        <p className="text-sm text-stone-700">{value}</p>
       </div>
     </div>
   );
@@ -68,7 +68,7 @@ function IdProofTile({ label, url, isImage }: { label: string; url: string; isIm
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="group flex-1">
       {isImage ? (
-        <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 aspect-[3/2]">
+        <div className="relative overflow-hidden rounded-lg border border-stone-200 bg-stone-50 aspect-[3/2]">
           <img src={url} alt={`ID ${label}`} className="h-full w-full object-cover transition group-hover:opacity-80" />
           <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition">
             <span className="px-2 py-1 text-xs font-semibold text-white">Open</span>
@@ -76,11 +76,11 @@ function IdProofTile({ label, url, isImage }: { label: string; url: string; isIm
           <div className="absolute top-1.5 left-1.5 rounded bg-black/50 px-1.5 py-0.5 text-xs font-medium text-white">{label}</div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 transition group-hover:bg-gray-100">
+        <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 transition group-hover:bg-stone-100">
           <svg className="h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
           </svg>
-          <span className="text-xs font-medium text-gray-700">ID {label} (PDF)</span>
+          <span className="text-xs font-medium text-stone-700">ID {label} (PDF)</span>
         </div>
       )}
     </a>
@@ -98,7 +98,7 @@ function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, deposi
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">Billing cycle</label>
+        <label className="mb-1.5 block text-sm font-medium text-stone-700">Billing cycle</label>
         <select value={rentCycle} onChange={(e) => setRentCycle(e.target.value)} className={selectCls}>
           <option value="monthly">Monthly</option>
           <option value="weekly">Weekly</option>
@@ -106,19 +106,19 @@ function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, deposi
         </select>
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">Due day</label>
+        <label className="mb-1.5 block text-sm font-medium text-stone-700">Due day</label>
         <input type="number" min="1" max="31" value={rentDueDay} onChange={(e) => setRentDueDay(e.target.value)} className={inputCls} />
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">{rentLabel} <span className="text-red-500">*</span></label>
+        <label className="mb-1.5 block text-sm font-medium text-stone-700">{rentLabel} <span className="text-red-500">*</span></label>
         <input type="number" min="0" placeholder="e.g. 5000" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)} className={inputCls} />
       </div>
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">Deposit (₹)</label>
+        <label className="mb-1.5 block text-sm font-medium text-stone-700">Deposit (₹)</label>
         <input type="number" min="0" placeholder="e.g. 10000" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={inputCls} />
       </div>
       <div className="col-span-2">
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">Start date <span className="text-red-500">*</span></label>
+        <label className="mb-1.5 block text-sm font-medium text-stone-700">Start date <span className="text-red-500">*</span></label>
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
       </div>
     </div>
@@ -229,20 +229,20 @@ function ReviewDrawer({
       {/* Drawer */}
       <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
           <div className="flex items-center gap-2">
             {step === "approve" && (
-              <button onClick={() => { setStep("review"); setError(""); }} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <button onClick={() => { setStep("review"); setError(""); }} className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
             )}
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            <h2 className="text-sm font-semibold text-stone-700 uppercase tracking-wide">
               {step === "review" ? "Registration details" : "Approve registration"}
             </h2>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button onClick={onClose} className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -255,16 +255,16 @@ function ReviewDrawer({
           <div className="flex items-center gap-4">
             <Avatar name={tenant.name} photoUrl={tenant.photo_url} size="lg" />
             <div>
-              <p className="text-lg font-bold text-gray-900">{tenant.name}</p>
-              <p className="text-sm text-gray-500">{tenant.phone}</p>
-              {tenant.email && <p className="text-sm text-gray-400">{tenant.email}</p>}
+              <p className="text-lg font-bold text-stone-900">{tenant.name}</p>
+              <p className="text-sm text-stone-500">{tenant.phone}</p>
+              {tenant.email && <p className="text-sm text-stone-400">{tenant.email}</p>}
             </div>
           </div>
 
           {/* Step: Review — profile details */}
           {step === "review" && (
             <>
-              <div className="space-y-3 rounded-xl bg-gray-50 px-4 py-4">
+              <div className="space-y-3 rounded-xl bg-stone-50 px-4 py-4">
                 {tenant.workplace && (
                   <Row icon="📍" label="Workplace / College" value={tenant.workplace} />
                 )}
@@ -284,7 +284,7 @@ function ReviewDrawer({
 
               {(idFront || idBack) && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">ID Proof</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">ID Proof</p>
                   <div className="flex gap-3">
                     {idFront && <IdProofTile label="Front" url={idFront} isImage={isImage(idFront)} />}
                     {idBack && <IdProofTile label="Back" url={idBack} isImage={isImage(idBack)} />}
@@ -303,9 +303,9 @@ function ReviewDrawer({
 
               {/* Mode selection */}
               <div className="space-y-2">
-                <p className="text-sm font-medium text-gray-700">What would you like to do?</p>
+                <p className="text-sm font-medium text-stone-700">What would you like to do?</p>
                 {(["approve_only", "assign_bed", "collect_deposit"] as ApproveMode[]).map((m) => (
-                  <label key={m} className="flex items-start gap-3 cursor-pointer rounded-lg border border-gray-200 p-3 hover:bg-gray-50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
+                  <label key={m} className="flex items-start gap-3 cursor-pointer rounded-lg border border-stone-200 p-3 hover:bg-stone-50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
                     <input
                       type="radio"
                       name="approve_mode"
@@ -315,12 +315,12 @@ function ReviewDrawer({
                       className="mt-0.5 h-4 w-4 text-indigo-600"
                     />
                     <div>
-                      <p className="text-sm font-medium text-gray-800">
+                      <p className="text-sm font-medium text-stone-800">
                         {m === "approve_only" && "Approve only"}
                         {m === "assign_bed" && "Approve & assign bed"}
                         {m === "collect_deposit" && "Approve & collect deposit (assign bed later)"}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-stone-500">
                         {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
                         {m === "assign_bed" && "Approve and assign to a specific bed now."}
                         {m === "collect_deposit" && "Collect a deposit/advance now. Bed assigned when tenant moves in."}
@@ -332,10 +332,10 @@ function ReviewDrawer({
 
               {/* Assign bed flow */}
               {mode === "assign_bed" && (
-                <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+                <div className="space-y-4 rounded-xl border border-stone-200 p-4">
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Site</label>
-                    {sitesLoading ? <p className="text-sm text-gray-400">Loading…</p> : (
+                    <label className="mb-1.5 block text-sm font-medium text-stone-700">Site</label>
+                    {sitesLoading ? <p className="text-sm text-stone-400">Loading…</p> : (
                       <select value={siteId} onChange={(e) => setSiteId(e.target.value ? parseInt(e.target.value) : "")} className={selectCls}>
                         <option value="">Select a site…</option>
                         {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -344,9 +344,9 @@ function ReviewDrawer({
                   </div>
                   {siteId && (
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-700">Bed</label>
-                      {roomsLoading ? <p className="text-sm text-gray-400">Loading…</p> : vacantBeds.length === 0 ? (
-                        <p className="text-sm text-gray-400">No vacant beds at this site.</p>
+                      <label className="mb-1.5 block text-sm font-medium text-stone-700">Bed</label>
+                      {roomsLoading ? <p className="text-sm text-stone-400">Loading…</p> : vacantBeds.length === 0 ? (
+                        <p className="text-sm text-stone-400">No vacant beds at this site.</p>
                       ) : (
                         <select value={selectedBed?.id ?? ""} onChange={(e) => setSelectedBed(vacantBeds.find((b) => b.id === parseInt(e.target.value)) ?? null)} className={selectCls}>
                           <option value="">Select a bed…</option>
@@ -361,8 +361,8 @@ function ReviewDrawer({
 
               {/* Collect deposit flow */}
               {mode === "collect_deposit" && (
-                <div className="space-y-4 rounded-xl border border-gray-200 p-4">
-                  <p className="text-xs text-gray-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
+                <div className="space-y-4 rounded-xl border border-stone-200 p-4">
+                  <p className="text-xs text-stone-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
                   <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} rentDueDay={rentDueDay} setRentDueDay={setRentDueDay} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />
                 </div>
               )}
@@ -371,7 +371,7 @@ function ReviewDrawer({
         </div>
 
         {/* Footer actions */}
-        <div className="border-t border-gray-100 px-5 py-4 flex gap-2">
+        <div className="border-t border-stone-100 px-5 py-4 flex gap-2">
           {step === "review" ? (
             <>
               <button
@@ -393,7 +393,7 @@ function ReviewDrawer({
               <button
                 onClick={() => { setStep("review"); setError(""); }}
                 disabled={loading}
-                className="rounded-lg px-4 py-2.5 text-sm text-gray-500 transition hover:bg-gray-100 disabled:opacity-60"
+                className="rounded-lg px-4 py-2.5 text-sm text-stone-500 transition hover:bg-stone-100 disabled:opacity-60"
               >
                 Back
               </button>
@@ -477,17 +477,17 @@ export default function PendingPage() {
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Pending</h1>
-        <p className="mt-1 text-sm text-gray-500">Review registrations and payment submissions.</p>
+        <h1 className="text-2xl font-bold text-stone-900">Pending</h1>
+        <p className="mt-1 text-sm text-stone-500">Review registrations and payment submissions.</p>
       </div>
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-gray-100 p-1 w-fit">
+      <div className="mb-6 flex gap-1 rounded-xl bg-stone-100 p-1 w-fit">
         {(["registrations", "payments"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-              tab === t ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === t ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"
             }`}
           >
             {t === "registrations" ? "Registrations" : "Payment Proofs"}
@@ -507,25 +507,25 @@ export default function PendingPage() {
             <p className="mb-1.5 text-sm font-medium text-indigo-900">Tenant registration link</p>
             <p className="mb-3 text-xs text-indigo-600">Share this link (or a QR code pointing to it) with prospective tenants.</p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs text-gray-700 ring-1 ring-indigo-200">{registrationUrl}</code>
+              <code className="flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs text-stone-700 ring-1 ring-indigo-200">{registrationUrl}</code>
               <button onClick={() => navigator.clipboard.writeText(registrationUrl)} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500">Copy</button>
             </div>
           </div>
 
           {regLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-400">
+            <div className="flex items-center gap-2 text-sm text-stone-400">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />Loading…
             </div>
           ) : pending.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
-              <p className="text-sm text-gray-500">No pending registrations.</p>
+            <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
+              <p className="text-sm text-stone-500">No pending registrations.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {pending.map((t) => (
                 <div
                   key={t.id}
-                  className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 transition hover:ring-indigo-200"
+                  className="rounded-xl bg-white shadow-sm ring-1 ring-stone-200 transition hover:ring-indigo-200"
                 >
                   <div className="flex items-center gap-3 px-4 py-4">
                     {/* Avatar + info — click opens drawer */}
@@ -536,12 +536,12 @@ export default function PendingPage() {
                     >
                       <Avatar name={t.name} photoUrl={t.photo_url} size="md" />
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900">{t.name}</p>
-                        <p className="text-sm text-gray-500">{t.phone}{t.email ? ` · ${t.email}` : ""}</p>
+                        <p className="font-medium text-stone-900">{t.name}</p>
+                        <p className="text-sm text-stone-500">{t.phone}{t.email ? ` · ${t.email}` : ""}</p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                          {t.workplace && <span className="text-xs text-gray-400">📍 {t.workplace}</span>}
-                          {t.aadhaar_number && <span className="text-xs text-gray-400">🪪 {maskAadhaar(t.aadhaar_number)}</span>}
-                          <span className="text-xs text-gray-300">
+                          {t.workplace && <span className="text-xs text-stone-400">📍 {t.workplace}</span>}
+                          {t.aadhaar_number && <span className="text-xs text-stone-400">🪪 {maskAadhaar(t.aadhaar_number)}</span>}
+                          <span className="text-xs text-stone-300">
                             {new Date(t.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                           </span>
                         </div>
@@ -575,22 +575,22 @@ export default function PendingPage() {
       {tab === "payments" && (
         <>
           {payLoading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-400">
+            <div className="flex items-center gap-2 text-sm text-stone-400">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />Loading…
             </div>
           ) : pendingPayments.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
-              <p className="text-sm text-gray-500">No pending payment submissions.</p>
+            <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
+              <p className="text-sm text-stone-500">No pending payment submissions.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {pendingPayments.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-200">
+                <div key={p.id} className="flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-stone-200">
                   <div>
-                    <p className="font-medium text-gray-900">{p.tenant_name} · {formatCurrency(p.amount)}</p>
-                    <p className="text-sm text-gray-500">{p.site_name} · {p.room_name} · {p.bed_name}</p>
-                    {p.notes && <p className="mt-0.5 text-xs text-gray-400">"{p.notes}"</p>}
-                    <p className="mt-0.5 text-xs text-gray-400">
+                    <p className="font-medium text-stone-900">{p.tenant_name} · {formatCurrency(p.amount)}</p>
+                    <p className="text-sm text-stone-500">{p.site_name} · {p.room_name} · {p.bed_name}</p>
+                    {p.notes && <p className="mt-0.5 text-xs text-stone-400">"{p.notes}"</p>}
+                    <p className="mt-0.5 text-xs text-stone-400">
                       Submitted {new Date(p.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                     {p.proof_url && (

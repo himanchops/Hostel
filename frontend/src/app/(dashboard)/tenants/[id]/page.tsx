@@ -12,16 +12,16 @@ import {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200";
-const labelCls = "mb-1 block text-xs font-medium text-gray-500 uppercase tracking-wide";
-const fileCls = "w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-400";
+const inputCls = "w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200";
+const labelCls = "mb-1 block text-xs font-medium text-stone-500 uppercase tracking-wide";
+const fileCls = "w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-400";
 
 function ProfileRow({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="text-sm text-gray-700">{value}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-stone-400">{label}</p>
+      <p className="text-sm text-stone-700">{value}</p>
     </div>
   );
 }
@@ -88,7 +88,7 @@ function AssignBedModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <h3 className="mb-4 text-base font-semibold text-gray-900">Assign Bed</h3>
+        <h3 className="mb-4 text-base font-semibold text-stone-900">Assign Bed</h3>
 
         {sites.length > 1 && (
           <div className="mb-3">
@@ -106,11 +106,11 @@ function AssignBedModal({
         <div className="mb-4">
           <label className={labelCls}>Vacant Beds</label>
           {vacantBeds.length === 0 ? (
-            <p className="text-sm text-gray-400">No vacant beds in this site.</p>
+            <p className="text-sm text-stone-400">No vacant beds in this site.</p>
           ) : (
             <div className="max-h-48 space-y-1.5 overflow-y-auto">
               {vacantBeds.map((b) => (
-                <label key={b.bedId} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 hover:bg-gray-50">
+                <label key={b.bedId} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 hover:bg-stone-50">
                   <input
                     type="radio"
                     name="bed"
@@ -119,7 +119,7 @@ function AssignBedModal({
                     onChange={() => setSelectedBedId(b.bedId)}
                     className="accent-indigo-600"
                   />
-                  <span className="text-sm text-gray-700">{b.roomName} · {b.bedName}</span>
+                  <span className="text-sm text-stone-700">{b.roomName} · {b.bedName}</span>
                 </label>
               ))}
             </div>
@@ -136,7 +136,7 @@ function AssignBedModal({
           >
             {loading ? "Assigning…" : "Assign"}
           </button>
-          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500 hover:bg-stone-100">
             Cancel
           </button>
         </div>
@@ -205,7 +205,7 @@ function EditProfileForm({
 
   return (
     <form onSubmit={handleSave} className="mt-4 space-y-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-5">
-      <p className="text-sm font-semibold text-gray-800">Edit Profile</p>
+      <p className="text-sm font-semibold text-stone-800">Edit Profile</p>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -272,7 +272,7 @@ function EditProfileForm({
           {loading ? "Saving…" : "Save changes"}
         </button>
         <button type="button" onClick={onCancel}
-          className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+          className="rounded-lg px-4 py-2 text-sm text-stone-500 hover:bg-stone-100">
           Cancel
         </button>
       </div>
@@ -312,14 +312,14 @@ function EndStayPicker({
         value={date}
         max={today()}
         onChange={(e) => setDate(e.target.value)}
-        className="rounded-lg border border-gray-200 px-3 py-1 text-sm outline-none focus:border-indigo-400"
+        className="rounded-lg border border-stone-200 px-3 py-1 text-sm outline-none focus:border-indigo-400"
       />
       <button type="submit" disabled={loading}
         className="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60 hover:bg-red-600">
         {loading ? "…" : "Confirm"}
       </button>
       <button type="button" onClick={onCancel}
-        className="rounded-lg px-2 py-1 text-xs text-gray-400 hover:bg-gray-100">
+        className="rounded-lg px-2 py-1 text-xs text-stone-400 hover:bg-stone-100">
         Cancel
       </button>
       {error && <span className="text-xs text-red-600">{error}</span>}
@@ -430,10 +430,10 @@ export default function TenantDetailPage() {
   return (
     <div className="p-8">
       {/* Breadcrumb */}
-      <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
+      <div className="mb-2 flex items-center gap-2 text-sm text-stone-500">
         <Link href="/tenants" className="hover:text-indigo-600">Tenants</Link>
         <span>/</span>
-        <span className="text-gray-800">{tenant?.name}</span>
+        <span className="text-stone-800">{tenant?.name}</span>
       </div>
 
       {/* Header */}
@@ -444,13 +444,13 @@ export default function TenantDetailPage() {
             : tenant?.name[0]?.toUpperCase()}
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">{tenant?.name}</h1>
-          <p className="text-sm text-gray-500">{tenant?.phone}</p>
-          {tenant?.email && <p className="text-sm text-gray-500">{tenant.email}</p>}
+          <h1 className="text-2xl font-bold text-stone-900">{tenant?.name}</h1>
+          <p className="text-sm text-stone-500">{tenant?.phone}</p>
+          {tenant?.email && <p className="text-sm text-stone-500">{tenant.email}</p>}
         </div>
         <button
           onClick={() => setEditingProfile((v) => !v)}
-          className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
         >
           {editingProfile ? "Cancel edit" : "Edit profile"}
         </button>
@@ -458,7 +458,7 @@ export default function TenantDetailPage() {
 
       {/* Profile card */}
       {!editingProfile && tenant && (
-        <div className="mb-6 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+        <div className="mb-6 rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
           <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
             <ProfileRow label="Home address" value={tenant.address} />
             <ProfileRow label="Workplace / College" value={tenant.workplace} />
@@ -470,7 +470,7 @@ export default function TenantDetailPage() {
             <ProfileRow label="Aadhaar" value={tenant.aadhaar_number ? maskAadhaar(tenant.aadhaar_number) : undefined} />
             {(idProofFront || idProofBack) && (
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">ID proof</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-stone-400">ID proof</p>
                 <div className="mt-1 flex gap-3">
                   <IdLink label="Front" url={idProofFront} />
                   <IdLink label="Back" url={idProofBack} />
@@ -481,7 +481,7 @@ export default function TenantDetailPage() {
 
           {/* No profile details placeholder */}
           {!tenant.address && !tenant.workplace && !tenant.emergency_contact_name && !tenant.aadhaar_number && !idProofFront && (
-            <p className="text-sm text-gray-400">No additional profile details. Click "Edit profile" to add.</p>
+            <p className="text-sm text-stone-400">No additional profile details. Click "Edit profile" to add.</p>
           )}
         </div>
       )}
@@ -499,20 +499,20 @@ export default function TenantDetailPage() {
       {/* Financial summary bar */}
       {summary && (
         <div className="mb-6 grid grid-cols-3 gap-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total paid</p>
-            <p className="mt-1 text-xl font-bold text-gray-900">{formatCurrency(summary.total_paid)}</p>
+          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-stone-200 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Total paid</p>
+            <p className="mt-1 text-xl font-bold text-stone-900">{formatCurrency(summary.total_paid)}</p>
           </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Stay duration</p>
-            <p className="mt-1 text-xl font-bold text-gray-900">{summary.duration_days}d</p>
+          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-stone-200 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Stay duration</p>
+            <p className="mt-1 text-xl font-bold text-stone-900">{summary.duration_days}d</p>
           </div>
           <div className={`rounded-xl p-4 shadow-sm ring-1 text-center ${
             summary.balance <= 0
               ? "bg-green-50 ring-green-200"
               : "bg-red-50 ring-red-200"
           }`}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Balance</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Balance</p>
             <p className={`mt-1 text-xl font-bold ${summary.balance <= 0 ? "text-green-700" : "text-red-700"}`}>
               {summary.balance <= 0
                 ? `${formatCurrency(Math.abs(summary.balance))} ahead`
@@ -523,10 +523,10 @@ export default function TenantDetailPage() {
       )}
 
       {/* Stays */}
-      <h2 className="mb-3 text-base font-semibold text-gray-900">Stays & Ledger</h2>
+      <h2 className="mb-3 text-base font-semibold text-stone-900">Stays & Ledger</h2>
 
       {stays.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-gray-200 py-12 text-center text-sm text-gray-400">
+        <div className="rounded-xl border-2 border-dashed border-stone-200 py-12 text-center text-sm text-stone-400">
           No stays recorded yet.
         </div>
       ) : (
@@ -539,7 +539,7 @@ export default function TenantDetailPage() {
             const isEndingThis = endingStay === stay.id;
 
             return (
-              <div key={stay.id} className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
+              <div key={stay.id} className="rounded-xl bg-white shadow-sm ring-1 ring-stone-200">
                 {/* Stay header */}
                 <div
                   onClick={() => { if (!isEndingThis) toggleStay(stay.id); }}
@@ -548,7 +548,7 @@ export default function TenantDetailPage() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                        active ? "bg-green-100 text-green-700" : "bg-stone-100 text-stone-500"
                       }`}>
                         {active ? "Active" : "Ended"}
                       </span>
@@ -557,12 +557,12 @@ export default function TenantDetailPage() {
                           Bed unassigned
                         </span>
                       ) : (
-                        <span className="text-sm font-medium text-gray-700">
+                        <span className="text-sm font-medium text-stone-700">
                           Bed #{stay.bed_id}
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-xs text-stone-400">
                       {stay.start_date.slice(0, 10)}
                       {stay.end_date ? ` → ${stay.end_date.slice(0, 10)}` : " → present"}
                       {" · "}
@@ -570,7 +570,7 @@ export default function TenantDetailPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-gray-700">
+                    <p className="text-sm font-semibold text-stone-700">
                       Paid {formatCurrency(totalPaid)}
                     </p>
                     {active && (
@@ -586,7 +586,7 @@ export default function TenantDetailPage() {
                         {!isEndingThis && (
                           <button
                             onClick={() => setEndingStay(stay.id)}
-                            className="text-xs text-gray-400 hover:text-red-500"
+                            className="text-xs text-stone-400 hover:text-red-500"
                           >
                             End stay
                           </button>
@@ -598,8 +598,8 @@ export default function TenantDetailPage() {
 
                 {/* End-stay date picker */}
                 {isEndingThis && token && (
-                  <div className="border-t border-gray-100 px-5 py-3">
-                    <p className="mb-2 text-xs font-medium text-gray-500">Select move-out date:</p>
+                  <div className="border-t border-stone-100 px-5 py-3">
+                    <p className="mb-2 text-xs font-medium text-stone-500">Select move-out date:</p>
                     <EndStayPicker
                       stayId={stay.id}
                       token={token}
@@ -615,7 +615,7 @@ export default function TenantDetailPage() {
 
                 {/* Expanded: payment ledger */}
                 {expanded === stay.id && (
-                  <div className="border-t border-gray-100 px-5 py-4">
+                  <div className="border-t border-stone-100 px-5 py-4">
                     {/* Add payment */}
                     {active && (
                       <div className="mb-4">
@@ -638,12 +638,12 @@ export default function TenantDetailPage() {
                               placeholder="Amount (₹)"
                               value={payAmount}
                               onChange={(e) => setPayAmount(e.target.value)}
-                              className="w-32 rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+                              className="w-32 rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
                             />
                             <select
                               value={payType}
                               onChange={(e) => setPayType(e.target.value)}
-                              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+                              className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
                             >
                               <option value="cash">Cash</option>
                               <option value="online">Online</option>
@@ -652,13 +652,13 @@ export default function TenantDetailPage() {
                               type="date"
                               value={payDate}
                               onChange={(e) => setPayDate(e.target.value)}
-                              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+                              className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
                             />
                             <input
                               placeholder="Notes"
                               value={payNotes}
                               onChange={(e) => setPayNotes(e.target.value)}
-                              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+                              className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
                             />
                             <button
                               type="submit"
@@ -670,7 +670,7 @@ export default function TenantDetailPage() {
                             <button
                               type="button"
                               onClick={() => setAddingPayment(null)}
-                              className="rounded-lg px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-100"
+                              className="rounded-lg px-3 py-1.5 text-sm text-stone-400 hover:bg-stone-100"
                             >
                               Cancel
                             </button>
@@ -681,13 +681,13 @@ export default function TenantDetailPage() {
 
                     {/* Payments list */}
                     {stayPayments === undefined ? (
-                      <p className="text-xs text-gray-400">Loading…</p>
+                      <p className="text-xs text-stone-400">Loading…</p>
                     ) : stayPayments.length === 0 ? (
-                      <p className="text-xs text-gray-400">No payments recorded.</p>
+                      <p className="text-xs text-stone-400">No payments recorded.</p>
                     ) : (
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-left text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          <tr className="text-left text-xs font-semibold uppercase tracking-wide text-stone-400">
                             <th className="pb-2">Date</th>
                             <th className="pb-2">Amount</th>
                             <th className="pb-2">Type</th>
@@ -695,17 +695,17 @@ export default function TenantDetailPage() {
                             <th className="pb-2" />
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-stone-50">
                           {stayPayments.map((p) => (
                             <tr key={p.id} className="group">
-                              <td className="py-2 text-gray-600">{p.payment_date.slice(0, 10)}</td>
-                              <td className="py-2 font-medium text-gray-800">{formatCurrency(p.amount)}</td>
-                              <td className="py-2 capitalize text-gray-500">{p.payment_type}</td>
-                              <td className="py-2 text-gray-400">{p.notes || "—"}</td>
+                              <td className="py-2 text-stone-600">{p.payment_date.slice(0, 10)}</td>
+                              <td className="py-2 font-medium text-stone-800">{formatCurrency(p.amount)}</td>
+                              <td className="py-2 capitalize text-stone-500">{p.payment_type}</td>
+                              <td className="py-2 text-stone-400">{p.notes || "—"}</td>
                               <td className="py-2 text-right">
                                 <button
                                   onClick={() => handleDeletePayment(stay.id, p.id)}
-                                  className="hidden text-gray-300 transition hover:text-red-500 group-hover:inline"
+                                  className="hidden text-stone-300 transition hover:text-red-500 group-hover:inline"
                                 >
                                   ✕
                                 </button>

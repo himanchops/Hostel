@@ -38,7 +38,27 @@ template noise.
 
 ---
 
-## Phase A — Foundations (half a session)
+## Phase A — Foundations ✅ (branch `design-phase-a-foundations`)
+
+**Shipped:** body font fixed to Geist (was hardcoded Arial); dark-mode media
+block deleted; status tokens defined in `globals.css` as `@theme` custom
+properties (`vacant`/`paid`/`partial`/`overdue`/`vacating`, shades 50/100/200/
+500/700/800); app background moved to stone-50; project-wide `gray-*` →
+`stone-*` (395 occurrences, 17 files); grid `STATUS` record migrated off raw
+`green-`/`yellow-`/`red-`/`orange-` onto the new tokens.
+
+Status hues that changed (intentional, per the palette above): **paid**
+green → emerald (`#dcfce7` → `#d1fae5` at the 100 step), **partial** yellow →
+amber (`#fef9c3` → `#fef3c7`). **overdue** (red), **vacating** (orange), and
+**vacant** (stone) resolve to the same hexes as before. Verified in the built
+CSS bundle: all `bg-/border-/text-` utilities for the five statuses generate.
+
+**Note for Phase B:** status-colored chips outside the grid (payment-type
+badges, pending banners, notice chips on dashboard/pending/tenant pages) still
+use raw Tailwind hues. Those become `Badge tone=...` in Phase B — do NOT point
+them at the status tokens, which are reserved for bed status.
+
+### Original spec
 
 **A1. Fix the font.** `globals.css` body rule says `font-family: Arial`.
 Replace with `var(--font-geist-sans)`. Add `font-feature-settings` nothing —

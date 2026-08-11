@@ -31,10 +31,10 @@ export default function DashboardPage() {
     <div className="p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-stone-900">
           Welcome back, {owner?.name?.split(" ")[0]}
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-stone-500">
           Here&apos;s an overview of your properties
         </p>
       </div>
@@ -104,8 +104,8 @@ export default function DashboardPage() {
 
       {/* No setup yet */}
       {!loading && occ && occ.total_beds === 0 && (
-        <div className="mb-8 rounded-xl border-2 border-dashed border-gray-200 py-12 text-center">
-          <p className="text-sm text-gray-500">No beds set up yet.</p>
+        <div className="mb-8 rounded-xl border-2 border-dashed border-stone-200 py-12 text-center">
+          <p className="text-sm text-stone-500">No beds set up yet.</p>
           <Link
             href="/sites"
             className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-500"
@@ -119,17 +119,17 @@ export default function DashboardPage() {
       {(!loading && occ && occ.total_beds > 0) && (
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Vacating soon */}
-          <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900">Vacating Soon</h2>
+          <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+            <h2 className="mb-4 text-sm font-semibold text-stone-900">Vacating Soon</h2>
             {data!.vacating_soon.length === 0 ? (
-              <p className="text-sm text-gray-400">No tenants vacating in the next 30 days.</p>
+              <p className="text-sm text-stone-400">No tenants vacating in the next 30 days.</p>
             ) : (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-stone-100">
                 {data!.vacating_soon.map((v, i) => (
                   <li key={i} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{v.tenant_name}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-medium text-stone-900">{v.tenant_name}</p>
+                      <p className="text-xs text-stone-500">
                         {v.site_name} · {v.room_name} · {v.bed_name}
                       </p>
                     </div>
@@ -151,28 +151,28 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent payments */}
-          <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-            <h2 className="mb-4 text-sm font-semibold text-gray-900">Recent Payments</h2>
+          <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+            <h2 className="mb-4 text-sm font-semibold text-stone-900">Recent Payments</h2>
             {data!.recent_payments.length === 0 ? (
-              <p className="text-sm text-gray-400">No payments recorded yet.</p>
+              <p className="text-sm text-stone-400">No payments recorded yet.</p>
             ) : (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-stone-100">
                 {data!.recent_payments.map((p) => (
                   <li key={p.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{p.tenant_name}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-medium text-stone-900">{p.tenant_name}</p>
+                      <p className="text-xs text-stone-500">
                         {p.site_name} · {p.room_name} · {p.bed_name}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold text-gray-900">
+                      <p className="text-sm font-semibold text-stone-900">
                         {formatCurrency(p.amount)}
                       </p>
-                      <p className="text-xs text-gray-400">{p.payment_date}</p>
+                      <p className="text-xs text-stone-400">{p.payment_date}</p>
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                         p.payment_type === "cash"
-                          ? "bg-gray-100 text-gray-600"
+                          ? "bg-stone-100 text-stone-600"
                           : "bg-green-100 text-green-700"
                       }`}>
                         {p.payment_type}
@@ -188,9 +188,9 @@ export default function DashboardPage() {
 
       {/* Per-site occupancy */}
       {!loading && occ && occ.sites.length > 0 && (
-        <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+        <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">Sites</h2>
+            <h2 className="text-sm font-semibold text-stone-900">Sites</h2>
             <Link
               href="/sites"
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500"
@@ -198,7 +198,7 @@ export default function DashboardPage() {
               Manage sites
             </Link>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-stone-100">
             {occ.sites.map((site) => (
               <Link
                 key={site.site_id}
@@ -206,19 +206,19 @@ export default function DashboardPage() {
                 className="flex items-center gap-4 py-3 first:pt-0 last:pb-0 hover:opacity-75"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-gray-900">{site.site_name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="truncate text-sm font-medium text-stone-900">{site.site_name}</p>
+                  <p className="text-xs text-stone-500">
                     {site.occupied_beds} / {site.total_beds} beds occupied
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-2 w-24 overflow-hidden rounded-full bg-stone-100">
                     <div
                       className="h-full rounded-full bg-indigo-500"
                       style={{ width: `${site.percentage}%` }}
                     />
                   </div>
-                  <span className="w-10 text-right text-xs font-medium text-gray-600">
+                  <span className="w-10 text-right text-xs font-medium text-stone-600">
                     {site.percentage.toFixed(0)}%
                   </span>
                 </div>
@@ -230,7 +230,7 @@ export default function DashboardPage() {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="mt-6 flex items-center gap-2 text-sm text-gray-400">
+        <div className="mt-6 flex items-center gap-2 text-sm text-stone-400">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
           Loading…
         </div>
@@ -251,10 +251,10 @@ function StatCard({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold text-gray-900 ${valueClassName ?? ""}`}>{value}</p>
-      {note && <p className="mt-1 text-xs text-gray-400">{note}</p>}
+    <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+      <p className="text-sm text-stone-500">{label}</p>
+      <p className={`mt-1 text-2xl font-bold text-stone-900 ${valueClassName ?? ""}`}>{value}</p>
+      {note && <p className="mt-1 text-xs text-stone-400">{note}</p>}
     </div>
   );
 }

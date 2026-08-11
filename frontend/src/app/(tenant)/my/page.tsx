@@ -30,7 +30,7 @@ export default function TenantPortalPage() {
 
   if (isLoading || loading) {
     return (
-      <div className="flex items-center gap-2 pt-8 text-sm text-gray-400">
+      <div className="flex items-center gap-2 pt-8 text-sm text-stone-400">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
         Loading…
       </div>
@@ -39,8 +39,8 @@ export default function TenantPortalPage() {
 
   if (stays.length === 0) {
     return (
-      <div className="rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
-        <p className="text-sm text-gray-500">No stays found.</p>
+      <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
+        <p className="text-sm text-stone-500">No stays found.</p>
       </div>
     );
   }
@@ -113,15 +113,15 @@ function StayCard({ stay, token, onUpdate }: {
   }
 
   return (
-    <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 overflow-hidden">
+    <div className="rounded-2xl bg-white shadow-sm ring-1 ring-stone-200 overflow-hidden">
       {/* Stay header */}
-      <div className="px-5 py-4 border-b border-gray-100">
+      <div className="px-5 py-4 border-b border-stone-100">
         <div className="flex items-start justify-between">
           <div>
-            <p className="font-semibold text-gray-900">
+            <p className="font-semibold text-stone-900">
               {stay.site_name} · {stay.room_name} · {stay.bed_name}
             </p>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-stone-500">
               {formatCurrency(stay.rent_amount)}/{stay.rent_cycle} · Since{" "}
               {new Date(stay.start_date).toLocaleDateString("en-IN", {
                 day: "numeric", month: "short", year: "numeric",
@@ -132,7 +132,7 @@ function StayCard({ stay, token, onUpdate }: {
             </p>
           </div>
           <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+            isActive ? "bg-green-100 text-green-700" : "bg-stone-100 text-stone-500"
           }`}>
             {isActive ? (hasNotice ? "Notice given" : "Active") : "Ended"}
           </span>
@@ -149,11 +149,11 @@ function StayCard({ stay, token, onUpdate }: {
 
       {/* Payment history */}
       <div className="px-5 py-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">
           Payment history
         </p>
         {stay.payments.length === 0 ? (
-          <p className="text-sm text-gray-400">No payments recorded.</p>
+          <p className="text-sm text-stone-400">No payments recorded.</p>
         ) : (
           <div className="space-y-2">
             {stay.payments.map((p) => (
@@ -165,7 +165,7 @@ function StayCard({ stay, token, onUpdate }: {
 
       {/* Actions */}
       {isActive && (
-        <div className="border-t border-gray-100 px-5 py-4 space-y-3">
+        <div className="border-t border-stone-100 px-5 py-4 space-y-3">
           {/* Submit payment */}
           {!showPaymentForm ? (
             <button
@@ -187,28 +187,28 @@ function StayCard({ stay, token, onUpdate }: {
                   placeholder="Amount (₹)"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-36 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-36 rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
                 <input
                   type="text"
                   placeholder="Notes / UTR / reference (optional)"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">
-                  Payment screenshot <span className="font-normal text-gray-400">(optional)</span>
+                <label className="mb-1 block text-xs font-medium text-stone-600">
+                  Payment screenshot <span className="font-normal text-stone-400">(optional)</span>
                 </label>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-2 file:py-0.5 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-2 file:py-0.5 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
                 {screenshot && (
-                  <p className="mt-0.5 text-xs text-gray-400">{screenshot.name}</p>
+                  <p className="mt-0.5 text-xs text-stone-400">{screenshot.name}</p>
                 )}
               </div>
               <div className="flex gap-2">
@@ -222,12 +222,12 @@ function StayCard({ stay, token, onUpdate }: {
                 <button
                   type="button"
                   onClick={() => { setShowPaymentForm(false); setPaymentError(""); setScreenshot(null); }}
-                  className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100"
+                  className="rounded-lg px-4 py-2 text-sm text-stone-500 hover:bg-stone-100"
                 >
                   Cancel
                 </button>
               </div>
-              <p className="text-xs text-gray-400">Your payment will be visible once the owner approves it.</p>
+              <p className="text-xs text-stone-400">Your payment will be visible once the owner approves it.</p>
             </form>
           )}
 
@@ -249,15 +249,15 @@ function StayCard({ stay, token, onUpdate }: {
 
 function PaymentRow({ payment }: { payment: Payment }) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+    <div className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2">
       <div>
-        <span className="text-sm font-medium text-gray-900">{formatCurrency(payment.amount)}</span>
+        <span className="text-sm font-medium text-stone-900">{formatCurrency(payment.amount)}</span>
         {payment.notes && (
-          <span className="ml-2 text-xs text-gray-500">{payment.notes}</span>
+          <span className="ml-2 text-xs text-stone-500">{payment.notes}</span>
         )}
       </div>
       <div className="flex items-center gap-2 text-right">
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-stone-400">
           {new Date(payment.payment_date).toLocaleDateString("en-IN", {
             day: "numeric", month: "short",
           })}
