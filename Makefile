@@ -1,6 +1,6 @@
 export PATH := /opt/homebrew/opt/node/bin:/opt/homebrew/bin:$(PATH)
 
-.PHONY: dev setup db-up db-down migrate backend frontend verify-backend import-data import-data-dry storage-check test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
+.PHONY: dev setup db-up db-down migrate backend frontend verify-backend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -8,6 +8,8 @@ setup:
 	cd backend && go mod download
 	@echo "→ Installing Node dependencies..."
 	cd frontend && npm install
+	@echo "→ Installing Playwright browser (needed by make test-e2e)..."
+	cd frontend && npx playwright install chromium
 	@echo "→ Starting PostgreSQL..."
 	docker compose up -d
 	@echo "→ Waiting for Postgres to be ready..."
@@ -82,6 +84,11 @@ test:
 	cd frontend && npm test
 
 # ── E2E ────────────────────────────────────────────────────────────────────────
+
+# Download the browser Playwright drives. Run once per machine; `make setup`
+# does it for you. Without it, every UI test fails with "Executable doesn't exist".
+playwright-install:
+	cd frontend && npx playwright install chromium
 
 test-e2e:
 	cd frontend && npx playwright test
