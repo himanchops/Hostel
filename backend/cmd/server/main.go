@@ -72,11 +72,25 @@ func main() {
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{getEnv("FRONTEND_URL", "http://localhost:3000")},
+
+	// CORS. FRONTEND_URL accepts a comma-separated list of allowed origins.
+	// When it is unset (local dev) we additionally accept loopback and
+	// private-range LAN origins on any port, so the app can be opened from a
+	// phone on the same Wi-Fi. A rejected origin gets a 204 preflight with no
+	// Access-Control-Allow-Origin header, which the browser reports only as a
+	// silently dropped request — hence the permissive dev default.
+	corsConfig := middleware.CORSConfig{
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-	}))
+	}
+	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
+		corsConfig.AllowOrigins = appMiddleware.ParseOrigins(frontendURL)
+		log.Printf("CORS: allowing configured origins %v", corsConfig.AllowOrigins)
+	} else {
+		corsConfig.AllowOriginFunc = appMiddleware.DevOriginAllowed
+		log.Print("CORS: FRONTEND_URL unset — allowing localhost/loopback/LAN origins (dev mode)")
+	}
+	e.Use(middleware.CORSWithConfig(corsConfig))
 
 	// Serve uploaded files (local dev only; in production files are on S3/R2)
 	e.Static("/uploads", "./uploads")

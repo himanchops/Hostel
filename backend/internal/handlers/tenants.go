@@ -387,10 +387,16 @@ func (h *TenantHandler) Update(c echo.Context) error {
 
 // TenantSummary holds aggregate stats for a tenant's stays and payments.
 type TenantSummary struct {
-	TotalPaid    int64 `db:"total_paid" json:"total_paid"`
-	TotalExpected int64 `db:"total_expected" json:"total_expected"`
-	Balance      int64 `json:"balance"`
-	DurationDays int64 `db:"duration_days" json:"duration_days"`
+	TotalPaid     int64 `json:"total_paid"`
+	TotalExpected int64 `json:"total_expected"`
+	Balance       int64 `json:"balance"`
+	DurationDays  int64 `json:"duration_days"`
+}
+
+// dateOnly strips the time component so day arithmetic isn't skewed by the
+// timezone Postgres hands back for a DATE column.
+func dateOnly(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func (h *TenantHandler) Summary(c echo.Context) error {
@@ -407,31 +413,53 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
 
-	var summary TenantSummary
-	err = h.db.QueryRowx(`
+	// One row per stay. Payment totals come from a correlated subquery rather
+	// than a JOIN: joining stays to payments yields one row per payment, and
+	// summing per-stay values (expected rent, duration) across those rows
+	// multiplied them by the payment count.
+	type staySummaryRow struct {
+		RentAmount int64      `db:"rent_amount"`
+		RentCycle  string     `db:"rent_cycle"`
+		StartDate  time.Time  `db:"start_date"`
+		EndDate    *time.Time `db:"end_date"`
+		TotalPaid  int64      `db:"total_paid"`
+	}
+	var stays []staySummaryRow
+	err = h.db.Select(&stays, `
 		SELECT
-			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true), 0) AS total_paid,
-			COALESCE(SUM(
-				CASE
-					WHEN s.rent_cycle = 'monthly' THEN
-						s.rent_amount * GREATEST(1,
-							EXTRACT(YEAR FROM AGE(COALESCE(s.end_date, CURRENT_DATE), s.start_date::date))::int * 12 +
-							EXTRACT(MONTH FROM AGE(COALESCE(s.end_date, CURRENT_DATE), s.start_date::date))::int
-						)
-					WHEN s.rent_cycle = 'weekly' THEN
-						s.rent_amount * GREATEST(1, (COALESCE(s.end_date, CURRENT_DATE) - s.start_date::date) / 7)
-					ELSE
-						s.rent_amount * GREATEST(1, (COALESCE(s.end_date, CURRENT_DATE) - s.start_date::date))
-				END
-			), 0) AS total_expected,
-			COALESCE(SUM(COALESCE(s.end_date, CURRENT_DATE) - s.start_date::date), 0) AS duration_days
+			s.rent_amount,
+			s.rent_cycle,
+			s.start_date,
+			s.end_date,
+			COALESCE((
+				SELECT SUM(p.amount) FROM payments p
+				WHERE p.stay_id = s.id AND p.is_approved = true
+			), 0) AS total_paid
 		FROM stays s
-		LEFT JOIN payments p ON p.stay_id = s.id
 		WHERE s.tenant_id = $1`,
 		tenantID,
-	).StructScan(&summary)
+	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to compute summary"))
+	}
+
+	// Billing cycles use cyclesElapsed so this agrees with the grid and the
+	// dashboard. Computing it separately in SQL previously made the tenant page
+	// disagree with the grid about what the same tenant owed.
+	var summary TenantSummary
+	today := dateOnly(time.Now())
+	for _, s := range stays {
+		start := dateOnly(s.StartDate)
+		until := today
+		if s.EndDate != nil {
+			until = dateOnly(*s.EndDate)
+		}
+
+		summary.TotalPaid += s.TotalPaid
+		summary.TotalExpected += s.RentAmount * int64(cyclesElapsed(start, until, s.RentCycle))
+		if days := int64(until.Sub(start).Hours() / 24); days > 0 {
+			summary.DurationDays += days
+		}
 	}
 
 	summary.Balance = summary.TotalExpected - summary.TotalPaid

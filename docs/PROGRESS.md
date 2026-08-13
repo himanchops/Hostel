@@ -346,6 +346,126 @@ refund. Currently done on a hand calculator; money mistakes happen there.
 
 ---
 
+## Phase 12 — Test Hardening 🔜
+
+**Why this exists.** The tenant-summary bug (payments inflating the balance
+owed) shipped while an e2e test named "tenant summary returns correct totals"
+was passing. That test asserted `total_paid` (which was never wrong) and
+`duration_days >= 0` (a tautology — the buggy value was 0), and never asserted
+`total_expected` or `balance` at all. Its fixture started the stay *today*, so
+the duration was zero and the per-payment multiplication was invisible.
+
+The lesson is not "write more tests." It is:
+1. **Assert exact values**, never `>= 0` or `toBeTruthy()` on a number.
+2. **Fixtures must be non-degenerate** — multi-month stays, several payments,
+   partial payments, backdated dates. A zero-length stay hides arithmetic bugs.
+3. **Money math belongs in fast unit tests**, not only in e2e. The bug was pure
+   arithmetic; a table test would have caught it in milliseconds without a
+   browser or a database.
+
+### 12a — Backend unit tests (money and dates) — do this first
+
+No DB, no browser. Pure functions and aggregation logic.
+
+- `cyclesElapsed`: join-date anchoring, month-end move-ins, short months,
+  leap years, weekly/daily, same-day start, future start. *(partially done —
+  `cycles_test.go`)*
+- Summary aggregation: per-stay values must not scale with payment count;
+  paying reduces balance by exactly the payment; multiple concurrent and
+  historical stays; ended stays stop accruing; backfilled end dates.
+  *(done — `summary_test.go`)*
+- Bed status derivation (`vacant`/`paid`/`partial`/`overdue`/`vacating_soon`):
+  table test over balance × notice × end-date combinations. The thresholds
+  ("owes less than one cycle" vs "owes ≥ one cycle") are untested today.
+- Dashboard revenue: expected vs collected this month, overdue totals, with
+  several stays on different cycles and start dates.
+- `formatCurrency` / paise conversions, including negative balances (credits).
+
+### 12b — API integration tests (real DB, no browser)
+
+Playwright `request` fixtures, as today, but with honest assertions.
+
+- **Tenant lifecycle**: create → assign bed → record payments → give notice →
+  end stay (backdated) → verify summary and grid status at each step.
+- **Payment flows**: owner-recorded payment; tenant-submitted proof requiring
+  approval; rejecting a proof; deleting a payment and confirming the balance
+  moves back.
+- **Date handling**: backdated payments, backdated stay start, backdated
+  vacate, month-boundary stays, stays spanning a year boundary.
+- **Overrides**: once stays become editable (see Known Issues), assert that
+  correcting `start_date` / `rent_amount` recomputes every derived number.
+- **Multi-tenancy**: owner A must never see or mutate owner B's data — one test
+  per endpoint family. Currently untested and it is the security-critical
+  invariant of the whole app.
+
+### 12c — UI e2e (browser)
+
+Keep thin — these are slow and will churn during the design phases.
+One happy path each: create tenant via form, assign bed from grid, record a
+payment from the grid drawer, approve a pending registration, end a stay with a
+backdated date picker. Assert on user-visible money and dates, not internals.
+
+### Conventions to adopt
+
+- Every bug fixed from now on ships with a regression test that fails on the
+  old code.
+- Fixtures live in one place with builders (`stayStartedMonthsAgo(3)`), so a
+  test that needs a realistic tenant doesn't hand-roll dates.
+- `make verify-backend` (unit) must stay fast enough to run on every save;
+  e2e runs before a PR.
+
+**Sequencing note:** 12a is immune to UI churn, so it can land before the
+design phases. 12c should wait until after design Phase D, or the tests get
+rewritten twice.
+
+---
+
+## Known Issues
+
+Found while verifying the billing fixes (Aug 2026). None are fixed yet.
+
+### `rent_due_day` is stored but never used 🐞
+`stays.rent_due_day` is written on create/approve (defaulting to 1), returned by
+the API, and exposed in the models — but **no billing code reads it**.
+`cyclesElapsed` takes only `(startDate, today, cycle)`. Billing is anchored to
+the stay's `start_date`, so the column is dead weight that looks meaningful.
+Either wire it into the cycle math or drop it; leaving it is a trap.
+
+### Month-end move-ins skip a cycle 🐞
+`cyclesElapsed` rolls over when `today.Day() >= startDate.Day()`. For a stay
+starting on the 31st, no day in February satisfies that, so February never
+rolls over and the tenant is not billed for it. Same for the 29th/30th.
+Covered (as current behaviour, not endorsed) by
+`TestCyclesElapsed_MonthEndMoveIn`. Fix would clamp the anchor day to the
+last day of a short month.
+
+### `PUT /api/stays/:id` clobbers the field you didn't send 🐞
+`Update` runs `SET end_date = $1, notice_date = $2` unconditionally from the
+request body. Sending only `end_date` writes `notice_date = NULL`, silently
+erasing a recorded notice. Should use `COALESCE`-style partial updates, or
+distinguish "absent" from "explicitly null".
+
+### `start_date` cannot be corrected 🐞
+`updateStayRequest` accepts only `end_date` and `notice_date`. If a stay is
+recorded with the wrong start date, every derived number (cycles due, balance,
+duration) is wrong with no way to fix it from the UI. Owners need to edit
+`start_date`, `rent_amount`, and `rent_cycle` on an existing stay.
+
+### Vacate-from-grid can't backfill a date 🐞
+The tenant detail page ends a stay via a date picker (so a departure can be
+recorded days later), but the grid's vacate path uses `confirm()` and hardcodes
+today — see `handleVacate` in `sites/[id]/grid/page.tsx`. The two paths disagree.
+Design Phase D already plans to replace it with a `ConfirmDialog` plus date
+picker; until then, backfilling only works from the tenant page.
+
+### Collapsed stay cards show "Paid ₹0" 🐞 (cosmetic)
+On the tenant detail page the ledger is lazy-loaded on expand, but the card's
+"Paid ₹X" total is computed from the not-yet-loaded payments array, so a
+collapsed stay always reads ₹0. Either load totals up front or omit the figure
+until expanded.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
