@@ -75,6 +75,53 @@ type DashboardResponse struct {
 	RecentPayments []RecentPayment  `json:"recent_payments"`
 }
 
+// ── Revenue rollup ───────────────────────────────────────────────────────────
+
+// stayRevenueRow is one active stay's billing inputs, as scanned from the DB.
+type stayRevenueRow struct {
+	RentAmount int64     `db:"rent_amount"`
+	RentCycle  string    `db:"rent_cycle"`
+	StartDate  time.Time `db:"start_date"`
+	TotalPaid  int64     `db:"total_paid"`
+}
+
+// computeRevenue rolls active stays up into the dashboard's revenue summary.
+//
+// collectedThisMonth is passed through from the payments table (it is scoped to
+// the calendar month there) — the other two figures are derived from billing
+// cycles, which are anchored to each stay's start date, not to the calendar:
+//
+//   - ExpectedThisMonth counts only cycles that rolled over during the current
+//     calendar month, so a tenant whose anchor day falls later in the month has
+//     not been billed yet and contributes nothing.
+//   - OverdueAmount is what is owed across all time. A tenant paying ahead
+//     contributes zero rather than a negative, so one tenant's credit can never
+//     mask another's arrears.
+func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time.Time) RevenueSummary {
+	firstOfMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
+	endOfLastMonth := firstOfMonth.Add(-24 * time.Hour)
+
+	summary := RevenueSummary{CollectedThisMonth: collectedThisMonth}
+	for _, row := range stays {
+		cyclesTotal := cyclesElapsed(row.StartDate, today, row.RentCycle)
+		totalExpected := row.RentAmount * int64(cyclesTotal)
+
+		// Overdue: amount owed across all time
+		if totalExpected > row.TotalPaid {
+			summary.OverdueAmount += totalExpected - row.TotalPaid
+		}
+
+		// Expected this month: cycles added during current calendar month
+		cyclesBeforeMonth := cyclesElapsed(row.StartDate, endOfLastMonth, row.RentCycle)
+		cyclesThisMonth := cyclesTotal - cyclesBeforeMonth
+		if cyclesThisMonth < 0 {
+			cyclesThisMonth = 0
+		}
+		summary.ExpectedThisMonth += row.RentAmount * int64(cyclesThisMonth)
+	}
+	return summary
+}
+
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 func (h *DashboardHandler) GetDashboard(c echo.Context) error {
@@ -146,13 +193,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	}
 
 	// 3. Active stays for expected/overdue calculation
-	type stayCalcRow struct {
-		RentAmount int64          `db:"rent_amount"`
-		RentCycle  string         `db:"rent_cycle"`
-		StartDate  time.Time      `db:"start_date"`
-		TotalPaid  int64          `db:"total_paid"`
-	}
-	var stayRows []stayCalcRow
+	var stayRows []stayRevenueRow
 	err = h.db.Select(&stayRows, `
 		SELECT
 			s.rent_amount,
@@ -171,25 +212,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch stay data"))
 	}
 
-	endOfLastMonth := firstOfMonth.Add(-24 * time.Hour)
-	var expectedThisMonth, overdueAmount int64
-	for _, row := range stayRows {
-		cyclesTotal := cyclesElapsed(row.StartDate, today, row.RentCycle)
-		totalExpected := row.RentAmount * int64(cyclesTotal)
-
-		// Overdue: amount owed across all time
-		if totalExpected > row.TotalPaid {
-			overdueAmount += totalExpected - row.TotalPaid
-		}
-
-		// Expected this month: cycles added during current calendar month
-		cyclesBeforeMonth := cyclesElapsed(row.StartDate, endOfLastMonth, row.RentCycle)
-		cyclesThisMonth := cyclesTotal - cyclesBeforeMonth
-		if cyclesThisMonth < 0 {
-			cyclesThisMonth = 0
-		}
-		expectedThisMonth += row.RentAmount * int64(cyclesThisMonth)
-	}
+	revenue := computeRevenue(stayRows, collectedThisMonth, today)
 
 	// 4. Pending counts
 	var pendingTenants, pendingPayments int
@@ -315,11 +338,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, DashboardResponse{
 		Occupancy: occupancy,
-		Revenue: RevenueSummary{
-			ExpectedThisMonth:  expectedThisMonth,
-			CollectedThisMonth: collectedThisMonth,
-			OverdueAmount:      overdueAmount,
-		},
+		Revenue:   revenue,
 		Alerts: AlertsSummary{
 			PendingTenants:  pendingTenants,
 			PendingPayments: pendingPayments,

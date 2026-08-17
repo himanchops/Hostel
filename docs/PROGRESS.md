@@ -452,6 +452,50 @@ total. `make verify-backend` and `make test-e2e` (12/12) green.
 
 ---
 
+## S2 — Money Math Unit Tests ✅
+
+Phase 12a continued: the arithmetic that decides what a bed looks like and what
+the dashboard claims you are owed is now covered by fast tests with exact
+assertions. No DB, no browser — `make verify-backend` runs in under a second.
+
+- **`computeBedStatus` (`grid.go`)** — `grid_status_test.go`. Table tests over
+  the paid/partial/overdue boundaries: the one that matters is that owing
+  *exactly* one full cycle is overdue while owing one paise less is partial, and
+  that the threshold scales with the stay's own rent (₹5,000 short is partial on
+  a ₹12,000 room, overdue on a ₹5,000 one). Also: zero rent is always paid, the
+  30-day vacating window is inclusive at 30 days and open-ended in the past
+  (backfilled vacates), notice outranks any end date, and vacating outranks the
+  money status. `buildBed` is exercised end-to-end from a `gridRow` so the
+  cycles → expected → balance → status chain is covered, not just the last step.
+- **Dashboard revenue (`dashboard.go`)** — `dashboard_revenue_test.go`. The
+  rollup loop was extracted from the handler into `computeRevenue(stays,
+  collectedThisMonth, today) RevenueSummary` (with `stayRevenueRow` promoted to
+  a package-level type) so the tests exercise production code rather than a
+  copy of it. Fixtures are a five-stay portfolio on three cycles with start
+  dates from February to mid-August: a monthly anchor day that has *not* come
+  round yet contributes 0 to expected-this-month while one on the 1st
+  contributes a full rent; a stay started mid-month bills its whole first cycle
+  this month; weekly/daily stays cross several cycles inside one calendar month;
+  a tenant paying ahead contributes 0 to overdue instead of netting off another
+  tenant's arrears; a future start contributes nothing.
+- **`formatCurrency` (`frontend/src/lib/api.ts`)** — `frontend/tests/unit/`.
+  Exact rendered strings: lakh/crore grouping (`₹1,00,000`, not `₹100,000`),
+  negative amounts keeping the sign outside the symbol, half-up rounding of
+  sub-rupee paise. Note the two backend sign conventions are opposite — the
+  tenant summary reports `expected − paid` (negative = credit), the grid reports
+  `paid − expected` (negative = owes) — so both directions are asserted.
+  Found in passing: `formatCurrency(-0)` renders `-₹0`. Pinned as a tripwire
+  rather than fixed; Go marshals a zero `int64` as `0`, so `-0` cannot arrive
+  from the API today.
+
+**New runner:** the frontend had no unit-test runner (`make test` called a
+non-existent `npm test`). Rather than adding vitest, unit tests run under
+Playwright with a separate `frontend/playwright.unit.config.ts` — `testDir:
+tests/unit`, no `webServer`, so nothing boots Go or Next. New targets:
+`make verify-frontend`, and `make test` now runs both unit suites.
+
+---
+
 ## Known Issues
 
 Found while verifying the billing fixes (Aug 2026). None are fixed yet.
