@@ -41,14 +41,15 @@ hostel/
 
 **See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
 
-Current state: **Phase 9.1 done on `phase-9-deploy-prep` branch** (uncommitted — awaiting local `go build`/`go test` verify before commit + PR) — S3Storage, storage selector + unit tests, `render.yaml`, `backend/.env.example`, `docs/DEPLOYMENT.md`, `cmd/storage-check` smoke-test CLI.
+Current state (Aug 2026): Phases 0–9.1 and design Phase A are merged. The last two sessions were stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Next up is design Phase B (component kit), which blocks Phases 10 and 11.
 
 **Roadmap decision (Apr 2026): deployment is deferred until after the UI modernization and two value features.** Execution order: design Phases A–B (`docs/DESIGN_PLAN.md`) → Phase 10 Collections & WhatsApp nudges (`docs/PROGRESS.md`) → design Phases C–E → Phase 11 Settlement calculator → deploy (Phase 9.2–9.6, `docs/DEPLOYMENT.md`).
 
 Key conventions to carry forward:
 - Every new feature ships with a Playwright e2e test in `frontend/tests/e2e/`
+- Money math ships with a unit test too — `backend/internal/handlers/*_test.go` or `frontend/tests/unit/`. Exact values, non-degenerate fixtures (see Phase 12a in `docs/PROGRESS.md`)
 - Amounts stored in **paise** (₹1 = 100 paise), displayed via `formatCurrency()`
-- Go binary and Node are not in default PATH in Claude's shell — use `~/sdk/go1.24.6/bin/go` and `/opt/homebrew/opt/node/bin/npm` etc.
+- Go and Node are not on the default PATH in Claude's shell, and the paths differ per laptop — check before assuming. On the Homebrew machines: `export PATH=/opt/homebrew/opt/node/bin:/opt/homebrew/bin:$PATH`. Postgres may run natively (`brew services`) rather than via Docker, in which case `make db-up` is a no-op.
 
 ## Git Remote
 

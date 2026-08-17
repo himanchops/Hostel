@@ -1,6 +1,6 @@
 export PATH := /opt/homebrew/opt/node/bin:/opt/homebrew/bin:$(PATH)
 
-.PHONY: dev setup db-up db-down migrate backend frontend verify-backend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
+.PHONY: dev setup db-up db-down migrate backend frontend verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -60,6 +60,10 @@ build-backend:
 verify-backend:
 	cd backend && go mod tidy && go build ./... && go test ./...
 
+# Frontend unit tests (pure functions in src/lib) — no browser, no dev server.
+verify-frontend:
+	cd frontend && npm run test:unit
+
 # Bulk-import tenants/stays/payments from a JSON file (see docs/import-prompt.md)
 # Usage: make import-data OWNER=you@example.com FILE=ledger.json
 import-data:
@@ -78,10 +82,10 @@ storage-check:
 	@test -n "$(FILE)" || (echo "Error: FILE=<path> required" && exit 1)
 	cd backend && go run ./cmd/storage-check --file ../$(FILE)
 
-# Run all tests
+# Run all unit tests (e2e is a separate target — see test-e2e)
 test:
 	cd backend && go test ./...
-	cd frontend && npm test
+	cd frontend && npm run test:unit
 
 # ── E2E ────────────────────────────────────────────────────────────────────────
 
