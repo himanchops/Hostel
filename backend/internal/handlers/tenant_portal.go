@@ -28,7 +28,6 @@ type tenantStay struct {
 	RentAmount    int64      `db:"rent_amount" json:"rent_amount"`
 	DepositAmount int64      `db:"deposit_amount" json:"deposit_amount"`
 	RentCycle     string     `db:"rent_cycle" json:"rent_cycle"`
-	RentDueDay    int        `db:"rent_due_day" json:"rent_due_day"`
 	StartDate     time.Time  `db:"start_date" json:"start_date"`
 	EndDate       *time.Time `db:"end_date" json:"end_date,omitempty"`
 	NoticeDate    *time.Time `db:"notice_date" json:"notice_date,omitempty"`
@@ -45,7 +44,7 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 		        COALESCE(b.name, 'Unassigned') AS bed_name,
 		        COALESCE(r.name, '') AS room_name,
 		        COALESCE(hs.name, '') AS site_name,
-		        s.rent_amount, s.deposit_amount, s.rent_cycle, s.rent_due_day,
+		        s.rent_amount, s.deposit_amount, s.rent_cycle,
 		        s.start_date, s.end_date, s.notice_date, s.created_at
 		 FROM stays s
 		 LEFT JOIN beds b        ON b.id = s.bed_id
@@ -151,7 +150,7 @@ func (h *TenantPortalHandler) SubmitNotice(c echo.Context) error {
 	err = h.db.QueryRowx(
 		`UPDATE stays SET notice_date = $1, updated_at = $2
 		 WHERE id = $3
-		 RETURNING id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, rent_due_day, start_date, end_date, notice_date, created_at, updated_at`,
+		 RETURNING id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, created_at, updated_at`,
 		noticeDate, time.Now(), stayID,
 	).StructScan(&stay)
 	if err != nil {

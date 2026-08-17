@@ -1,0 +1,1 @@
+ALTER TABLE stays ADD COLUMN rent_due_day INT NOT NULL DEFAULT 1;
