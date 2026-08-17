@@ -425,6 +425,10 @@ rewritten twice.
 Found while verifying the billing fixes (Aug 2026). None are fixed yet.
 
 ### `rent_due_day` is stored but never used 🐞
+**Decision (Aug 2026): rent is due on each tenant's join-date anniversary**, which
+is what `cyclesElapsed` already does. So the fix is to **drop the column** and
+its request fields, not to wire it in. No fixed-day-of-month billing.
+
 `stays.rent_due_day` is written on create/approve (defaulting to 1), returned by
 the API, and exposed in the models — but **no billing code reads it**.
 `cyclesElapsed` takes only `(startDate, today, cycle)`. Billing is anchored to
@@ -451,7 +455,11 @@ recorded with the wrong start date, every derived number (cycles due, balance,
 duration) is wrong with no way to fix it from the UI. Owners need to edit
 `start_date`, `rent_amount`, and `rent_cycle` on an existing stay.
 
-### Vacate-from-grid can't backfill a date 🐞
+### Vacate-from-grid can't backfill a date 🐞 (deferred to design Phase D)
+Deliberately not fixed standalone: Phase D replaces this panel with a
+`ConfirmDialog` + date picker anyway. Workaround until then — end the stay from
+the tenant detail page, which already has a date picker.
+
 The tenant detail page ends a stay via a date picker (so a departure can be
 recorded days later), but the grid's vacate path uses `confirm()` and hardcodes
 today — see `handleVacate` in `sites/[id]/grid/page.tsx`. The two paths disagree.
