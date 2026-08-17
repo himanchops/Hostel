@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,7 +22,7 @@ func NewStayHandler(db *sqlx.DB) *StayHandler {
 	return &StayHandler{db: db}
 }
 
-const stayCols = `id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, rent_due_day, start_date, end_date, notice_date, created_at, updated_at`
+const stayCols = `id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, created_at, updated_at`
 
 type createStayRequest struct {
 	TenantID      int64  `json:"tenant_id"`
@@ -27,13 +30,83 @@ type createStayRequest struct {
 	RentAmount    int64  `json:"rent_amount"`    // in paise
 	DepositAmount int64  `json:"deposit_amount"` // in paise
 	RentCycle     string `json:"rent_cycle"`     // "daily"|"weekly"|"monthly"
-	RentDueDay    int    `json:"rent_due_day"`
 	StartDate     string `json:"start_date"` // YYYY-MM-DD
 }
 
-type updateStayRequest struct {
-	EndDate    *string `json:"end_date"`    // YYYY-MM-DD or null
-	NoticeDate *string `json:"notice_date"` // YYYY-MM-DD or null
+// stayPatch is a partial update. Every field is optional, and a field that is
+// absent from the JSON body is left untouched — distinct from one sent as
+// explicit null, which clears it. Binding into plain pointers cannot tell those
+// apart (both arrive as nil), which is why the raw keys are tracked separately.
+type stayPatch struct {
+	keys map[string]bool
+
+	StartDate     *time.Time
+	EndDate       *time.Time
+	NoticeDate    *time.Time
+	RentAmount    *int64
+	DepositAmount *int64
+	RentCycle     *string
+}
+
+func (p stayPatch) has(field string) bool { return p.keys[field] }
+
+func parseStayPatch(c echo.Context) (stayPatch, error) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(c.Request().Body).Decode(&raw); err != nil {
+		return stayPatch{}, errors.New("invalid request body")
+	}
+
+	p := stayPatch{keys: make(map[string]bool, len(raw))}
+	for k := range raw {
+		p.keys[k] = true
+	}
+
+	dates := map[string]**time.Time{
+		"start_date":  &p.StartDate,
+		"end_date":    &p.EndDate,
+		"notice_date": &p.NoticeDate,
+	}
+	for field, dst := range dates {
+		msg, ok := raw[field]
+		if !ok || string(msg) == "null" {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(msg, &s); err != nil {
+			return stayPatch{}, fmt.Errorf("%s must be a YYYY-MM-DD string or null", field)
+		}
+		t, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			return stayPatch{}, fmt.Errorf("invalid %s format, use YYYY-MM-DD", field)
+		}
+		*dst = &t
+	}
+
+	amounts := map[string]**int64{
+		"rent_amount":    &p.RentAmount,
+		"deposit_amount": &p.DepositAmount,
+	}
+	for field, dst := range amounts {
+		msg, ok := raw[field]
+		if !ok || string(msg) == "null" {
+			continue
+		}
+		var n int64
+		if err := json.Unmarshal(msg, &n); err != nil {
+			return stayPatch{}, fmt.Errorf("%s must be a number in paise", field)
+		}
+		*dst = &n
+	}
+
+	if msg, ok := raw["rent_cycle"]; ok && string(msg) != "null" {
+		var s string
+		if err := json.Unmarshal(msg, &s); err != nil {
+			return stayPatch{}, errors.New("rent_cycle must be a string")
+		}
+		p.RentCycle = &s
+	}
+
+	return p, nil
 }
 
 type assignBedRequest struct {
@@ -55,9 +128,6 @@ func (h *StayHandler) Create(c echo.Context) error {
 	}
 	if req.RentCycle == "" {
 		req.RentCycle = "monthly"
-	}
-	if req.RentDueDay == 0 {
-		req.RentDueDay = 1
 	}
 
 	startDate, err := time.Parse("2006-01-02", req.StartDate)
@@ -103,11 +173,11 @@ func (h *StayHandler) Create(c echo.Context) error {
 
 	var stay models.Stay
 	err = h.db.QueryRowx(
-		`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, rent_due_day, start_date, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+		`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
 		 RETURNING `+stayCols,
 		req.TenantID, req.BedID, req.RentAmount, req.DepositAmount,
-		req.RentCycle, req.RentDueDay, startDate, time.Now(),
+		req.RentCycle, startDate, time.Now(),
 	).StructScan(&stay)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create stay"))
@@ -132,33 +202,86 @@ func (h *StayHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, errorResponse("stay not found"))
 	}
 
-	var req updateStayRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid request body"))
+	// Load the current row so omitted fields keep their values and so the
+	// resulting date range can be validated as a whole.
+	var current models.Stay
+	if err := h.db.QueryRowx(`SELECT `+stayCols+` FROM stays WHERE id = $1`, stayID).StructScan(&current); err != nil {
+		return c.JSON(http.StatusInternalServerError, errorResponse("failed to load stay"))
 	}
 
-	var endDate, noticeDate *time.Time
-	if req.EndDate != nil {
-		t, err := time.Parse("2006-01-02", *req.EndDate)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid end_date format"))
-		}
-		endDate = &t
+	patch, err := parseStayPatch(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 	}
-	if req.NoticeDate != nil {
-		t, err := time.Parse("2006-01-02", *req.NoticeDate)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid notice_date format"))
+
+	// Start from current values; only overwrite what the request actually sent.
+	next := current
+	if patch.has("start_date") {
+		if patch.StartDate == nil {
+			return c.JSON(http.StatusBadRequest, errorResponse("start_date cannot be null"))
 		}
-		noticeDate = &t
+		next.StartDate = *patch.StartDate
+	}
+	if patch.has("end_date") {
+		next.EndDate = patch.EndDate
+	}
+	if patch.has("notice_date") {
+		next.NoticeDate = patch.NoticeDate
+	}
+	if patch.has("rent_amount") {
+		if patch.RentAmount == nil || *patch.RentAmount <= 0 {
+			return c.JSON(http.StatusBadRequest, errorResponse("rent_amount must be positive"))
+		}
+		next.RentAmount = *patch.RentAmount
+	}
+	if patch.has("deposit_amount") {
+		if patch.DepositAmount == nil || *patch.DepositAmount < 0 {
+			return c.JSON(http.StatusBadRequest, errorResponse("deposit_amount cannot be negative"))
+		}
+		next.DepositAmount = *patch.DepositAmount
+	}
+	if patch.has("rent_cycle") {
+		if patch.RentCycle == nil {
+			return c.JSON(http.StatusBadRequest, errorResponse("rent_cycle cannot be null"))
+		}
+		switch *patch.RentCycle {
+		case "daily", "weekly", "monthly":
+			next.RentCycle = models.RentCycle(*patch.RentCycle)
+		default:
+			return c.JSON(http.StatusBadRequest, errorResponse(`rent_cycle must be "daily", "weekly", or "monthly"`))
+		}
+	}
+
+	// A stay cannot end before it starts, and notice cannot predate the stay.
+	if next.EndDate != nil && next.EndDate.Before(next.StartDate) {
+		return c.JSON(http.StatusBadRequest, errorResponse("end_date cannot be before start_date"))
+	}
+	if next.NoticeDate != nil && next.NoticeDate.Before(next.StartDate) {
+		return c.JSON(http.StatusBadRequest, errorResponse("notice_date cannot be before start_date"))
+	}
+
+	// Reopening a stay (clearing end_date) must not collide with whoever is in
+	// the bed now.
+	if current.EndDate != nil && next.EndDate == nil && next.BedID != nil {
+		var occupied int
+		h.db.Get(&occupied,
+			`SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL AND id <> $2`,
+			*next.BedID, stayID,
+		)
+		if occupied > 0 {
+			return c.JSON(http.StatusConflict, errorResponse("bed is already occupied by another active stay"))
+		}
 	}
 
 	var stay models.Stay
 	err = h.db.QueryRowx(
-		`UPDATE stays SET end_date = $1, notice_date = $2, updated_at = $3
-		 WHERE id = $4
+		`UPDATE stays
+		 SET start_date = $1, end_date = $2, notice_date = $3,
+		     rent_amount = $4, deposit_amount = $5, rent_cycle = $6, updated_at = $7
+		 WHERE id = $8
 		 RETURNING `+stayCols,
-		endDate, noticeDate, time.Now(), stayID,
+		next.StartDate, next.EndDate, next.NoticeDate,
+		next.RentAmount, next.DepositAmount, next.RentCycle, time.Now(), stayID,
 	).StructScan(&stay)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to update stay"))

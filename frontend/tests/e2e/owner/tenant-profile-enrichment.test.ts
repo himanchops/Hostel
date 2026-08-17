@@ -78,7 +78,6 @@ test.describe("Tenant profile enrichment", () => {
           rent_amount: 500000,   // ₹5000 in paise
           deposit_amount: 100000, // ₹1000 in paise
           rent_cycle: "monthly",
-          rent_due_day: 1,
           start_date: new Date().toISOString().slice(0, 10),
           // no bed_id
         },
@@ -109,7 +108,7 @@ test.describe("Tenant profile enrichment", () => {
 
     await request.post(`${BASE}/api/tenants/${tenantId}/approve`, {
       headers: { Authorization: `Bearer ${ownerToken}` },
-      data: { rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", rent_due_day: 1, start_date: new Date().toISOString().slice(0, 10) },
+      data: { rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", start_date: new Date().toISOString().slice(0, 10) },
     });
 
     const staysRes = await request.get(`${BASE}/api/tenants/${tenantId}/stays`, {
@@ -144,14 +143,14 @@ test.describe("Tenant profile enrichment", () => {
     // First stay
     const s1 = await request.post(`${BASE}/api/stays`, {
       headers: auth,
-      data: { tenant_id: tenantId, bed_id: bedId1, rent_amount: 100000, deposit_amount: 0, rent_cycle: "monthly", rent_due_day: 1, start_date: new Date().toISOString().slice(0, 10) },
+      data: { tenant_id: tenantId, bed_id: bedId1, rent_amount: 100000, deposit_amount: 0, rent_cycle: "monthly", start_date: new Date().toISOString().slice(0, 10) },
     });
     expect(s1.ok()).toBeTruthy();
 
     // Second stay should 409
     const s2 = await request.post(`${BASE}/api/stays`, {
       headers: auth,
-      data: { tenant_id: tenantId, bed_id: bedId2, rent_amount: 100000, deposit_amount: 0, rent_cycle: "monthly", rent_due_day: 1, start_date: new Date().toISOString().slice(0, 10) },
+      data: { tenant_id: tenantId, bed_id: bedId2, rent_amount: 100000, deposit_amount: 0, rent_cycle: "monthly", start_date: new Date().toISOString().slice(0, 10) },
     });
     expect(s2.status()).toBe(409);
   });
@@ -171,7 +170,7 @@ test.describe("Tenant profile enrichment", () => {
     const startDate = new Date().toISOString().slice(0, 10);
     const stayRes = await request.post(`${BASE}/api/stays`, {
       headers: auth,
-      data: { tenant_id: tenantId, bed_id: bedId, rent_amount: 600000, deposit_amount: 0, rent_cycle: "monthly", rent_due_day: 1, start_date: startDate },
+      data: { tenant_id: tenantId, bed_id: bedId, rent_amount: 600000, deposit_amount: 0, rent_cycle: "monthly", start_date: startDate },
     });
     const { id: stayId } = await stayRes.json();
 
@@ -251,7 +250,7 @@ test.describe("Tenant profile enrichment", () => {
     const startDate = new Date().toISOString().slice(0, 10);
     const stayRes = await request.post(`${BASE}/api/stays`, {
       headers: auth,
-      data: { tenant_id: tenant.id, bed_id: bedId, rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", rent_due_day: 1, start_date: startDate },
+      data: { tenant_id: tenant.id, bed_id: bedId, rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", start_date: startDate },
     });
     const { id: stayId } = await stayRes.json();
     await request.post(`${BASE}/api/stays/${stayId}/payments`, {
@@ -295,7 +294,7 @@ test.describe("Tenant profile enrichment", () => {
     const startDate = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10); // 30 days ago
     await request.post(`${BASE}/api/stays`, {
       headers: auth,
-      data: { tenant_id: tenantId, bed_id: bedId, rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", rent_due_day: 1, start_date: startDate },
+      data: { tenant_id: tenantId, bed_id: bedId, rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", start_date: startDate },
     });
 
     const loginRes = await request.post(`${BASE}/auth/login`, {

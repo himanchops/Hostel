@@ -213,7 +213,6 @@ export const tenantsApi = {
     rent_amount?: number;
     deposit_amount?: number;
     rent_cycle?: string;
-    rent_due_day?: number;
     start_date?: string;
   }) => request<Tenant>(`/api/tenants/${id}/approve`, { method: "POST", body: JSON.stringify(data) }, token),
   reject: (token: string, id: number) =>
@@ -293,7 +292,6 @@ export interface TenantStay {
   rent_amount: number;
   deposit_amount: number;
   rent_cycle: "daily" | "weekly" | "monthly";
-  rent_due_day: number;
   start_date: string;
   end_date?: string;
   notice_date?: string;
@@ -335,7 +333,6 @@ export interface Stay {
   rent_amount: number;   // paise
   deposit_amount: number; // paise
   rent_cycle: "daily" | "weekly" | "monthly";
-  rent_due_day: number;
   start_date: string;
   end_date?: string;
   notice_date?: string;
@@ -350,7 +347,6 @@ export const staysApi = {
     rent_amount: number;
     deposit_amount: number;
     rent_cycle: string;
-    rent_due_day: number;
     start_date: string;
   }) => request<Stay>("/api/stays", { method: "POST", body: JSON.stringify(data) }, token),
 

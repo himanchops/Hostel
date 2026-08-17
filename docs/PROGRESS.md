@@ -420,40 +420,41 @@ rewritten twice.
 
 ---
 
+## S1 — Data Integrity ✅
+
+Stabilization pass. Priority set Aug 2026: make what exists correct before
+building anything new.
+
+- **`PUT /api/stays/:id` no longer clobbers fields you didn't send.** It wrote
+  every column from the request body, so ending a stay (sending only
+  `end_date`) silently set `notice_date = NULL`. Absent keys are now
+  distinguished from explicit `null` by parsing the raw JSON keys —
+  `c.Bind` into pointers cannot tell those apart, since both arrive as nil.
+- **Stays are correctable.** `start_date`, `rent_amount`, `deposit_amount`, and
+  `rent_cycle` are now editable. Previously a stay entered with the wrong start
+  date had every derived number wrong forever with no fix path.
+- **Validation on the resulting row**, not just the payload: end can't precede
+  start, notice can't precede start, rent must be positive, cycle must be one
+  of the three. Reopening a stay (clearing `end_date`) 409s if another active
+  stay now holds the bed.
+- **Month-end move-ins no longer skip a cycle.** The anchor day is clamped to
+  the last day of the month being measured, so a stay starting the 31st rolls
+  over on Feb 28 (29 in a leap year) instead of not at all.
+- **`rent_due_day` dropped** (migration `004`) from the schema, models,
+  handlers, import CLI, API types, and the pending-page form. Per the decision
+  above, billing anchors to each tenant's join date, which is what
+  `cyclesElapsed` already did — the column was dead config that looked live.
+
+Tests: partial-update semantics (absent vs null vs value, zero treated as a
+real value, malformed input rejected), month-end and leap-year cycle clamping,
+30th-of-month move-ins, and that correcting a start date moves the expected
+total. `make verify-backend` and `make test-e2e` (12/12) green.
+
+---
+
 ## Known Issues
 
 Found while verifying the billing fixes (Aug 2026). None are fixed yet.
-
-### `rent_due_day` is stored but never used 🐞
-**Decision (Aug 2026): rent is due on each tenant's join-date anniversary**, which
-is what `cyclesElapsed` already does. So the fix is to **drop the column** and
-its request fields, not to wire it in. No fixed-day-of-month billing.
-
-`stays.rent_due_day` is written on create/approve (defaulting to 1), returned by
-the API, and exposed in the models — but **no billing code reads it**.
-`cyclesElapsed` takes only `(startDate, today, cycle)`. Billing is anchored to
-the stay's `start_date`, so the column is dead weight that looks meaningful.
-Either wire it into the cycle math or drop it; leaving it is a trap.
-
-### Month-end move-ins skip a cycle 🐞
-`cyclesElapsed` rolls over when `today.Day() >= startDate.Day()`. For a stay
-starting on the 31st, no day in February satisfies that, so February never
-rolls over and the tenant is not billed for it. Same for the 29th/30th.
-Covered (as current behaviour, not endorsed) by
-`TestCyclesElapsed_MonthEndMoveIn`. Fix would clamp the anchor day to the
-last day of a short month.
-
-### `PUT /api/stays/:id` clobbers the field you didn't send 🐞
-`Update` runs `SET end_date = $1, notice_date = $2` unconditionally from the
-request body. Sending only `end_date` writes `notice_date = NULL`, silently
-erasing a recorded notice. Should use `COALESCE`-style partial updates, or
-distinguish "absent" from "explicitly null".
-
-### `start_date` cannot be corrected 🐞
-`updateStayRequest` accepts only `end_date` and `notice_date`. If a stay is
-recorded with the wrong start date, every derived number (cycles due, balance,
-duration) is wrong with no way to fix it from the UI. Owners need to edit
-`start_date`, `rent_amount`, and `rent_cycle` on an existing stay.
 
 ### Vacate-from-grid can't backfill a date 🐞 (deferred to design Phase D)
 Deliberately not fixed standalone: Phase D replaces this panel with a

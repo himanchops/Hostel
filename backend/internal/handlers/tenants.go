@@ -222,7 +222,6 @@ type approveRequest struct {
 	RentAmount    int64  `json:"rent_amount"`
 	DepositAmount int64  `json:"deposit_amount"`
 	RentCycle     string `json:"rent_cycle"`
-	RentDueDay    int    `json:"rent_due_day"`
 	StartDate     string `json:"start_date"`
 }
 
@@ -253,9 +252,6 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 	if req.BedID != nil || req.RentAmount > 0 {
 		if req.RentCycle != "daily" && req.RentCycle != "weekly" && req.RentCycle != "monthly" {
 			req.RentCycle = "monthly"
-		}
-		if req.RentDueDay == 0 {
-			req.RentDueDay = 1
 		}
 
 		startDate := time.Now()
@@ -296,9 +292,9 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 		}
 
 		_, err = h.db.Exec(
-			`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, rent_due_day, start_date, created_at, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
-			tenantID, req.BedID, req.RentAmount, req.DepositAmount, req.RentCycle, req.RentDueDay, startDate, time.Now(),
+			`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
+			tenantID, req.BedID, req.RentAmount, req.DepositAmount, req.RentCycle, startDate, time.Now(),
 		)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errorResponse("tenant approved but failed to create stay: "+err.Error()))

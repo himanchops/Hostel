@@ -320,9 +320,9 @@ func createStay(tx *sqlx.Tx, siteID, tenantID int64, s importStay) (int64, error
 	now := time.Now()
 	var newID int64
 	err = tx.QueryRow(
-		`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, rent_due_day,
+		`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle,
 		    start_date, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+		 VALUES ($1, $2, $3, $4, $5, $6, $6)
 		 RETURNING id`,
 		tenantID, bedID, s.RentPaise, s.DepositPaise, cycle, 1, startDate, now,
 	).Scan(&newID)

@@ -83,7 +83,6 @@ type Stay struct {
 	RentAmount   int64      `db:"rent_amount" json:"rent_amount"`     // In paise (INR * 100)
 	DepositAmount int64     `db:"deposit_amount" json:"deposit_amount"` // In paise
 	RentCycle    RentCycle  `db:"rent_cycle" json:"rent_cycle"`
-	RentDueDay   int        `db:"rent_due_day" json:"rent_due_day"`   // Day of month/week for due date
 	StartDate    time.Time  `db:"start_date" json:"start_date"`
 	EndDate      *time.Time `db:"end_date" json:"end_date,omitempty"` // Null if ongoing
 	NoticeDate   *time.Time `db:"notice_date" json:"notice_date,omitempty"` // When tenant gave notice

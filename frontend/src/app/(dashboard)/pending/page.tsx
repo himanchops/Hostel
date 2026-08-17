@@ -87,11 +87,10 @@ function IdProofTile({ label, url, isImage }: { label: string; url: string; isIm
   );
 }
 
-function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, depositAmount, setDepositAmount, rentDueDay, setRentDueDay, startDate, setStartDate, rentLabel }: {
+function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, depositAmount, setDepositAmount, startDate, setStartDate, rentLabel }: {
   rentCycle: string; setRentCycle: (v: string) => void;
   rentAmount: string; setRentAmount: (v: string) => void;
   depositAmount: string; setDepositAmount: (v: string) => void;
-  rentDueDay: string; setRentDueDay: (v: string) => void;
   startDate: string; setStartDate: (v: string) => void;
   rentLabel: string;
 }) {
@@ -104,10 +103,6 @@ function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, deposi
           <option value="weekly">Weekly</option>
           <option value="daily">Daily</option>
         </select>
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-stone-700">Due day</label>
-        <input type="number" min="1" max="31" value={rentDueDay} onChange={(e) => setRentDueDay(e.target.value)} className={inputCls} />
       </div>
       <div>
         <label className="mb-1.5 block text-sm font-medium text-stone-700">{rentLabel} <span className="text-red-500">*</span></label>
@@ -151,7 +146,6 @@ function ReviewDrawer({
   const [rentAmount, setRentAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [rentCycle, setRentCycle] = useState("monthly");
-  const [rentDueDay, setRentDueDay] = useState("1");
   const [startDate, setStartDate] = useState(today());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -197,7 +191,6 @@ function ReviewDrawer({
         payload.rent_amount = Math.round(parseFloat(rentAmount) * 100);
         payload.deposit_amount = Math.round(parseFloat(depositAmount || "0") * 100);
         payload.rent_cycle = rentCycle;
-        payload.rent_due_day = parseInt(rentDueDay, 10) || 1;
         payload.start_date = startDate;
       } else if (mode === "collect_deposit") {
         if (!rentAmount) {
@@ -208,7 +201,6 @@ function ReviewDrawer({
         payload.rent_amount = Math.round(parseFloat(rentAmount) * 100);
         payload.deposit_amount = Math.round(parseFloat(depositAmount || "0") * 100);
         payload.rent_cycle = rentCycle;
-        payload.rent_due_day = parseInt(rentDueDay, 10) || 1;
         payload.start_date = startDate;
       }
 
@@ -355,7 +347,7 @@ function ReviewDrawer({
                       )}
                     </div>
                   )}
-                  {selectedBed && <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} rentDueDay={rentDueDay} setRentDueDay={setRentDueDay} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />}
+                  {selectedBed && <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />}
                 </div>
               )}
 
@@ -363,7 +355,7 @@ function ReviewDrawer({
               {mode === "collect_deposit" && (
                 <div className="space-y-4 rounded-xl border border-stone-200 p-4">
                   <p className="text-xs text-stone-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
-                  <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} rentDueDay={rentDueDay} setRentDueDay={setRentDueDay} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />
+                  <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />
                 </div>
               )}
             </>

@@ -278,7 +278,6 @@ function AssignPanel({
         rent_amount: Math.round(parseFloat(rent) * 100),
         deposit_amount: Math.round(parseFloat(deposit || "0") * 100),
         rent_cycle: cycle,
-        rent_due_day: new Date(startDate).getDate(),
         start_date: startDate,
       });
       onDone();

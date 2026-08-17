@@ -31,12 +31,12 @@ func TestCyclesElapsed_AnchoredToJoinDate(t *testing.T) {
 	}
 }
 
-// Documents current behaviour for month-end move-ins. A stay starting on the
-// 31st never sees a day >= 31 in a short month, so the cycle does not roll over
-// within that month — the tenant is not charged for it.
+// Month-end move-ins: the anchor day is clamped to the last day of whichever
+// month is being measured. A stay starting on the 31st still rolls over in
+// February, on the 28th (or 29th in a leap year).
 //
-// NOTE: this encodes a known rough edge rather than endorsing it. If the rule
-// changes to "clamp to the last day of a short month", update this test.
+// Before clamping, `today.Day() >= 31` was never true in February, so the
+// tenant got that month rent-free.
 func TestCyclesElapsed_MonthEndMoveIn(t *testing.T) {
 	start := date(2026, time.January, 31)
 
@@ -46,8 +46,9 @@ func TestCyclesElapsed_MonthEndMoveIn(t *testing.T) {
 		want  int
 	}{
 		{"move-in day", date(2026, time.January, 31), 1},
-		{"end of February — no 31st exists, so no rollover", date(2026, time.February, 28), 1},
-		{"March 30 — still no rollover", date(2026, time.March, 30), 2},
+		{"Feb 27 — before the clamped anchor", date(2026, time.February, 27), 1},
+		{"Feb 28 — clamped anchor, rolls over", date(2026, time.February, 28), 2},
+		{"March 30 — before the 31st", date(2026, time.March, 30), 2},
 		{"March 31 — rolls over", date(2026, time.March, 31), 3},
 	}
 	for _, tt := range tests {
@@ -56,6 +57,39 @@ func TestCyclesElapsed_MonthEndMoveIn(t *testing.T) {
 				t.Errorf("cyclesElapsed(%s) = %d, want %d", tt.today.Format("2006-01-02"), got, tt.want)
 			}
 		})
+	}
+}
+
+// 2028 is a leap year: the clamped anchor for a 31st move-in is the 29th.
+func TestCyclesElapsed_MonthEndMoveInLeapYear(t *testing.T) {
+	start := date(2028, time.January, 31)
+
+	if got := cyclesElapsed(start, date(2028, time.February, 28), "monthly"); got != 1 {
+		t.Errorf("Feb 28 in a leap year = %d, want 1 (anchor is the 29th)", got)
+	}
+	if got := cyclesElapsed(start, date(2028, time.February, 29), "monthly"); got != 2 {
+		t.Errorf("Feb 29 in a leap year = %d, want 2", got)
+	}
+}
+
+// A 30th move-in must not roll over early in a 31-day month.
+func TestCyclesElapsed_ThirtiethMoveIn(t *testing.T) {
+	start := date(2026, time.April, 30) // April has 30 days
+
+	tests := []struct {
+		today time.Time
+		want  int
+	}{
+		{date(2026, time.April, 30), 1},
+		{date(2026, time.May, 29), 1},
+		{date(2026, time.May, 30), 2}, // May has 31 days; anchor stays the 30th
+		{date(2026, time.May, 31), 2},
+		{date(2026, time.June, 30), 3},
+	}
+	for _, tt := range tests {
+		if got := cyclesElapsed(start, tt.today, "monthly"); got != tt.want {
+			t.Errorf("cyclesElapsed(%s) = %d, want %d", tt.today.Format("2006-01-02"), got, tt.want)
+		}
 	}
 }
 
