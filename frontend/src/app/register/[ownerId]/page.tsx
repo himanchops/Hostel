@@ -4,10 +4,10 @@ import { useState } from "react";
 import { use } from "react";
 import { registrationApi, uploadApi, ApiError } from "@/lib/api";
 
-const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
-const fileCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
-const labelCls = "mb-1.5 block text-sm font-medium text-gray-700";
-const optionalSpan = <span className="text-gray-400 font-normal">(optional)</span>;
+const inputCls = "w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+const fileCls = "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+const labelCls = "mb-1.5 block text-sm font-medium text-stone-700";
+const optionalSpan = <span className="text-stone-400 font-normal">(optional)</span>;
 
 function FileInput({ label, onChange, file, hint }: { label: React.ReactNode; onChange: (f: File | null) => void; file: File | null; hint?: string }) {
   return (
@@ -19,8 +19,8 @@ function FileInput({ label, onChange, file, hint }: { label: React.ReactNode; on
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
         className={fileCls}
       />
-      {file && <p className="mt-1 text-xs text-gray-400">{file.name} ({(file.size / 1024).toFixed(0)} KB)</p>}
-      {hint && !file && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {file && <p className="mt-1 text-xs text-stone-400">{file.name} ({(file.size / 1024).toFixed(0)} KB)</p>}
+      {hint && !file && <p className="mt-1 text-xs text-stone-400">{hint}</p>}
     </div>
   );
 }
@@ -46,8 +46,8 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
   if (isNaN(ownerIdNum)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-        <p className="text-sm text-gray-500">Invalid registration link.</p>
+      <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
+        <p className="text-sm text-stone-500">Invalid registration link.</p>
       </div>
     );
   }
@@ -86,15 +86,15 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
   if (submitted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 text-center">
+      <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm ring-1 ring-stone-200 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
             <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Registration submitted!</h2>
-          <p className="mt-2 text-sm text-gray-500">
+          <h2 className="text-xl font-bold text-stone-900">Registration submitted!</h2>
+          <p className="mt-2 text-sm text-stone-500">
             Your details have been sent to the owner for review. You'll be contacted once approved.
           </p>
         </div>
@@ -103,16 +103,16 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
       <div className="w-full max-w-lg">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Tenant Registration</h1>
-          <p className="mt-2 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-stone-900">Tenant Registration</h1>
+          <p className="mt-2 text-sm text-stone-500">
             Fill in your details to register. The owner will review and approve your request.
           </p>
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
+        <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
@@ -153,7 +153,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
             {/* ── Emergency contact ── */}
             <div>
-              <p className="mb-2 text-sm font-semibold text-gray-700">Emergency contact {optionalSpan}</p>
+              <p className="mb-2 text-sm font-semibold text-stone-700">Emergency contact {optionalSpan}</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Name</label>
@@ -170,7 +170,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
             <div>
               <label className={labelCls}>Aadhaar number {optionalSpan}</label>
               <input type="text" placeholder="12-digit Aadhaar number" value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value)} maxLength={12} className={inputCls} />
-              <p className="mt-1 text-xs text-gray-400">Your Aadhaar number is stored securely and only visible to the property owner.</p>
+              <p className="mt-1 text-xs text-stone-400">Your Aadhaar number is stored securely and only visible to the property owner.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -191,7 +191,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
             <div>
               <label className={labelCls}>Password <span className="text-red-500">*</span></label>
               <input required type="password" placeholder="Min. 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} />
-              <p className="mt-1 text-xs text-gray-400">You'll use this to log in to your tenant portal after approval.</p>
+              <p className="mt-1 text-xs text-stone-400">You'll use this to log in to your tenant portal after approval.</p>
             </div>
 
             <button

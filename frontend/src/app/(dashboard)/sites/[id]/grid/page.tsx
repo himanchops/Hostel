@@ -13,12 +13,14 @@ import {
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
+// Colors come from the status tokens in globals.css — never raw green-/red-/etc.
+// Classes are written out in full (not interpolated) so Tailwind's scanner sees them.
 const STATUS: Record<BedStatus, { bg: string; border: string; text: string; label: string }> = {
-  vacant:       { bg: "bg-gray-100",   border: "border-gray-200",   text: "text-gray-500",   label: "Vacant" },
-  paid:         { bg: "bg-green-100",  border: "border-green-200",  text: "text-green-800",  label: "Paid" },
-  partial:      { bg: "bg-yellow-100", border: "border-yellow-200", text: "text-yellow-800", label: "Partial" },
-  overdue:      { bg: "bg-red-100",    border: "border-red-200",    text: "text-red-800",    label: "Overdue" },
-  vacating_soon:{ bg: "bg-orange-100", border: "border-orange-200", text: "text-orange-800", label: "Vacating" },
+  vacant:       { bg: "bg-vacant-100",   border: "border-vacant-200",   text: "text-vacant-500",   label: "Vacant" },
+  paid:         { bg: "bg-paid-100",     border: "border-paid-200",     text: "text-paid-800",     label: "Paid" },
+  partial:      { bg: "bg-partial-100",  border: "border-partial-200",  text: "text-partial-800",  label: "Partial" },
+  overdue:      { bg: "bg-overdue-100",  border: "border-overdue-200",  text: "text-overdue-800",  label: "Overdue" },
+  vacating_soon:{ bg: "bg-vacating-100", border: "border-vacating-200", text: "text-vacating-800", label: "Vacating" },
 };
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -92,16 +94,16 @@ export default function GridPage() {
       {/* Main grid area */}
       <div className="flex-1 overflow-auto p-8">
         {/* Breadcrumb + header */}
-        <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
+        <div className="mb-2 flex items-center gap-2 text-sm text-stone-500">
           <Link href="/sites" className="hover:text-indigo-600">Sites</Link>
           <span>/</span>
           <Link href={`/sites/${siteId}`} className="hover:text-indigo-600">{site?.name}</Link>
           <span>/</span>
-          <span className="text-gray-800">Grid</span>
+          <span className="text-stone-800">Grid</span>
         </div>
 
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">{site?.name} — Occupancy Grid</h1>
+          <h1 className="text-2xl font-bold text-stone-900">{site?.name} — Occupancy Grid</h1>
           <Link
             href={`/sites/${siteId}`}
             className="text-sm text-indigo-600 hover:text-indigo-500"
@@ -122,8 +124,8 @@ export default function GridPage() {
 
         {/* Grid */}
         {grid.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-gray-200 py-20 text-center">
-            <p className="text-sm text-gray-400">No rooms found. Add rooms and beds first.</p>
+          <div className="rounded-xl border-2 border-dashed border-stone-200 py-20 text-center">
+            <p className="text-sm text-stone-400">No rooms found. Add rooms and beds first.</p>
             <Link href={`/sites/${siteId}`} className="mt-2 inline-block text-sm text-indigo-600 hover:text-indigo-500">
               Manage rooms →
             </Link>
@@ -133,16 +135,16 @@ export default function GridPage() {
             {grid.map((room) => (
               <div key={room.id}>
                 <div className="mb-2 flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-gray-700">{room.name}</h2>
+                  <h2 className="text-sm font-semibold text-stone-700">{room.name}</h2>
                   {room.floor > 0 && (
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                    <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs text-stone-500">
                       Floor {room.floor}
                     </span>
                   )}
                 </div>
 
                 {room.beds.length === 0 ? (
-                  <p className="text-xs text-gray-400">No beds — add beds to this room.</p>
+                  <p className="text-xs text-stone-400">No beds — add beds to this room.</p>
                 ) : (
                   <div className="flex flex-wrap gap-3">
                     {room.beds.map((bed) => (
@@ -163,7 +165,7 @@ export default function GridPage() {
 
       {/* Side panel */}
       {selectedBed && (
-        <div className="w-80 shrink-0 border-l border-gray-200 bg-white p-6 shadow-sm">
+        <div className="w-80 shrink-0 border-l border-stone-200 bg-white p-6 shadow-sm">
           {showAssign ? (
             <AssignPanel
               token={token!}
@@ -290,8 +292,8 @@ function AssignPanel({
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900">Assign to {bed.name}</h3>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">✕</button>
+        <h3 className="font-semibold text-stone-900">Assign to {bed.name}</h3>
+        <button onClick={onCancel} className="text-stone-400 hover:text-stone-600">✕</button>
       </div>
 
       {error && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -303,7 +305,7 @@ function AssignPanel({
             placeholder="Search tenants…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+            className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
           />
 
           <div className="max-h-48 overflow-y-auto space-y-1">
@@ -313,20 +315,20 @@ function AssignPanel({
                 onClick={() => { setTenantId(t.id); setStep("stay"); setError(""); }}
                 className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition hover:bg-indigo-50"
               >
-                <span className="text-sm font-medium text-gray-800">{t.name}</span>
-                <span className="text-xs text-gray-500">{t.phone}</span>
+                <span className="text-sm font-medium text-stone-800">{t.name}</span>
+                <span className="text-xs text-stone-500">{t.phone}</span>
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="py-2 text-center text-xs text-gray-400">No tenants found</p>
+              <p className="py-2 text-center text-xs text-stone-400">No tenants found</p>
             )}
           </div>
 
-          <div className="border-t border-gray-100 pt-3">
+          <div className="border-t border-stone-100 pt-3">
             {!creating ? (
               <button
                 onClick={() => setCreating(true)}
-                className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200"
+                className="w-full rounded-lg bg-stone-100 px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-200"
               >
                 + New tenant
               </button>
@@ -336,19 +338,19 @@ function AssignPanel({
                   placeholder="Name *"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+                  className="block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
                 />
                 <input
                   placeholder="Phone *"
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+                  className="block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
                 />
                 <input
                   placeholder="Email (optional)"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+                  className="block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
                 />
                 <div className="flex gap-2">
                   <button
@@ -360,7 +362,7 @@ function AssignPanel({
                   </button>
                   <button
                     onClick={() => setCreating(false)}
-                    className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
+                    className="rounded-lg px-3 py-1.5 text-sm text-stone-500 hover:bg-stone-100"
                   >
                     Cancel
                   </button>
@@ -371,36 +373,36 @@ function AssignPanel({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-stone-600">
             Tenant: <strong>{tenants.find((t) => t.id === tenantId)?.name}</strong>
           </p>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600">Monthly rent (₹)</label>
+            <label className="block text-xs font-medium text-stone-600">Monthly rent (₹)</label>
             <input
               type="number"
               placeholder="e.g. 8000"
               value={rent}
               onChange={(e) => setRent(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="mt-1 block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600">Deposit (₹)</label>
+            <label className="block text-xs font-medium text-stone-600">Deposit (₹)</label>
             <input
               type="number"
               placeholder="e.g. 16000"
               value={deposit}
               onChange={(e) => setDeposit(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="mt-1 block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600">Billing cycle</label>
+            <label className="block text-xs font-medium text-stone-600">Billing cycle</label>
             <select
               value={cycle}
               onChange={(e) => setCycle(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="mt-1 block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             >
               <option value="monthly">Monthly</option>
               <option value="weekly">Weekly</option>
@@ -408,12 +410,12 @@ function AssignPanel({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600">Start date</label>
+            <label className="block text-xs font-medium text-stone-600">Start date</label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="mt-1 block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             />
           </div>
 
@@ -427,7 +429,7 @@ function AssignPanel({
             </button>
             <button
               onClick={() => { setStep("select"); setError(""); }}
-              className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100"
+              className="rounded-lg px-3 py-2 text-sm text-stone-500 hover:bg-stone-100"
             >
               Back
             </button>
@@ -502,8 +504,8 @@ function OccupiedPanel({
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900">Bed {bed.name}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        <h3 className="font-semibold text-stone-900">Bed {bed.name}</h3>
+        <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
       </div>
 
       {/* Status badge */}
@@ -513,8 +515,8 @@ function OccupiedPanel({
 
       {bed.tenant && (
         <div className="mb-4">
-          <p className="text-lg font-bold text-gray-900">{bed.tenant.name}</p>
-          <p className="text-sm text-gray-500">{bed.tenant.phone}</p>
+          <p className="text-lg font-bold text-stone-900">{bed.tenant.name}</p>
+          <p className="text-sm text-stone-500">{bed.tenant.phone}</p>
           {bed.tenant.id && (
             <Link
               href={`/tenants/${bed.tenant.id}`}
@@ -528,15 +530,15 @@ function OccupiedPanel({
 
       {/* Balance */}
       <div className={`mb-4 rounded-xl p-4 ${balance >= 0 ? "bg-green-50" : "bg-red-50"}`}>
-        <p className="text-xs font-medium text-gray-500">Balance</p>
+        <p className="text-xs font-medium text-stone-500">Balance</p>
         <p className={`text-2xl font-bold ${balance >= 0 ? "text-green-700" : "text-red-700"}`}>
           {balance >= 0 ? "+" : ""}{formatCurrency(balance)}
         </p>
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-stone-400">
           Paid {formatCurrency(bed.total_paid ?? 0)} of {formatCurrency(bed.total_expected ?? 0)} expected
         </p>
         {bed.rent_amount && (
-          <p className="mt-0.5 text-xs text-gray-400">
+          <p className="mt-0.5 text-xs text-stone-400">
             Rent: {formatCurrency(bed.rent_amount)}/{bed.stay_id ? "mo" : ""}
             {bed.deposit_amount ? ` · Deposit: ${formatCurrency(bed.deposit_amount)}` : ""}
           </p>
@@ -555,7 +557,7 @@ function OccupiedPanel({
           {bed.stay_id && (
             <button
               onClick={() => onVacate(bed.stay_id!)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-500 transition hover:bg-gray-50"
+              className="rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-500 transition hover:bg-stone-50"
               title="Mark as vacated today"
             >
               Vacate
@@ -563,8 +565,8 @@ function OccupiedPanel({
           )}
         </div>
       ) : (
-        <form onSubmit={handleAddPayment} className="mb-4 rounded-xl bg-gray-50 p-4">
-          <h4 className="mb-3 text-sm font-semibold text-gray-800">Add payment</h4>
+        <form onSubmit={handleAddPayment} className="mb-4 rounded-xl bg-stone-50 p-4">
+          <h4 className="mb-3 text-sm font-semibold text-stone-800">Add payment</h4>
           {payError && <p className="mb-2 text-xs text-red-600">{payError}</p>}
           <div className="space-y-2">
             <input
@@ -573,12 +575,12 @@ function OccupiedPanel({
               placeholder="Amount (₹)"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             />
             <select
               value={payType}
               onChange={(e) => setPayType(e.target.value)}
-              className="block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             >
               <option value="cash">Cash</option>
               <option value="online">Online</option>
@@ -587,13 +589,13 @@ function OccupiedPanel({
               type="date"
               value={payDate}
               onChange={(e) => setPayDate(e.target.value)}
-              className="block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             />
             <input
               placeholder="Notes (optional)"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="block w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
+              className="block w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
             />
             <button
               type="submit"
@@ -608,25 +610,25 @@ function OccupiedPanel({
 
       {/* Payment history */}
       <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Payment history</h4>
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">Payment history</h4>
         {paymentsLoading ? (
-          <p className="text-xs text-gray-400">Loading…</p>
+          <p className="text-xs text-stone-400">Loading…</p>
         ) : payments.length === 0 ? (
-          <p className="text-xs text-gray-400">No payments yet.</p>
+          <p className="text-xs text-stone-400">No payments yet.</p>
         ) : (
           <div className="space-y-1.5">
             {payments.map((p) => (
-              <div key={p.id} className="group flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+              <div key={p.id} className="group flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{formatCurrency(p.amount)}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-medium text-stone-800">{formatCurrency(p.amount)}</p>
+                  <p className="text-xs text-stone-400">
                     {p.payment_type} · {p.payment_date.slice(0, 10)}
                     {p.notes ? ` · ${p.notes}` : ""}
                   </p>
                 </div>
                 <button
                   onClick={() => handleDeletePayment(p.id)}
-                  className="hidden text-gray-300 transition hover:text-red-500 group-hover:block"
+                  className="hidden text-stone-300 transition hover:text-red-500 group-hover:block"
                   title="Delete"
                 >
                   ✕

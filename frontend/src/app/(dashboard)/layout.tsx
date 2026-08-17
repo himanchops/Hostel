@@ -25,16 +25,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-stone-50">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-stone-50">
       {/* Sidebar */}
-      <aside className="flex w-56 flex-col bg-white shadow-sm ring-1 ring-gray-200">
+      <aside className="flex w-56 flex-col bg-white shadow-sm ring-1 ring-stone-200">
         <div className="flex h-16 items-center px-5">
           <span className="text-lg font-bold text-indigo-600">Hostel Manager</span>
         </div>
@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   active
                     ? "bg-indigo-50 text-indigo-700"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                 }`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               pathname === "/pending"
                 ? "bg-indigo-50 text-indigo-700"
-                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
             }`}
           >
             <ClockIcon className="h-4 w-4 shrink-0" />
@@ -80,12 +80,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
         </nav>
 
-        <div className="border-t border-gray-100 p-4">
-          <p className="truncate text-sm font-medium text-gray-800">{owner?.name}</p>
-          <p className="truncate text-xs text-gray-500">{owner?.email}</p>
+        <div className="border-t border-stone-100 p-4">
+          <p className="truncate text-sm font-medium text-stone-800">{owner?.name}</p>
+          <p className="truncate text-xs text-stone-500">{owner?.email}</p>
           <button
             onClick={() => { logout(); router.replace("/login"); }}
-            className="mt-3 w-full rounded-lg px-3 py-1.5 text-sm text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+            className="mt-3 w-full rounded-lg px-3 py-1.5 text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-700"
           >
             Sign out
           </button>

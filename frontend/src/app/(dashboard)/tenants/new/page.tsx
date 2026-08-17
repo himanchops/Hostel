@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import { tenantsApi, uploadApi, TenantUpdateData, ApiError } from "@/lib/api";
 
-const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200";
-const labelCls = "mb-1 block text-xs font-medium text-gray-500 uppercase tracking-wide";
-const fileCls = "w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-400";
+const inputCls = "w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200";
+const labelCls = "mb-1 block text-xs font-medium text-stone-500 uppercase tracking-wide";
+const fileCls = "w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-400";
 
 export default function NewTenantPage() {
   const { token } = useAuth();
@@ -68,18 +68,18 @@ export default function NewTenantPage() {
   return (
     <div className="p-8">
       {/* Breadcrumb */}
-      <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
+      <div className="mb-2 flex items-center gap-2 text-sm text-stone-500">
         <Link href="/tenants" className="hover:text-indigo-600">Tenants</Link>
         <span>/</span>
-        <span className="text-gray-800">New tenant</span>
+        <span className="text-stone-800">New tenant</span>
       </div>
 
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Add new tenant</h1>
+      <h1 className="mb-6 text-2xl font-bold text-stone-900">Add new tenant</h1>
 
       <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
         {/* Basic info */}
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Basic information</h2>
+        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-stone-500">Basic information</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Full name <span className="text-red-500">*</span></label>
@@ -97,8 +97,8 @@ export default function NewTenantPage() {
         </section>
 
         {/* Profile details */}
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Profile details</h2>
+        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-stone-500">Profile details</h2>
           <div className="space-y-4">
             <div>
               <label className={labelCls}>Home address</label>
@@ -126,8 +126,8 @@ export default function NewTenantPage() {
         </section>
 
         {/* Documents */}
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Photo & documents</h2>
+        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-stone-500">Photo & documents</h2>
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Photo</label>
@@ -156,7 +156,7 @@ export default function NewTenantPage() {
           </button>
           <Link
             href="/tenants"
-            className="rounded-lg px-4 py-2.5 text-sm text-gray-500 transition hover:bg-gray-100"
+            className="rounded-lg px-4 py-2.5 text-sm text-stone-500 transition hover:bg-stone-100"
           >
             Cancel
           </Link>

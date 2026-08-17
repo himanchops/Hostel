@@ -35,8 +35,8 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
-      <h2 className="mb-6 text-xl font-semibold text-gray-900">Create your account</h2>
+    <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
+      <h2 className="mb-6 text-xl font-semibold text-stone-900">Create your account</h2>
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -46,7 +46,7 @@ export default function SignupPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="name">
+          <label className="block text-sm font-medium text-stone-700" htmlFor="name">
             Full name
           </label>
           <input
@@ -56,13 +56,13 @@ export default function SignupPage() {
             autoComplete="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             placeholder="Ravi Kumar"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="email">
+          <label className="block text-sm font-medium text-stone-700" htmlFor="email">
             Email
           </label>
           <input
@@ -72,14 +72,14 @@ export default function SignupPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             placeholder="you@example.com"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="phone">
-            Phone <span className="font-normal text-gray-400">(optional)</span>
+          <label className="block text-sm font-medium text-stone-700" htmlFor="phone">
+            Phone <span className="font-normal text-stone-400">(optional)</span>
           </label>
           <input
             id="phone"
@@ -87,13 +87,13 @@ export default function SignupPage() {
             autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             placeholder="+91 98765 43210"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700" htmlFor="password">
+          <label className="block text-sm font-medium text-stone-700" htmlFor="password">
             Password
           </label>
           <input
@@ -103,7 +103,7 @@ export default function SignupPage() {
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             placeholder="Min. 8 characters"
           />
         </div>
@@ -117,7 +117,7 @@ export default function SignupPage() {
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-gray-500">
+      <p className="mt-6 text-center text-sm text-stone-500">
         Already have an account?{" "}
         <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
           Sign in
