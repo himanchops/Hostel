@@ -7,7 +7,9 @@ extra design decisions. Do the phases in order. Do not restyle pages before
 Phase B is complete.
 
 **Status (Aug 2026): Phases A and B are done.** Next is Phase 10 (Collections
-& WhatsApp nudges), built with the new kit, then design Phase C.
+& WhatsApp nudges), built with the new kit, then design Phase C. Phase F
+(public surfaces) was added later and sits after E — see its own section for
+why it is deliberately not part of the A–E sequence.
 
 **Sequencing with feature work:** the overall roadmap (see "Roadmap decision"
 in `PROGRESS.md`) interleaves two feature phases: **Phase 10 — Collections &
@@ -202,6 +204,19 @@ Playwright viewport spot-check added for dashboard + grid.
 - Occupancy bars: color by health (≥90% emerald, else indigo) — this is a
   *utilization* color, not a status color; acceptable exception, note it.
 
+**D3. Typographic character + empty states** (small; do it last, after D1/D2):
+- The app sets Geist everywhere. That is right for data — neutral, tabular
+  figures — but it is also the default of every AI-era dev tool, so the app
+  currently has no identity of its own. Give the **wordmark and page titles** a
+  display face with some character; leave Geist on every number, table cell and
+  form control. Contained to `PageHeader` and the sidebar logo. Do not touch
+  body or data type, and do not add a third family.
+- `EmptyState` accepts an `icon` prop that **no page passes** — every empty
+  state in the app is a bare grey sentence today. Give each one an icon, and a
+  CTA where there is an obvious next step: no sites, no rooms, no beds, no
+  tenants, no stays, no payments, no pending registrations. "Everyone is paid
+  up 🎉" (Phase 10) is the tone to match.
+
 **Acceptance:** grid readable at a glance from 2m away (squint test: status
 stripes distinguishable); e2e green; `make review-design` run before/after and
 the report attached to the PR.
@@ -222,13 +237,51 @@ mutation shows a toast.
 
 ---
 
+## Phase F — Public surfaces (1 session)
+
+The screens a stranger sees: `/register/[ownerId]` and its success state,
+with `/my/login` as the lesser sibling. These are still Phase-0 code — local
+`inputCls`/`labelCls` constants, `ring-stone-200` cards, no kit imports at all.
+
+Two jobs, strictly in this order:
+
+1. **Convert to the kit** — `Card`, `Field`/`Input`/`FileInput`, `Button`,
+   `FormError`. Mechanical, same as Phase B. After this,
+   `grep -rn "ring-stone-200" frontend/src/app` returns zero hits anywhere,
+   which is the Phase B acceptance test finally finished.
+2. **Then give it character.** This is the one surface in the product where
+   "make it visually interesting" is the right instinct — distinctive type, a
+   committed palette, a little motion, decorative detail. It is a first
+   impression, not a work surface: a prospective tenant scanning a QR code in a
+   corridor is deciding whether this place looks legitimate. Constraints still
+   hold — no dark mode, one accent — and **the form itself stays boring and
+   legible**. Character goes in the frame around it (header, background,
+   success screen), never in the inputs.
+
+Why this is separate from A–E: everything before it optimises for scan speed
+for a daily user. This page optimises for trust from a first-time one. Those
+are different jobs and should not share a checklist.
+
+**Acceptance:** registration completes end-to-end at 375px; the success screen
+is worth screenshotting; zero raw ring/radius/colour classNames left in
+`src/app`.
+
+---
+
 ## Out of scope (explicitly)
 
 - Dark mode, theming, and user-configurable colors.
-- Tenant portal + public registration redesign — apply tokens/components
-  opportunistically but no dedicated pass until owner-side is done.
+- The logged-in tenant portal (`/my`) beyond kit conversion — the owner is the
+  paying user and gets the design attention. (Public registration is no longer
+  out of scope: it graduated to Phase F.)
 - Component library dependencies (shadcn/radix). Revisit only if hand-rolled
   Drawer/Modal focus-trapping becomes a bug source.
+- **Decorative layout tricks** — asymmetry, broken grids, overlapping elements,
+  textures, gradient washes. Considered and rejected in Aug 2026, from a
+  design-guidance list making the rounds. That advice is written for marketing
+  sites; here the grid *is* the product and scan speed beats visual interest on
+  every owner-facing screen. The parts of that list that did survive are D3
+  (typography) and Phase F (the one page where it genuinely applies).
 
 ## Evaluation loop
 

@@ -234,12 +234,14 @@ Owner is the alpha user, running locally. Decision: ship the **UI modernization*
 (`docs/DESIGN_PLAN.md`, Phases A–E) and the two **value features below** BEFORE
 deploying. Recommended execution order:
 
-1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything
+1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything ✅
 2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it)
 3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here
 4. Design Phase D (hero screens) + E (feedback layer)
 5. **Phase 11 — Settlement calculator**
-6. Phase 9.2–9.6 — deploy
+6. Design Phase F (public surfaces) — the registration page a stranger sees;
+   worth doing before real tenants are pointed at it by QR code
+7. Phase 9.2–9.6 — deploy
 
 ---
 
