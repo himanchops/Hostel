@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
-import { tenantsApi } from "@/lib/api";
+import { collectionsApi, tenantsApi } from "@/lib/api";
 import { Button, ConfirmProvider, CountBadge, ToastProvider } from "@/components/ui";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -12,10 +12,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
+  const [collectionsCount, setCollectionsCount] = useState(0);
 
+  // Refetched on every navigation so the badges settle after a payment is
+  // recorded or a registration is approved.
   useEffect(() => {
     if (!token) return;
     tenantsApi.list(token, true).then((t) => setPendingCount(t.length)).catch(() => {});
+    collectionsApi.list(token).then((rows) => setCollectionsCount(rows.length)).catch(() => {});
   }, [token, pathname]);
 
   useEffect(() => {
@@ -45,9 +49,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 space-y-0.5 px-3 py-3">
           {[
             { label: "Dashboard", href: "/dashboard", icon: GridIcon },
+            // Collections sits second: it is the daily loop — rent day, who
+            // hasn't paid, chase them.
+            { label: "Collections", href: "/collections", icon: RupeeIcon,
+              count: collectionsCount, tone: "danger" as const },
             { label: "Sites", href: "/sites", icon: BuildingIcon },
             { label: "Tenants", href: "/tenants", icon: UsersIcon },
-          ].map(({ label, href, icon: Icon }) => {
+            { label: "Pending", href: "/pending", icon: ClockIcon,
+              count: pendingCount, tone: "warning" as const },
+          ].map(({ label, href, icon: Icon, count, tone }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
@@ -61,26 +71,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {label}
+                {count !== undefined && count > 0 && (
+                  <span className="ml-auto">
+                    <CountBadge tone={tone}>{count}</CountBadge>
+                  </span>
+                )}
               </Link>
             );
           })}
-          {/* Pending registrations */}
-          <Link
-            href="/pending"
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              pathname === "/pending"
-                ? "bg-indigo-50 text-indigo-700"
-                : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-            }`}
-          >
-            <ClockIcon className="h-4 w-4 shrink-0" />
-            Pending
-            {pendingCount > 0 && (
-              <span className="ml-auto">
-                <CountBadge tone="warning">{pendingCount}</CountBadge>
-              </span>
-            )}
-          </Link>
         </nav>
 
         <div className="border-t border-stone-100 p-4">
@@ -127,6 +125,14 @@ function UsersIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function RupeeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h12M6 9h12M15.5 4c0 4-2.5 5-5.5 5m0 0c4.5 0 7 2 7 5.5S14 20 10 20l8-8" />
     </svg>
   );
 }

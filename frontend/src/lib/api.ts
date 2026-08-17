@@ -447,6 +447,32 @@ export const dashboardApi = {
   get: (token: string) => request<DashboardData>("/api/dashboard", {}, token),
 };
 
+// ─── Collections ─────────────────────────────────────────────────────────────
+
+/**
+ * One tenant who owes money. Note `balance_paise` is what they OWE, so it is
+ * positive — the opposite sign from the grid's balance, and the same as the
+ * tenant summary's. Rows with nothing outstanding never reach the client.
+ */
+export interface CollectionRow {
+  stay_id: number;
+  tenant_id: number;
+  tenant_name: string;
+  phone: string;
+  site_name: string;
+  room_name: string;
+  bed_name: string | null;
+  rent_amount: number;   // paise
+  rent_cycle: "monthly" | "weekly" | "daily";
+  balance_paise: number; // paise owed, always > 0
+  days_since_due: number;
+  last_payment_date: string | null;
+}
+
+export const collectionsApi = {
+  list: (token: string) => request<CollectionRow[]>("/api/collections", {}, token),
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Format paise as ₹ with comma separators */

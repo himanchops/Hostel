@@ -65,6 +65,7 @@ func main() {
 	paymentHandler := handlers.NewPaymentHandler(db)
 	gridHandler := handlers.NewGridHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
+	collectionsHandler := handlers.NewCollectionsHandler(db)
 	uploadHandler := handlers.NewUploadHandler(storageSvc)
 
 	e := echo.New()
@@ -146,6 +147,9 @@ func main() {
 
 	// Dashboard
 	api.GET("/dashboard", dashboardHandler.GetDashboard)
+
+	// Collections
+	api.GET("/collections", collectionsHandler.GetCollections)
 
 	// Grid
 	api.GET("/sites/:siteId/grid", gridHandler.GetGrid)
