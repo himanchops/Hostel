@@ -234,12 +234,14 @@ Owner is the alpha user, running locally. Decision: ship the **UI modernization*
 (`docs/DESIGN_PLAN.md`, Phases A–E) and the two **value features below** BEFORE
 deploying. Recommended execution order:
 
-1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything
+1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything ✅
 2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it)
 3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here
 4. Design Phase D (hero screens) + E (feedback layer)
 5. **Phase 11 — Settlement calculator**
-6. Phase 9.2–9.6 — deploy
+6. Design Phase F (public surfaces) — the registration page a stranger sees;
+   worth doing before real tenants are pointed at it by QR code
+7. Phase 9.2–9.6 — deploy
 
 ---
 
@@ -493,6 +495,35 @@ non-existent `npm test`). Rather than adding vitest, unit tests run under
 Playwright with a separate `frontend/playwright.unit.config.ts` — `testDir:
 tests/unit`, no `webServer`, so nothing boots Go or Next. New targets:
 `make verify-frontend`, and `make test` now runs both unit suites.
+
+---
+
+## Design Phase B — Component Kit ✅
+
+Full detail in `docs/DESIGN_PLAN.md`. In short: `frontend/src/components/ui/`
+now holds the whole vocabulary — `Button`, `Card`, `Field`/`Input`/`Select`/
+`Textarea`/`FileInput`, `Badge`/`CountBadge`, `Banner`, `StatusPill`, `Drawer`,
+`Modal`, `ConfirmDialog`, `EmptyState`, `PageHeader`, `Skeleton`, `Toast` —
+and every owner-side page has been converted to use it. The grid's side column
+and the pending page's hand-rolled overlay are now the shared `Drawer`; the
+assign-bed modal is the shared `Modal`.
+
+**`window.confirm` is gone from the owner app.** `useConfirm()` returns a
+promise and renders a real dialog. This was a test-correctness fix too:
+Playwright auto-dismisses native dialogs, so any e2e test covering a delete or
+vacate would have silently exercised the cancel path.
+
+**Frontend unit runner arrived with S2**, so `make verify-frontend` covers the
+kit's pure helpers alongside `formatCurrency`.
+
+Verification: `npx tsc --noEmit` clean, `npm run build` clean,
+`make test-e2e` 12/12, and the converted pages driven by hand in a browser —
+including the vacate flow end to end (confirm → stay ended → grid refreshed →
+bed reads Vacant → scroll lock released).
+
+Two follow-ups deliberately left for later phases: the tenant portal and public
+registration pages are untouched (Phase C–E pick them up opportunistically),
+and `Toast` is mounted but not yet wired into mutations (Phase E).
 
 ---
 

@@ -17,9 +17,20 @@ import {
   formatCurrency,
   maskAadhaar,
 } from "@/lib/api";
-
-const selectCls = "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
-const inputCls = "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+import {
+  Button,
+  Card,
+  CountBadge,
+  Drawer,
+  EmptyState,
+  Field,
+  FormError,
+  Input,
+  PageHeader,
+  Select,
+  Skeleton,
+  useConfirm,
+} from "@/components/ui";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -68,15 +79,15 @@ function IdProofTile({ label, url, isImage }: { label: string; url: string; isIm
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="group flex-1">
       {isImage ? (
-        <div className="relative overflow-hidden rounded-lg border border-stone-200 bg-stone-50 aspect-[3/2]">
-          <img src={url} alt={`ID ${label}`} className="h-full w-full object-cover transition group-hover:opacity-80" />
-          <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition">
+        <div className="relative aspect-[3/2] overflow-hidden rounded-lg border border-stone-200 bg-stone-50">
+          <img src={url} alt={`ID ${label}`} className="h-full w-full object-cover transition duration-150 ease-out group-hover:opacity-80" />
+          <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/40 to-transparent opacity-0 transition duration-150 ease-out group-hover:opacity-100">
             <span className="px-2 py-1 text-xs font-semibold text-white">Open</span>
           </div>
-          <div className="absolute top-1.5 left-1.5 rounded bg-black/50 px-1.5 py-0.5 text-xs font-medium text-white">{label}</div>
+          <div className="absolute left-1.5 top-1.5 rounded bg-black/50 px-1.5 py-0.5 text-xs font-medium text-white">{label}</div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 transition group-hover:bg-stone-100">
+        <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 transition duration-150 ease-out group-hover:bg-stone-100">
           <svg className="h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
           </svg>
@@ -96,26 +107,22 @@ function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, deposi
 }) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-stone-700">Billing cycle</label>
-        <select value={rentCycle} onChange={(e) => setRentCycle(e.target.value)} className={selectCls}>
+      <Field label="Billing cycle">
+        <Select value={rentCycle} onChange={(e) => setRentCycle(e.target.value)}>
           <option value="monthly">Monthly</option>
           <option value="weekly">Weekly</option>
           <option value="daily">Daily</option>
-        </select>
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-stone-700">{rentLabel} <span className="text-red-500">*</span></label>
-        <input type="number" min="0" placeholder="e.g. 5000" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)} className={inputCls} />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-stone-700">Deposit (₹)</label>
-        <input type="number" min="0" placeholder="e.g. 10000" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={inputCls} />
-      </div>
-      <div className="col-span-2">
-        <label className="mb-1.5 block text-sm font-medium text-stone-700">Start date <span className="text-red-500">*</span></label>
-        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
-      </div>
+        </Select>
+      </Field>
+      <Field label={rentLabel} required>
+        <Input type="number" min="0" placeholder="e.g. 5000" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)} />
+      </Field>
+      <Field label="Deposit (₹)">
+        <Input type="number" min="0" placeholder="e.g. 10000" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
+      </Field>
+      <Field label="Start date" required className="col-span-2">
+        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      </Field>
     </div>
   );
 }
@@ -213,194 +220,178 @@ function ReviewDrawer({
     }
   }
 
-  return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+  const header = (
+    <div className="flex items-center gap-2">
+      {step === "approve" && (
+        <button
+          onClick={() => { setStep("review"); setError(""); }}
+          aria-label="Back"
+          className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+      )}
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-700">
+        {step === "review" ? "Registration details" : "Approve registration"}
+      </h2>
+    </div>
+  );
 
-      {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
-          <div className="flex items-center gap-2">
-            {step === "approve" && (
-              <button onClick={() => { setStep("review"); setError(""); }} className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            )}
-            <h2 className="text-sm font-semibold text-stone-700 uppercase tracking-wide">
-              {step === "review" ? "Registration details" : "Approve registration"}
-            </h2>
-          </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-          {/* Identity — always visible */}
-          <div className="flex items-center gap-4">
-            <Avatar name={tenant.name} photoUrl={tenant.photo_url} size="lg" />
-            <div>
-              <p className="text-lg font-bold text-stone-900">{tenant.name}</p>
-              <p className="text-sm text-stone-500">{tenant.phone}</p>
-              {tenant.email && <p className="text-sm text-stone-400">{tenant.email}</p>}
-            </div>
-          </div>
-
-          {/* Step: Review — profile details */}
-          {step === "review" && (
-            <>
-              <div className="space-y-3 rounded-xl bg-stone-50 px-4 py-4">
-                {tenant.workplace && (
-                  <Row icon="📍" label="Workplace / College" value={tenant.workplace} />
-                )}
-                {tenant.address && (
-                  <Row icon="🏠" label="Home address" value={tenant.address} />
-                )}
-                {(tenant.emergency_contact_name || tenant.emergency_contact_phone) && (
-                  <Row icon="🆘" label="Emergency contact"
-                    value={[tenant.emergency_contact_name, tenant.emergency_contact_phone].filter(Boolean).join("  ·  ")} />
-                )}
-                {tenant.aadhaar_number && (
-                  <Row icon="🪪" label="Aadhaar" value={maskAadhaar(tenant.aadhaar_number)} />
-                )}
-                <Row icon="📅" label="Registered"
-                  value={new Date(tenant.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} />
-              </div>
-
-              {(idFront || idBack) && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">ID Proof</p>
-                  <div className="flex gap-3">
-                    {idFront && <IdProofTile label="Front" url={idFront} isImage={isImage(idFront)} />}
-                    {idBack && <IdProofTile label="Back" url={idBack} isImage={isImage(idBack)} />}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Step: Approve — mode selection + fields */}
-          {step === "approve" && (
-            <>
-              {error && (
-                <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>
-              )}
-
-              {/* Mode selection */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-stone-700">What would you like to do?</p>
-                {(["approve_only", "assign_bed", "collect_deposit"] as ApproveMode[]).map((m) => (
-                  <label key={m} className="flex items-start gap-3 cursor-pointer rounded-lg border border-stone-200 p-3 hover:bg-stone-50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
-                    <input
-                      type="radio"
-                      name="approve_mode"
-                      value={m}
-                      checked={mode === m}
-                      onChange={() => setMode(m)}
-                      className="mt-0.5 h-4 w-4 text-indigo-600"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-stone-800">
-                        {m === "approve_only" && "Approve only"}
-                        {m === "assign_bed" && "Approve & assign bed"}
-                        {m === "collect_deposit" && "Approve & collect deposit (assign bed later)"}
-                      </p>
-                      <p className="text-xs text-stone-500">
-                        {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
-                        {m === "assign_bed" && "Approve and assign to a specific bed now."}
-                        {m === "collect_deposit" && "Collect a deposit/advance now. Bed assigned when tenant moves in."}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-
-              {/* Assign bed flow */}
-              {mode === "assign_bed" && (
-                <div className="space-y-4 rounded-xl border border-stone-200 p-4">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-stone-700">Site</label>
-                    {sitesLoading ? <p className="text-sm text-stone-400">Loading…</p> : (
-                      <select value={siteId} onChange={(e) => setSiteId(e.target.value ? parseInt(e.target.value) : "")} className={selectCls}>
-                        <option value="">Select a site…</option>
-                        {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    )}
-                  </div>
-                  {siteId && (
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-stone-700">Bed</label>
-                      {roomsLoading ? <p className="text-sm text-stone-400">Loading…</p> : vacantBeds.length === 0 ? (
-                        <p className="text-sm text-stone-400">No vacant beds at this site.</p>
-                      ) : (
-                        <select value={selectedBed?.id ?? ""} onChange={(e) => setSelectedBed(vacantBeds.find((b) => b.id === parseInt(e.target.value)) ?? null)} className={selectCls}>
-                          <option value="">Select a bed…</option>
-                          {vacantBeds.map((b) => <option key={b.id} value={b.id}>{b.roomName} — {b.name}</option>)}
-                        </select>
-                      )}
-                    </div>
-                  )}
-                  {selectedBed && <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />}
-                </div>
-              )}
-
-              {/* Collect deposit flow */}
-              {mode === "collect_deposit" && (
-                <div className="space-y-4 rounded-xl border border-stone-200 p-4">
-                  <p className="text-xs text-stone-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
-                  <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer actions */}
-        <div className="border-t border-stone-100 px-5 py-4 flex gap-2">
-          {step === "review" ? (
-            <>
-              <button
-                onClick={() => onReject(tenant.id)}
-                disabled={rejectingId === tenant.id}
-                className="flex-1 rounded-lg border border-red-200 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
-              >
-                {rejectingId === tenant.id ? "Removing…" : "Reject"}
-              </button>
-              <button
-                onClick={() => setStep("approve")}
-                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-500"
-              >
-                Approve
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => { setStep("review"); setError(""); }}
-                disabled={loading}
-                className="rounded-lg px-4 py-2.5 text-sm text-stone-500 transition hover:bg-stone-100 disabled:opacity-60"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleApprove}
-                disabled={loading || (mode === "assign_bed" && (!siteId || !selectedBed))}
-                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition hover:bg-green-500 disabled:opacity-60"
-              >
-                {loading ? "Approving…" : mode === "assign_bed" ? "Approve & assign" : mode === "collect_deposit" ? "Approve & record deposit" : "Approve"}
-              </button>
-            </>
-          )}
-        </div>
+  const footer =
+    step === "review" ? (
+      <div className="flex gap-2">
+        <Button
+          variant="danger"
+          className="flex-1"
+          loading={rejectingId === tenant.id}
+          onClick={() => onReject(tenant.id)}
+        >
+          {rejectingId === tenant.id ? "Removing…" : "Reject"}
+        </Button>
+        <Button className="flex-1" onClick={() => setStep("approve")}>
+          Approve
+        </Button>
       </div>
-    </>
+    ) : (
+      <div className="flex gap-2">
+        <Button
+          variant="ghost"
+          disabled={loading}
+          onClick={() => { setStep("review"); setError(""); }}
+        >
+          Back
+        </Button>
+        <Button
+          className="flex-1"
+          loading={loading}
+          disabled={mode === "assign_bed" && (!siteId || !selectedBed)}
+          onClick={handleApprove}
+        >
+          {loading ? "Approving…" : mode === "assign_bed" ? "Approve & assign" : mode === "collect_deposit" ? "Approve & record deposit" : "Approve"}
+        </Button>
+      </div>
+    );
+
+  return (
+    <Drawer open onClose={onClose} header={header} footer={footer}>
+      <div className="space-y-5">
+        {/* Identity — always visible */}
+        <div className="flex items-center gap-4">
+          <Avatar name={tenant.name} photoUrl={tenant.photo_url} size="lg" />
+          <div>
+            <p className="text-lg font-bold text-stone-900">{tenant.name}</p>
+            <p className="text-sm tabular-nums text-stone-500">{tenant.phone}</p>
+            {tenant.email && <p className="text-sm text-stone-400">{tenant.email}</p>}
+          </div>
+        </div>
+
+        {/* Step: Review — profile details */}
+        {step === "review" && (
+          <>
+            <div className="space-y-3 rounded-xl bg-stone-50 px-4 py-4">
+              {tenant.workplace && (
+                <Row icon="📍" label="Workplace / College" value={tenant.workplace} />
+              )}
+              {tenant.address && (
+                <Row icon="🏠" label="Home address" value={tenant.address} />
+              )}
+              {(tenant.emergency_contact_name || tenant.emergency_contact_phone) && (
+                <Row icon="🆘" label="Emergency contact"
+                  value={[tenant.emergency_contact_name, tenant.emergency_contact_phone].filter(Boolean).join("  ·  ")} />
+              )}
+              {tenant.aadhaar_number && (
+                <Row icon="🪪" label="Aadhaar" value={maskAadhaar(tenant.aadhaar_number)} />
+              )}
+              <Row icon="📅" label="Registered"
+                value={new Date(tenant.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} />
+            </div>
+
+            {(idFront || idBack) && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">ID Proof</p>
+                <div className="flex gap-3">
+                  {idFront && <IdProofTile label="Front" url={idFront} isImage={isImage(idFront)} />}
+                  {idBack && <IdProofTile label="Back" url={idBack} isImage={isImage(idBack)} />}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Step: Approve — mode selection + fields */}
+        {step === "approve" && (
+          <>
+            {error && <FormError>{error}</FormError>}
+
+            {/* Mode selection */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-stone-700">What would you like to do?</p>
+              {(["approve_only", "assign_bed", "collect_deposit"] as ApproveMode[]).map((m) => (
+                <label key={m} className="flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 p-3 transition duration-150 ease-out hover:bg-stone-50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
+                  <input
+                    type="radio"
+                    name="approve_mode"
+                    value={m}
+                    checked={mode === m}
+                    onChange={() => setMode(m)}
+                    className="mt-0.5 h-4 w-4 text-indigo-600"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-stone-800">
+                      {m === "approve_only" && "Approve only"}
+                      {m === "assign_bed" && "Approve & assign bed"}
+                      {m === "collect_deposit" && "Approve & collect deposit (assign bed later)"}
+                    </p>
+                    <p className="text-xs text-stone-500">
+                      {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
+                      {m === "assign_bed" && "Approve and assign to a specific bed now."}
+                      {m === "collect_deposit" && "Collect a deposit/advance now. Bed assigned when tenant moves in."}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            {/* Assign bed flow */}
+            {mode === "assign_bed" && (
+              <div className="space-y-4 rounded-xl border border-stone-200 p-4">
+                <Field label="Site">
+                  {sitesLoading ? <p className="text-sm text-stone-400">Loading…</p> : (
+                    <Select value={siteId} onChange={(e) => setSiteId(e.target.value ? parseInt(e.target.value) : "")}>
+                      <option value="">Select a site…</option>
+                      {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </Select>
+                  )}
+                </Field>
+                {siteId && (
+                  <Field label="Bed">
+                    {roomsLoading ? <p className="text-sm text-stone-400">Loading…</p> : vacantBeds.length === 0 ? (
+                      <p className="text-sm text-stone-400">No vacant beds at this site.</p>
+                    ) : (
+                      <Select value={selectedBed?.id ?? ""} onChange={(e) => setSelectedBed(vacantBeds.find((b) => b.id === parseInt(e.target.value)) ?? null)}>
+                        <option value="">Select a bed…</option>
+                        {vacantBeds.map((b) => <option key={b.id} value={b.id}>{b.roomName} — {b.name}</option>)}
+                      </Select>
+                    )}
+                  </Field>
+                )}
+                {selectedBed && <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />}
+              </div>
+            )}
+
+            {/* Collect deposit flow */}
+            {mode === "collect_deposit" && (
+              <div className="space-y-4 rounded-xl border border-stone-200 p-4">
+                <p className="text-xs text-stone-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
+                <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Drawer>
   );
 }
 
@@ -408,6 +399,7 @@ function ReviewDrawer({
 
 export default function PendingPage() {
   const { token, owner } = useAuth();
+  const confirm = useConfirm();
   const [tab, setTab] = useState<"registrations" | "payments">("registrations");
 
   const [pending, setPending] = useState<Tenant[]>([]);
@@ -434,7 +426,13 @@ export default function PendingPage() {
   useEffect(() => { loadRegistrations(); loadPayments(); }, [loadRegistrations, loadPayments]);
 
   async function handleReject(id: number) {
-    if (!token || !confirm("Remove this registration request?")) return;
+    if (!token) return;
+    const ok = await confirm({
+      title: "Remove this registration request?",
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
+    if (!ok) return;
     setRejectingId(id);
     try {
       await tenantsApi.reject(token, id);
@@ -458,7 +456,13 @@ export default function PendingPage() {
   }
 
   async function handleRejectPayment(id: number) {
-    if (!token || !confirm("Reject and delete this payment submission?")) return;
+    if (!token) return;
+    const ok = await confirm({
+      title: "Reject and delete this payment submission?",
+      confirmLabel: "Reject",
+      tone: "danger",
+    });
+    if (!ok) return;
     setActioningPayId(id);
     try {
       await pendingPaymentsApi.reject(token, id);
@@ -468,26 +472,23 @@ export default function PendingPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-stone-900">Pending</h1>
-        <p className="mt-1 text-sm text-stone-500">Review registrations and payment submissions.</p>
-      </div>
+      <PageHeader title="Pending" subtitle="Review registrations and payment submissions." />
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-stone-100 p-1 w-fit">
+      <div className="mb-6 flex w-fit gap-1 rounded-xl bg-stone-100 p-1">
         {(["registrations", "payments"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-              tab === t ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"
+            className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition duration-150 ease-out ${
+              tab === t ? "bg-white text-stone-900" : "text-stone-500 hover:text-stone-700"
             }`}
           >
             {t === "registrations" ? "Registrations" : "Payment Proofs"}
             {t === "registrations" && pending.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">{pending.length}</span>
+              <CountBadge tone="warning">{pending.length}</CountBadge>
             )}
             {t === "payments" && pendingPayments.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">{pendingPayments.length}</span>
+              <CountBadge tone="warning">{pendingPayments.length}</CountBadge>
             )}
           </button>
         ))}
@@ -495,35 +496,35 @@ export default function PendingPage() {
 
       {tab === "registrations" && (
         <>
-          <div className="mb-6 rounded-xl bg-indigo-50 px-5 py-4 ring-1 ring-indigo-100">
+          <div className="mb-6 rounded-xl bg-indigo-50 px-4 py-4 ring-1 ring-indigo-100">
             <p className="mb-1.5 text-sm font-medium text-indigo-900">Tenant registration link</p>
             <p className="mb-3 text-xs text-indigo-600">Share this link (or a QR code pointing to it) with prospective tenants.</p>
             <div className="flex items-center gap-2">
               <code className="flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs text-stone-700 ring-1 ring-indigo-200">{registrationUrl}</code>
-              <button onClick={() => navigator.clipboard.writeText(registrationUrl)} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500">Copy</button>
+              <Button size="sm" onClick={() => navigator.clipboard.writeText(registrationUrl)}>Copy</Button>
             </div>
           </div>
 
           {regLoading ? (
-            <div className="flex items-center gap-2 text-sm text-stone-400">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />Loading…
+            <div className="space-y-3">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
             </div>
           ) : pending.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
-              <p className="text-sm text-stone-500">No pending registrations.</p>
-            </div>
+            <EmptyState message="No pending registrations." />
           ) : (
             <div className="space-y-3">
               {pending.map((t) => (
-                <div
+                <Card
                   key={t.id}
-                  className="rounded-xl bg-white shadow-sm ring-1 ring-stone-200 transition hover:ring-indigo-200"
+                  padding="none"
+                  className="transition duration-150 ease-out hover:ring-indigo-200"
                 >
                   <div className="flex items-center gap-3 px-4 py-4">
                     {/* Avatar + info — click opens drawer */}
                     <button
                       onClick={() => setDrawerTenant(t)}
-                      className="flex flex-1 items-center gap-3 min-w-0 text-left focus:outline-none"
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left focus:outline-none"
                       aria-label={`View ${t.name}'s profile`}
                     >
                       <Avatar name={t.name} photoUrl={t.photo_url} size="md" />
@@ -542,22 +543,20 @@ export default function PendingPage() {
 
                     {/* Quick actions */}
                     <div className="flex shrink-0 items-center gap-2">
-                      <button
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        loading={rejectingId === t.id}
                         onClick={() => handleReject(t.id)}
-                        disabled={rejectingId === t.id}
-                        className="rounded-lg px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-60"
                       >
                         Reject
-                      </button>
-                      <button
-                        onClick={() => setDrawerTenant(t)}
-                        className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-500"
-                      >
+                      </Button>
+                      <Button size="sm" onClick={() => setDrawerTenant(t)}>
                         Approve
-                      </button>
+                      </Button>
                     </div>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           )}
@@ -567,38 +566,50 @@ export default function PendingPage() {
       {tab === "payments" && (
         <>
           {payLoading ? (
-            <div className="flex items-center gap-2 text-sm text-stone-400">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />Loading…
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
             </div>
           ) : pendingPayments.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
-              <p className="text-sm text-stone-500">No pending payment submissions.</p>
-            </div>
+            <EmptyState message="No pending payment submissions." />
           ) : (
             <div className="space-y-3">
               {pendingPayments.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-stone-200">
-                  <div>
-                    <p className="font-medium text-stone-900">{p.tenant_name} · {formatCurrency(p.amount)}</p>
-                    <p className="text-sm text-stone-500">{p.site_name} · {p.room_name} · {p.bed_name}</p>
-                    {p.notes && <p className="mt-0.5 text-xs text-stone-400">"{p.notes}"</p>}
-                    <p className="mt-0.5 text-xs text-stone-400">
-                      Submitted {new Date(p.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                    </p>
-                    {p.proof_url && (
-                      <a href={p.proof_url} target="_blank" rel="noopener noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500">
-                        View screenshot →
-                      </a>
-                    )}
+                <Card key={p.id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium tabular-nums text-stone-900">{p.tenant_name} · {formatCurrency(p.amount)}</p>
+                      <p className="text-sm text-stone-500">{p.site_name} · {p.room_name} · {p.bed_name}</p>
+                      {p.notes && <p className="mt-0.5 text-xs text-stone-400">&quot;{p.notes}&quot;</p>}
+                      <p className="mt-0.5 text-xs text-stone-400">
+                        Submitted {new Date(p.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                      {p.proof_url && (
+                        <a href={p.proof_url} target="_blank" rel="noopener noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500">
+                          View screenshot →
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={actioningPayId === p.id}
+                        onClick={() => handleRejectPayment(p.id)}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={actioningPayId === p.id}
+                        onClick={() => handleApprovePayment(p.id)}
+                      >
+                        Approve
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => handleRejectPayment(p.id)} disabled={actioningPayId === p.id}
-                      className="rounded-lg px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-60">Reject</button>
-                    <button onClick={() => handleApprovePayment(p.id)} disabled={actioningPayId === p.id}
-                      className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-500 disabled:opacity-60">Approve</button>
-                  </div>
-                </div>
+                </Card>
               ))}
             </div>
           )}

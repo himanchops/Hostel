@@ -4,9 +4,22 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import { sitesApi, Site, ApiError } from "@/lib/api";
+import {
+  Button,
+  Card,
+  EmptyState,
+  FormError,
+  Input,
+  PageHeader,
+  SkeletonCard,
+  useConfirm,
+  useToast,
+} from "@/components/ui";
 
 export default function SitesPage() {
   const { token } = useAuth();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,105 +54,95 @@ export default function SitesPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!token || !confirm("Delete this site? All rooms and data will be removed.")) return;
+    if (!token) return;
+    const ok = await confirm({
+      title: "Delete this site?",
+      message: "All rooms and data will be removed.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await sitesApi.delete(token, id);
       setSites((prev) => prev.filter((s) => s.id !== id));
     } catch {
-      alert("Failed to delete site");
+      toast.error("Failed to delete site");
     }
   }
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-stone-900">Sites</h1>
-          <p className="mt-1 text-sm text-stone-500">Manage your hostel properties</p>
-        </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500"
-        >
-          + Add site
-        </button>
-      </div>
+      <PageHeader
+        title="Sites"
+        subtitle="Manage your hostel properties"
+        actions={<Button onClick={() => setShowForm(true)}>+ Add site</Button>}
+      />
 
       {/* Create form */}
       {showForm && (
-        <div className="mb-6 rounded-xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-          <h3 className="mb-4 text-base font-semibold text-stone-900">New site</h3>
-          {formError && (
-            <div className="mb-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{formError}</div>
-          )}
+        <Card title="New site" className="mb-6">
           <form onSubmit={handleCreate} className="space-y-3">
-            <input
+            {formError && <FormError>{formError}</FormError>}
+            <Input
               required
               type="text"
               placeholder="Site name (e.g. Sunrise PG)"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
-              className="block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             />
-            <input
+            <Input
               type="text"
               placeholder="Address (optional)"
               value={formAddress}
               onChange={(e) => setFormAddress(e.target.value)}
-              className="block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             />
             <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={formLoading}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
-              >
+              <Button type="submit" loading={formLoading}>
                 {formLoading ? "Creating…" : "Create"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => { setShowForm(false); setFormError(""); }}
-                className="rounded-lg px-4 py-2 text-sm text-stone-500 transition hover:bg-stone-100"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
       {/* Sites list */}
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-stone-400">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-          Loading…
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       ) : sites.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
-          <p className="text-sm text-stone-500">No sites yet. Add your first one above.</p>
-        </div>
+        <EmptyState message="No sites yet. Add your first one above." />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sites.map((site) => (
-            <div
+            <Card
               key={site.id}
-              className="group relative rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200 transition hover:ring-indigo-300"
+              className="group relative transition duration-150 ease-out hover:ring-indigo-300"
             >
               <Link href={`/sites/${site.id}`} className="block">
                 <p className="font-semibold text-stone-900">{site.name}</p>
                 {site.address && (
-                  <p className="mt-1 text-sm text-stone-500">{site.address}</p>
+                  <p className="mt-1 text-[13px] text-stone-500">{site.address}</p>
                 )}
                 <p className="mt-3 text-xs text-indigo-600">View rooms →</p>
               </Link>
               <button
                 onClick={() => handleDelete(site.id)}
-                className="absolute right-4 top-4 hidden rounded p-1 text-stone-400 transition hover:bg-red-50 hover:text-red-500 group-hover:block"
+                className="absolute right-3 top-3 hidden rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 group-hover:block"
                 title="Delete site"
               >
                 <TrashIcon className="h-4 w-4" />
               </button>
-            </div>
+            </Card>
           ))}
         </div>
       )}

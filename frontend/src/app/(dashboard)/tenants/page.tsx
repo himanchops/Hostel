@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import { tenantsApi, Tenant } from "@/lib/api";
+import {
+  Card,
+  EmptyState,
+  Input,
+  PageHeader,
+  Skeleton,
+  buttonClasses,
+} from "@/components/ui";
 
 export default function TenantsPage() {
   const { token } = useAuth();
@@ -25,46 +33,44 @@ export default function TenantsPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-stone-900">Tenants</h1>
-          <p className="mt-1 text-sm text-stone-500">All registered tenants across your properties</p>
-        </div>
-        <Link
-          href="/tenants/new"
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500"
-        >
-          + Add tenant
-        </Link>
-      </div>
+      <PageHeader
+        title="Tenants"
+        subtitle="All registered tenants across your properties"
+        actions={
+          <Link href="/tenants/new" className={buttonClasses()}>
+            + Add tenant
+          </Link>
+        }
+      />
 
       {/* Search */}
       {tenants.length > 0 && (
         <div className="mb-4">
-          <input
+          <Input
             type="search"
             placeholder="Search by name, phone, or email…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-sm rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            className="max-w-sm"
           />
         </div>
       )}
 
       {/* List */}
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-stone-400">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-          Loading…
-        </div>
+        <Card padding="none" className="overflow-hidden">
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        </Card>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
-          <p className="text-sm text-stone-500">
-            {tenants.length === 0 ? "No tenants yet." : "No tenants match your search."}
-          </p>
-        </div>
+        <EmptyState
+          message={tenants.length === 0 ? "No tenants yet." : "No tenants match your search."}
+        />
       ) : (
-        <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-stone-200">
+        <Card padding="none" className="overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-100 text-left text-xs font-semibold uppercase tracking-wide text-stone-400">
@@ -77,9 +83,9 @@ export default function TenantsPage() {
             </thead>
             <tbody className="divide-y divide-stone-50">
               {filtered.map((t) => (
-                <tr key={t.id} className="transition hover:bg-stone-50">
+                <tr key={t.id} className="transition duration-150 ease-out hover:bg-stone-50">
                   <td className="px-5 py-3 font-medium text-stone-900">{t.name}</td>
-                  <td className="px-5 py-3 text-stone-600">{t.phone}</td>
+                  <td className="px-5 py-3 tabular-nums text-stone-600">{t.phone}</td>
                   <td className="hidden px-5 py-3 text-stone-400 sm:table-cell">{t.email || "—"}</td>
                   <td className="px-5 py-3 text-stone-400">
                     {new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
@@ -87,7 +93,7 @@ export default function TenantsPage() {
                   <td className="px-5 py-3 text-right">
                     <Link
                       href={`/tenants/${t.id}`}
-                      className="text-indigo-600 hover:text-indigo-500"
+                      className="text-indigo-600 transition duration-150 ease-out hover:text-indigo-500"
                     >
                       View →
                     </Link>
@@ -96,7 +102,7 @@ export default function TenantsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
     </div>
   );

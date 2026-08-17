@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/contexts/auth";
+import { Button, Card, Field, FormError, Input } from "@/components/ui";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -29,55 +30,39 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
+    <Card padding="none" className="p-6">
       <h2 className="mb-6 text-xl font-semibold text-stone-900">Sign in to your account</h2>
 
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <div className="mb-4"><FormError>{error}</FormError></div>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-stone-700" htmlFor="email">
-            Email
-          </label>
-          <input
+        <Field label="Email">
+          <Input
             id="email"
             type="email"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             placeholder="you@example.com"
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-sm font-medium text-stone-700" htmlFor="password">
-            Password
-          </label>
-          <input
+        <Field label="Password">
+          <Input
             id="password"
             type="password"
             required
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             placeholder="••••••••"
           />
-        </div>
+        </Field>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-60"
-        >
+        <Button type="submit" className="w-full" loading={loading}>
           {loading ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-stone-500">
@@ -86,6 +71,6 @@ export default function LoginPage() {
           Create one
         </Link>
       </p>
-    </div>
+    </Card>
   );
 }

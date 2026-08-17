@@ -95,7 +95,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
           </div>
           <h2 className="text-xl font-bold text-stone-900">Registration submitted!</h2>
           <p className="mt-2 text-sm text-stone-500">
-            Your details have been sent to the owner for review. You'll be contacted once approved.
+            Your details have been sent to the owner for review. You&apos;ll be contacted once approved.
           </p>
         </div>
       </div>
@@ -191,7 +191,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
             <div>
               <label className={labelCls}>Password <span className="text-red-500">*</span></label>
               <input required type="password" placeholder="Min. 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} />
-              <p className="mt-1 text-xs text-stone-400">You'll use this to log in to your tenant portal after approval.</p>
+              <p className="mt-1 text-xs text-stone-400">You&apos;ll use this to log in to your tenant portal after approval.</p>
             </div>
 
             <button

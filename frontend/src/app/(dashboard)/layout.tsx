@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { tenantsApi } from "@/lib/api";
+import { Button, ConfirmProvider, CountBadge, ToastProvider } from "@/components/ui";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, owner, logout, token } = useAuth();
@@ -32,9 +33,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
+    <ConfirmProvider>
+    <ToastProvider>
     <div className="flex min-h-screen bg-stone-50">
       {/* Sidebar */}
-      <aside className="flex w-56 flex-col bg-white shadow-sm ring-1 ring-stone-200">
+      <aside className="flex w-56 flex-col border-r border-stone-200 bg-white">
         <div className="flex h-16 items-center px-5">
           <span className="text-lg font-bold text-indigo-600">Hostel Manager</span>
         </div>
@@ -73,8 +76,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <ClockIcon className="h-4 w-4 shrink-0" />
             Pending
             {pendingCount > 0 && (
-              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-700">
-                {pendingCount}
+              <span className="ml-auto">
+                <CountBadge tone="warning">{pendingCount}</CountBadge>
               </span>
             )}
           </Link>
@@ -83,12 +86,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="border-t border-stone-100 p-4">
           <p className="truncate text-sm font-medium text-stone-800">{owner?.name}</p>
           <p className="truncate text-xs text-stone-500">{owner?.email}</p>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3 w-full"
             onClick={() => { logout(); router.replace("/login"); }}
-            className="mt-3 w-full rounded-lg px-3 py-1.5 text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-700"
           >
             Sign out
-          </button>
+          </Button>
         </div>
       </aside>
 
@@ -97,6 +102,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
       </main>
     </div>
+    </ToastProvider>
+    </ConfirmProvider>
   );
 }
 
