@@ -6,6 +6,9 @@ ordered by dependency, and scoped so a smaller model can implement it without
 extra design decisions. Do the phases in order. Do not restyle pages before
 Phase B is complete.
 
+**Status (Aug 2026): Phases A and B are done.** Next is Phase 10 (Collections
+& WhatsApp nudges), built with the new kit, then design Phase C.
+
 **Sequencing with feature work:** the overall roadmap (see "Roadmap decision"
 in `PROGRESS.md`) interleaves two feature phases: **Phase 10 — Collections &
 WhatsApp nudges** lands right after Phase B (build that page WITH the new
@@ -95,7 +98,33 @@ grays; `make test-e2e` passes.
 
 ---
 
-## Phase B — Component kit (1–2 sessions) ⚠️ blocking everything after it
+## Phase B — Component kit ✅ (branch `design-phase-b-component-kit`)
+
+**Shipped:** `frontend/src/components/ui/` with all 12 components plus two
+additions — `Banner` (the dashboard's tinted alert strips, which otherwise
+would have kept raw `bg-amber-50 ring-amber-200` on the page) and `FileInput`
+(three pages had hand-rolled `file:` styling). Every owner-side page now
+imports from `@/components/ui`; `grep -rn "ring-stone-200" src/app` returns
+hits only in the tenant portal and public registration, which this phase
+deliberately leaves alone.
+
+Decisions worth knowing:
+- **`window.confirm` is gone from owner pages** — `ConfirmProvider` +
+  `useConfirm()` return a promise. This was a correctness fix as much as a
+  design one: Playwright auto-dismisses native dialogs, so every confirmed
+  action silently no-opped in tests.
+- **Approve buttons are indigo, not green.** Status hues are reserved for bed
+  status, so a green button no longer competes with "paid". Reject uses the
+  `danger` variant.
+- **Balance tints read the status tokens** (`bg-paid-50` / `bg-overdue-50` on
+  the grid drawer and tenant summary) — those genuinely *are* payment status.
+  `Badge` tones stay on raw Tailwind hues, per the Phase A note.
+- **Cards lost their `shadow-sm`** and standardised on `p-4`, per the density
+  and surface rules above. Shadows now appear only on Drawer/Modal/Toast.
+- `Toast` is built and mounted but not yet wired into mutations — that is
+  Phase E.
+
+### Original spec
 
 Create `frontend/src/components/ui/`. Extract these, replacing ALL page-local
 duplicates as you go (that's the deliverable — the pages must actually use

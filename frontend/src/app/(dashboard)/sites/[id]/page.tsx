@@ -5,12 +5,25 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import { sitesApi, roomsApi, bedsApi, Site, Room, Bed, ApiError } from "@/lib/api";
+import {
+  Button,
+  Card,
+  EmptyState,
+  FormError,
+  Input,
+  PageHeader,
+  Skeleton,
+  useConfirm,
+  useToast,
+} from "@/components/ui";
 
 export default function SiteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const siteId = Number(id);
   const { token } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [site, setSite] = useState<Site | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -57,12 +70,14 @@ export default function SiteDetailPage() {
   }
 
   async function handleDeleteRoom(roomId: number) {
-    if (!token || !confirm("Delete this room?")) return;
+    if (!token) return;
+    const ok = await confirm({ title: "Delete this room?", confirmLabel: "Delete", tone: "danger" });
+    if (!ok) return;
     try {
       await roomsApi.delete(token, siteId, roomId);
       setRooms((prev) => prev.filter((r) => r.id !== roomId));
     } catch {
-      alert("Failed to delete room");
+      toast.error("Failed to delete room");
     }
   }
 
@@ -86,92 +101,79 @@ export default function SiteDetailPage() {
   }
 
   async function handleDeleteBed(roomId: number, bedId: number) {
-    if (!token || !confirm("Delete this bed?")) return;
+    if (!token) return;
+    const ok = await confirm({ title: "Delete this bed?", confirmLabel: "Delete", tone: "danger" });
+    if (!ok) return;
     await bedsApi.delete(token, siteId, roomId, bedId);
     setBeds((prev) => ({ ...prev, [roomId]: prev[roomId].filter((b) => b.id !== bedId) }));
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+      <div className="space-y-3 p-8">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
       </div>
     );
   }
 
   return (
     <div className="p-8">
-      {/* Header */}
-      <div className="mb-2 flex items-center gap-2 text-sm text-stone-500">
-        <Link href="/sites" className="hover:text-indigo-600">Sites</Link>
-        <span>/</span>
-        <span className="text-stone-800">{site?.name}</span>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: "Sites", href: "/sites" }, { label: site?.name ?? "" }]}
+        title={site?.name ?? ""}
+        subtitle={site?.address ?? undefined}
+        actions={<Button onClick={() => setShowRoomForm(true)}>+ Add room</Button>}
+      />
 
-      <div className="mb-8 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-stone-900">{site?.name}</h1>
-          {site?.address && <p className="mt-1 text-sm text-stone-500">{site.address}</p>}
-          <Link
-            href={`/sites/${siteId}/grid`}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition hover:bg-indigo-100"
-          >
-            <GridIcon className="h-4 w-4" />
-            View occupancy grid
-          </Link>
-        </div>
-        <button
-          onClick={() => setShowRoomForm(true)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500"
-        >
-          + Add room
-        </button>
-      </div>
+      <Link
+        href={`/sites/${siteId}/grid`}
+        className="mb-6 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition duration-150 ease-out hover:bg-indigo-100"
+      >
+        <GridIcon className="h-4 w-4" />
+        View occupancy grid
+      </Link>
 
       {/* Room form */}
       {showRoomForm && (
-        <div className="mb-6 rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
-          <h3 className="mb-3 text-sm font-semibold text-stone-900">New room</h3>
-          {roomError && <div className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{roomError}</div>}
-          <form onSubmit={handleCreateRoom} className="flex flex-wrap gap-2">
-            <input
-              required
-              type="text"
-              placeholder="Room name (e.g. 101)"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              className="rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            />
-            <input
-              type="number"
-              placeholder="Floor"
-              value={roomFloor}
-              onChange={(e) => setRoomFloor(e.target.value)}
-              className="w-24 rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            />
-            <button
-              type="submit"
-              disabled={roomLoading}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
-            >
-              {roomLoading ? "Adding…" : "Add"}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setShowRoomForm(false); setRoomError(""); }}
-              className="rounded-lg px-4 py-2 text-sm text-stone-500 transition hover:bg-stone-100"
-            >
-              Cancel
-            </button>
+        <Card title="New room" className="mb-6">
+          <form onSubmit={handleCreateRoom} className="space-y-3">
+            {roomError && <FormError>{roomError}</FormError>}
+            <div className="flex flex-wrap items-start gap-2">
+              <Input
+                required
+                type="text"
+                placeholder="Room name (e.g. 101)"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                className="w-56"
+              />
+              <Input
+                type="number"
+                placeholder="Floor"
+                value={roomFloor}
+                onChange={(e) => setRoomFloor(e.target.value)}
+                className="w-24"
+              />
+              <Button type="submit" loading={roomLoading}>
+                {roomLoading ? "Adding…" : "Add"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => { setShowRoomForm(false); setRoomError(""); }}
+              >
+                Cancel
+              </Button>
+            </div>
           </form>
-        </div>
+        </Card>
       )}
 
       {/* Rooms list */}
       {rooms.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-stone-200 py-16 text-center">
-          <p className="text-sm text-stone-500">No rooms yet. Add one above.</p>
-        </div>
+        <EmptyState message="No rooms yet. Add one above." />
       ) : (
         <div className="space-y-3">
           {rooms.map((room) => (
@@ -222,8 +224,8 @@ function RoomCard({
   }
 
   return (
-    <div className="rounded-xl bg-white shadow-sm ring-1 ring-stone-200">
-      <div className="flex items-center justify-between px-5 py-4">
+    <Card padding="none">
+      <div className="flex items-center justify-between px-4 py-3">
         <button
           className="flex flex-1 items-center gap-3 text-left"
           onClick={onToggle}
@@ -238,7 +240,7 @@ function RoomCard({
         </button>
         <button
           onClick={onDelete}
-          className="rounded p-1 text-stone-400 transition hover:bg-red-50 hover:text-red-500"
+          className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500"
           title="Delete room"
         >
           <TrashIcon className="h-4 w-4" />
@@ -246,7 +248,7 @@ function RoomCard({
       </div>
 
       {expanded && (
-        <div className="border-t border-stone-100 px-5 py-4">
+        <div className="border-t border-stone-100 px-4 py-3">
           {/* Beds */}
           {beds === undefined ? (
             <p className="text-sm text-stone-400">Loading…</p>
@@ -262,7 +264,7 @@ function RoomCard({
                   {bed.name}
                   <button
                     onClick={() => onDeleteBed(bed.id)}
-                    className="ml-1 hidden text-stone-400 transition hover:text-red-500 group-hover:inline"
+                    className="ml-1 hidden text-stone-400 transition duration-150 ease-out hover:text-red-500 group-hover:inline"
                     title="Remove bed"
                   >
                     ×
@@ -274,24 +276,20 @@ function RoomCard({
 
           {/* Add bed form */}
           <form onSubmit={submitBed} className="flex items-center gap-2">
-            <input
+            <Input
               type="text"
               placeholder="Bed name (e.g. A, Lower)"
               value={bedName}
               onChange={(e) => setBedName(e.target.value)}
-              className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200"
+              className="w-56"
             />
-            <button
-              type="submit"
-              disabled={addingBed || !bedName.trim()}
-              className="rounded-lg bg-stone-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50"
-            >
+            <Button type="submit" size="sm" loading={addingBed} disabled={!bedName.trim()}>
               Add bed
-            </button>
+            </Button>
           </form>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -306,7 +304,7 @@ function GridIcon({ className }: { className?: string }) {
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
     <svg
-      className={`h-4 w-4 text-stone-400 transition-transform ${expanded ? "rotate-90" : ""}`}
+      className={`h-4 w-4 text-stone-400 transition-transform duration-150 ease-out ${expanded ? "rotate-90" : ""}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"

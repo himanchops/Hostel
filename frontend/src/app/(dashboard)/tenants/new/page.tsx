@@ -5,10 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import { tenantsApi, uploadApi, TenantUpdateData, ApiError } from "@/lib/api";
-
-const inputCls = "w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200";
-const labelCls = "mb-1 block text-xs font-medium text-stone-500 uppercase tracking-wide";
-const fileCls = "w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-400";
+import {
+  Button,
+  Card,
+  Field,
+  FileInput,
+  FormError,
+  Input,
+  PageHeader,
+  Textarea,
+} from "@/components/ui";
 
 export default function NewTenantPage() {
   const { token } = useAuth();
@@ -67,97 +73,69 @@ export default function NewTenantPage() {
 
   return (
     <div className="p-8">
-      {/* Breadcrumb */}
-      <div className="mb-2 flex items-center gap-2 text-sm text-stone-500">
-        <Link href="/tenants" className="hover:text-indigo-600">Tenants</Link>
-        <span>/</span>
-        <span className="text-stone-800">New tenant</span>
-      </div>
-
-      <h1 className="mb-6 text-2xl font-bold text-stone-900">Add new tenant</h1>
+      <PageHeader
+        title="Add new tenant"
+        breadcrumb={[{ label: "Tenants", href: "/tenants" }, { label: "New tenant" }]}
+      />
 
       <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
-        {/* Basic info */}
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-stone-500">Basic information</h2>
+        <Card title="Basic information">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Full name <span className="text-red-500">*</span></label>
-              <input required value={name} onChange={(e) => setName(e.target.value)} className={inputCls} placeholder="e.g. Rahul Sharma" />
-            </div>
-            <div>
-              <label className={labelCls}>Phone <span className="text-red-500">*</span></label>
-              <input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} placeholder="e.g. 9876543210" />
-            </div>
+            <Field label="Full name" required>
+              <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahul Sharma" />
+            </Field>
+            <Field label="Phone" required>
+              <Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 9876543210" />
+            </Field>
           </div>
-          <div className="mt-4">
-            <label className={labelCls}>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} placeholder="Optional" />
-          </div>
-        </section>
+          <Field label="Email" className="mt-4">
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
+          </Field>
+        </Card>
 
-        {/* Profile details */}
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-stone-500">Profile details</h2>
+        <Card title="Profile details">
           <div className="space-y-4">
-            <div>
-              <label className={labelCls}>Home address</label>
-              <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls + " resize-none"} placeholder="Permanent home address" />
-            </div>
-            <div>
-              <label className={labelCls}>Workplace / College</label>
-              <input value={workplace} onChange={(e) => setWorkplace(e.target.value)} className={inputCls} placeholder="e.g. BITS Pilani" />
-            </div>
+            <Field label="Home address">
+              <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="resize-none" placeholder="Permanent home address" />
+            </Field>
+            <Field label="Workplace / College">
+              <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="e.g. BITS Pilani" />
+            </Field>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Emergency contact name</label>
-                <input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={inputCls} placeholder="Parent / guardian" />
-              </div>
-              <div>
-                <label className={labelCls}>Emergency contact phone</label>
-                <input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className={inputCls} placeholder="Phone number" />
-              </div>
+              <Field label="Emergency contact name">
+                <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
+              </Field>
+              <Field label="Emergency contact phone">
+                <Input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="Phone number" />
+              </Field>
             </div>
-            <div>
-              <label className={labelCls}>Aadhaar number</label>
-              <input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} className={inputCls} placeholder="12-digit number" />
-            </div>
+            <Field label="Aadhaar number">
+              <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} placeholder="12-digit number" />
+            </Field>
           </div>
-        </section>
+        </Card>
 
-        {/* Documents */}
-        <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-stone-500">Photo & documents</h2>
+        <Card title="Photo & documents">
           <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className={labelCls}>Photo</label>
-              <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} className={fileCls} />
-            </div>
-            <div>
-              <label className={labelCls}>ID front</label>
-              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdFrontFile(e.target.files?.[0] ?? null)} className={fileCls} />
-            </div>
-            <div>
-              <label className={labelCls}>ID back</label>
-              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdBackFile(e.target.files?.[0] ?? null)} className={fileCls} />
-            </div>
+            <Field label="Photo">
+              <FileInput accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
+            </Field>
+            <Field label="ID front">
+              <FileInput accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdFrontFile(e.target.files?.[0] ?? null)} />
+            </Field>
+            <Field label="ID back">
+              <FileInput accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdBackFile(e.target.files?.[0] ?? null)} />
+            </Field>
           </div>
-        </section>
+        </Card>
 
-        {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {error && <FormError>{error}</FormError>}
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-60"
-          >
+          <Button type="submit" loading={loading}>
             {loading ? "Creating…" : "Create tenant"}
-          </button>
-          <Link
-            href="/tenants"
-            className="rounded-lg px-4 py-2.5 text-sm text-stone-500 transition hover:bg-stone-100"
-          >
+          </Button>
+          <Link href="/tenants" className="inline-flex items-center rounded-lg px-4 py-2 text-sm text-stone-500 transition duration-150 ease-out hover:bg-stone-100">
             Cancel
           </Link>
         </div>
