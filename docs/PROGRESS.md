@@ -633,6 +633,29 @@ taken by hand instead.
 Things we decided are worth doing, but not now. Nothing here is half-built —
 if it were, it would be under Known Issues instead.
 
+### Go-live blockers, deliberately bypassed for the alpha 🅿️
+
+**Decision (Aug 2026):** deploy without multi-tenancy isolation tests and
+without password reset. Both were raised as go-live blockers in a status
+report; the owner's call is that the alpha does not need them.
+
+The reasoning holds, and it is worth writing down so this is not re-argued:
+with exactly one owner account there is nobody for an isolation bug to leak
+*to*, so the risk is unobservable. Every handler already scopes by `owner_id`
+(42 query sites) — what is missing is the test proving it, not the scoping.
+
+**The trigger is a second owner signing up, not the deploy.** Before anyone
+else gets an account, write the 12b multi-tenancy tests: owner A must not be
+able to read or mutate owner B's sites, rooms, beds, tenants, stays or
+payments — one test per endpoint family.
+
+Password reset stays parked until there is a second human who can lock
+themselves out. Until then the fix is a `psql` update on `owners.password_hash`.
+
+Also unaddressed and worth the same note: there is no rate limiting on
+`/auth/login` or `/public/register/:ownerId`. Low risk while the registration
+link is not public; a problem the day it is printed on a QR code by the door.
+
 ### Automated design review 🅿️
 
 **The idea:** screenshot every page at 1280px and 375px with Playwright, send
