@@ -243,9 +243,9 @@ empty states from D3.
   been duplicated across the grid, the dashboard and the shell, and an icon that
   differs by a stroke width between screens looks like a bug.
 
-**Note:** `make review-design` was not run — it needs `ANTHROPIC_API_KEY`, which
-this environment doesn't have. Before/after screenshots were taken by hand at
-1280px and 375px instead.
+**Note:** the automated design review did not run, and could not have — the
+script it calls has never existed (see "Deferred" in `PROGRESS.md`). Before and
+after screenshots were taken by hand at 1280px and 375px instead.
 
 ### Original spec
 
@@ -286,8 +286,8 @@ this environment doesn't have. Before/after screenshots were taken by hand at
   up 🎉" (Phase 10) is the tone to match.
 
 **Acceptance:** grid readable at a glance from 2m away (squint test: status
-stripes distinguishable); e2e green; `make review-design` run before/after and
-the report attached to the PR.
+stripes distinguishable); e2e green; before/after screenshots at 1280px and
+375px attached to the PR.
 
 ---
 
@@ -353,9 +353,16 @@ is worth screenshotting; zero raw ring/radius/colour classNames left in
 
 ## Evaluation loop
 
-After each phase: run `make test-e2e`, then `make review-design` (screenshots
-every page → Claude vision review in `test-results/design-review.md`). Keep the
-before-screenshots from the first run as the baseline for comparison.
+After each phase: `make test-e2e`, then walk the changed pages by hand at 1280px
+and 375px and attach before/after screenshots to the PR. Check for horizontal
+scroll *and* for content clipped inside a container — the second is invisible in
+a screenshot and has hidden a real bug before (see Phase C).
+
+An automated version of this was planned — screenshot every page, send the
+images to Claude's vision API, write the critique to
+`test-results/design-review.md` — and `make review-design` existed as a target,
+but the script behind it was never written. The target has been removed rather
+than left as a trap; the idea is parked under "Deferred" in `PROGRESS.md`.
 
 ## Execution notes for the implementing model
 

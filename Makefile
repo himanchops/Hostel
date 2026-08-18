@@ -1,6 +1,6 @@
 export PATH := /opt/homebrew/opt/node/bin:/opt/homebrew/bin:$(PATH)
 
-.PHONY: dev setup db-up db-down migrate backend frontend verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests review-design clean-e2e-data
+.PHONY: dev setup db-up db-down migrate backend frontend verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -108,13 +108,6 @@ test-e2e-debug:
 fix-tests:
 	@test -f test-results/failures.json || (echo "Error: test-results/failures.json not found. Run 'make test-e2e' first." && exit 1)
 	cd scripts && npm install --silent && npx tsx fix-tests.ts
-
-# ── Design review via Claude Vision ───────────────────────────────────────────
-
-review-design:
-	@test -n "$$ANTHROPIC_API_KEY" || (echo "Error: ANTHROPIC_API_KEY is not set" && exit 1)
-	cd scripts && npm install --silent && npx tsx review-design.ts
-	@echo "→ Design review written to test-results/design-review.md"
 
 # ── Clean e2e test data ─────────────────────────────────────────────────────────
 

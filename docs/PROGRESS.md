@@ -124,12 +124,11 @@ _Committed: `8481bb4`_
 
 ---
 
-## Phase 6 — E2E Testing + AI Design Review ✅
+## Phase 6 — E2E Testing ✅
 
 - Playwright config with custom failure reporter → `test-results/failures.json`
 - `make test-e2e`, `make test-e2e-ui`, `make test-e2e-debug`, `make fix-tests` targets
 - `scripts/fix-tests.ts` — categorizes failures (api-error, navigation, missing-element, etc.) → `test-results/fix-report.md`
-- `scripts/review-design.ts` + `make review-design` — screenshots every page, Claude vision API → `test-results/design-review.md`
 - `tests/e2e/helpers/api.ts` — typed API helpers for seeding test data
 - `tests/e2e/owner/tenant-management.test.ts` — tenant creation API + UI; caught + fixed NULL scan bug in models
 - **Convention**: new features get a Playwright test alongside the implementation
@@ -623,8 +622,45 @@ states.
 now render the same `EndStayDialog`, so a departure recorded three days late is
 billed to the day it happened from either screen.
 
-`make review-design` was not run — it needs `ANTHROPIC_API_KEY`, which this
-environment doesn't have. Before/after screenshots were taken by hand instead.
+The automated design review did not run, and could not have — the script it
+called has never existed (see "Deferred" below). Before/after screenshots were
+taken by hand instead.
+
+---
+
+## Deferred
+
+Things we decided are worth doing, but not now. Nothing here is half-built —
+if it were, it would be under Known Issues instead.
+
+### Automated design review 🅿️
+
+**The idea:** screenshot every page at 1280px and 375px with Playwright, send
+the images to Claude's vision API with the "Design direction" section of
+`docs/DESIGN_PLAN.md` as the rubric, and write the critique to
+`test-results/design-review.md`. Run it before and after each design phase and
+diff the two — a second pair of eyes on work that no test can assert.
+
+**Status (Aug 2026): removed, not written.** `make review-design` existed as a
+Makefile target from Phase 6 and `docs/` described the script as shipped, but
+`scripts/review-design.ts` was never committed — the Phase 5–6 commit
+(`6234f1c`) adds only `fix-tests.ts` and the package files. The target guarded
+on `ANTHROPIC_API_KEY` and would then have failed on a missing file, which is
+exactly the sort of trap that costs someone twenty minutes. Target, npm script,
+and the now-unused `@anthropic-ai/sdk` dependency have been removed.
+
+**To build it** (roughly 80 lines in `scripts/review-design.ts`, plus putting
+the SDK dependency back):
+1. Reuse the Playwright setup to visit each owner route at both viewports and
+   save PNGs.
+2. Base64 the images into one `messages.create` call with the design direction
+   as the rubric.
+3. Write the response to `test-results/design-review.md`, and restore the
+   `review-design` Makefile target with its `ANTHROPIC_API_KEY` guard.
+
+**Worth it when** design phases are still landing and the before/after
+comparison earns its keep. Phases E and F are the last two, so if it does not
+get built before those, it probably should not be built at all.
 
 ---
 
