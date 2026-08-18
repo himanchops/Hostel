@@ -1,27 +1,95 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { use } from "react";
+import Link from "next/link";
 import { registrationApi, uploadApi, ApiError } from "@/lib/api";
+import {
+  Button, Card, Field, FileInput, FormError, Input, Textarea,
+} from "@/components/ui";
 
-const inputCls = "w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
-const fileCls = "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
-const labelCls = "mb-1.5 block text-sm font-medium text-stone-700";
-const optionalSpan = <span className="text-stone-400 font-normal">(optional)</span>;
+const optionalSpan = <span className="font-normal text-stone-400">(optional)</span>;
 
-function FileInput({ label, onChange, file, hint }: { label: React.ReactNode; onChange: (f: File | null) => void; file: File | null; hint?: string }) {
+/**
+ * The frame around the form.
+ *
+ * Every other screen in this app optimises for scan speed for someone who uses
+ * it daily. This one optimises for trust from someone who has never seen it —
+ * a prospective tenant pointing a phone at a sticker in a corridor, deciding
+ * whether this is a real business or a scam. Hence the one place in the product
+ * with a gradient, a wordmark and the display face doing real work.
+ *
+ * The character stays strictly out here. The form inside keeps the same boring,
+ * legible controls as the rest of the app: this is where someone types their
+ * Aadhaar number, and a clever input is a hostile input.
+ */
+function PublicFrame({
+  ownerName,
+  children,
+}: {
+  ownerName: string | null;
+  children: React.ReactNode;
+}) {
   return (
-    <div>
-      <label className={labelCls}>{label}</label>
-      <input
-        type="file"
+    <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-stone-50 to-stone-50">
+      <header className="px-4 pb-10 pt-12 text-center sm:pt-16">
+        <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
+          Hostel Manager
+        </p>
+        {/* The property name is the trust signal. Until it loads, the heading
+            says something true rather than flashing a placeholder name. */}
+        <h1 className="mt-3 text-balance font-display text-3xl font-bold text-stone-900 sm:text-4xl">
+          {ownerName ? (
+            <>
+              Register with{" "}
+              <span className="text-indigo-600">{ownerName}</span>
+            </>
+          ) : (
+            "Tenant registration"
+          )}
+        </h1>
+        <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">
+          Fill in your details and the owner will review your request. It takes
+          about two minutes.
+        </p>
+      </header>
+
+      <main className="mx-auto w-full max-w-lg px-4 pb-16 motion-safe:animate-[rise_.4s_ease-out]">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+/**
+ * ID upload with the filename echoed back.
+ *
+ * The confirmation matters more here than anywhere else in the app: this is
+ * someone on a phone in a corridor picking a photo out of a camera roll, and
+ * "did that attach?" has no other answer on the page. The name takes the hint
+ * slot once a file is chosen, which is exactly what the pre-kit version did.
+ */
+function IdProofField({
+  label,
+  file,
+  onChange,
+  hint,
+}: {
+  label: React.ReactNode;
+  file: File | null;
+  onChange: (f: File | null) => void;
+  hint?: string;
+}) {
+  return (
+    <Field
+      label={label}
+      hint={file ? `${file.name} (${(file.size / 1024).toFixed(0)} KB)` : hint}
+    >
+      <FileInput
         accept="image/jpeg,image/png,image/webp,application/pdf"
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-        className={fileCls}
       />
-      {file && <p className="mt-1 text-xs text-stone-400">{file.name} ({(file.size / 1024).toFixed(0)} KB)</p>}
-      {hint && !file && <p className="mt-1 text-xs text-stone-400">{hint}</p>}
-    </div>
+    </Field>
   );
 }
 
@@ -43,6 +111,20 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [ownerName, setOwnerName] = useState<string | null>(null);
+
+  // Declared above the isNaN guard below: hooks cannot sit after a conditional
+  // return. A failure here costs the header its property name and nothing
+  // else — the form still works, so it must not block or shout.
+  useEffect(() => {
+    if (isNaN(ownerIdNum)) return;
+    let cancelled = false;
+    registrationApi
+      .owner(ownerIdNum)
+      .then((o) => { if (!cancelled) setOwnerName(o.name); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [ownerIdNum]);
 
   if (isNaN(ownerIdNum)) {
     return (
@@ -86,124 +168,193 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
   if (submitted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
-        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm ring-1 ring-stone-200 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      <PublicFrame ownerName={ownerName}>
+        <Card padding="none" className="p-8 text-center">
+          {/* Indigo, not emerald: the status hues in globals.css are reserved
+              for bed status, and a green tick here would be the first place in
+              the app where one of them means something else. */}
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 ring-8 ring-indigo-50/60">
+            <svg
+              className="h-8 w-8 text-indigo-600 motion-safe:animate-[draw_.5s_ease-out_.15s_backwards]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-stone-900">Registration submitted!</h2>
+
+          <h2 className="mt-5 font-display text-2xl font-bold text-stone-900">
+            You&apos;re registered
+          </h2>
           <p className="mt-2 text-sm text-stone-500">
-            Your details have been sent to the owner for review. You&apos;ll be contacted once approved.
+            {ownerName
+              ? `Your details have gone to ${ownerName} for review.`
+              : "Your details have gone to the owner for review."}
           </p>
-        </div>
-      </div>
+
+          {/* What happens next, because "you'll be contacted" leaves someone
+              who just typed their Aadhaar number with nothing to expect. */}
+          <ol className="mt-6 space-y-3 text-left">
+            {[
+              "The owner checks your details and assigns you a bed.",
+              "You'll hear from them on the phone number you gave.",
+              "Once approved, sign in to see your rent and payments.",
+            ].map((step, i) => (
+              <li key={i} className="flex gap-3 text-sm text-stone-600">
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-stone-100 text-xs font-semibold tabular-nums text-stone-500">
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+
+          <Link
+            href="/my/login"
+            className="mt-6 inline-block text-sm font-semibold text-indigo-600 hover:underline"
+          >
+            Go to the tenant portal →
+          </Link>
+        </Card>
+      </PublicFrame>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
-      <div className="w-full max-w-lg">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-stone-900">Tenant Registration</h1>
-          <p className="mt-2 text-sm text-stone-500">
-            Fill in your details to register. The owner will review and approve your request.
-          </p>
-        </div>
+    <PublicFrame ownerName={ownerName}>
+      {/* padding="none" plus explicit padding: passing p-8 alongside Card's
+          own p-4 would leave Tailwind's source order to pick the winner. */}
+      <Card padding="none" className="p-6 sm:p-8">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error && <FormError>{error}</FormError>}
 
-        <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
-          {error && (
-            <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-          )}
+          {/* ── Personal details ── */}
+          <Field label="Full name" required>
+            <Input
+              required
+              type="text"
+              placeholder="Your full name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* ── Personal details ── */}
-            <div>
-              <label className={labelCls}>Full name <span className="text-red-500">*</span></label>
-              <input required type="text" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Phone <span className="text-red-500">*</span></label>
-                <input required type="tel" placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Email {optionalSpan}</label>
-                <input type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
-              </div>
-            </div>
-
-            <div>
-              <label className={labelCls}>Home address {optionalSpan}</label>
-              <textarea
-                placeholder="Full home / permanent address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                rows={2}
-                className={inputCls + " resize-none"}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Phone" required>
+              <Input
+                required
+                type="tel"
+                placeholder="10-digit number"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
               />
-            </div>
-
-            <div>
-              <label className={labelCls}>Workplace / College {optionalSpan}</label>
-              <input type="text" placeholder="Company or college name" value={workplace} onChange={(e) => setWorkplace(e.target.value)} className={inputCls} />
-            </div>
-
-            {/* ── Emergency contact ── */}
-            <div>
-              <p className="mb-2 text-sm font-semibold text-stone-700">Emergency contact {optionalSpan}</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Name</label>
-                  <input type="text" placeholder="Parent / guardian name" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Phone</label>
-                  <input type="tel" placeholder="Contact number" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className={inputCls} />
-                </div>
-              </div>
-            </div>
-
-            {/* ── ID details ── */}
-            <div>
-              <label className={labelCls}>Aadhaar number {optionalSpan}</label>
-              <input type="text" placeholder="12-digit Aadhaar number" value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value)} maxLength={12} className={inputCls} />
-              <p className="mt-1 text-xs text-stone-400">Your Aadhaar number is stored securely and only visible to the property owner.</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FileInput
-                label={<>ID proof — front {optionalSpan}</>}
-                onChange={setIdProofFront}
-                file={idProofFront}
-                hint="Aadhaar, passport, driving licence…"
+            </Field>
+            <Field label={<>Email {optionalSpan}</>}>
+              <Input
+                type="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
-              <FileInput
-                label={<>ID proof — back {optionalSpan}</>}
-                onChange={setIdProofBack}
-                file={idProofBack}
-              />
-            </div>
+            </Field>
+          </div>
 
-            {/* ── Portal password ── */}
-            <div>
-              <label className={labelCls}>Password <span className="text-red-500">*</span></label>
-              <input required type="password" placeholder="Min. 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} />
-              <p className="mt-1 text-xs text-stone-400">You&apos;ll use this to log in to your tenant portal after approval.</p>
-            </div>
+          <Field label={<>Home address {optionalSpan}</>}>
+            <Textarea
+              placeholder="Full home / permanent address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              rows={2}
+              className="resize-none"
+            />
+          </Field>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 w-full rounded-lg bg-indigo-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-60"
-            >
-              {loading ? "Submitting…" : "Submit registration"}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+          <Field label={<>Workplace / College {optionalSpan}</>}>
+            <Input
+              type="text"
+              placeholder="Company or college name"
+              value={workplace}
+              onChange={(e) => setWorkplace(e.target.value)}
+            />
+          </Field>
+
+          {/* ── Emergency contact ── */}
+          <div>
+            <p className="mb-2 text-sm font-semibold text-stone-700">
+              Emergency contact {optionalSpan}
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Name">
+                <Input
+                  type="text"
+                  placeholder="Parent / guardian name"
+                  value={emergencyName}
+                  onChange={(e) => setEmergencyName(e.target.value)}
+                />
+              </Field>
+              <Field label="Phone">
+                <Input
+                  type="tel"
+                  placeholder="Contact number"
+                  value={emergencyPhone}
+                  onChange={(e) => setEmergencyPhone(e.target.value)}
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* ── ID details ── */}
+          <Field
+            label={<>Aadhaar number {optionalSpan}</>}
+            hint="Your Aadhaar number is stored securely and only visible to the property owner."
+          >
+            <Input
+              type="text"
+              placeholder="12-digit Aadhaar number"
+              value={aadhaarNumber}
+              onChange={(e) => setAadhaarNumber(e.target.value)}
+              maxLength={12}
+            />
+          </Field>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <IdProofField
+              label={<>ID proof — front {optionalSpan}</>}
+              onChange={setIdProofFront}
+              file={idProofFront}
+              hint="Aadhaar, passport, driving licence…"
+            />
+            <IdProofField
+              label={<>ID proof — back {optionalSpan}</>}
+              onChange={setIdProofBack}
+              file={idProofBack}
+            />
+          </div>
+
+          {/* ── Portal password ── */}
+          <Field
+            label="Password"
+            required
+            hint="You'll use this to log in to your tenant portal after approval."
+          >
+            <Input
+              required
+              type="password"
+              placeholder="Min. 6 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </Field>
+
+          <Button type="submit" loading={loading} className="mt-2 w-full">
+            {loading ? "Submitting…" : "Submit registration"}
+          </Button>
+        </form>
+      </Card>
+    </PublicFrame>
   );
 }

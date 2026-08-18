@@ -15,7 +15,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     <ConfirmProvider>
     <ToastProvider>
     <div className="min-h-screen bg-stone-50">
-      <header className="bg-white shadow-sm ring-1 ring-stone-200">
+      <header className="border-b border-stone-200 bg-white">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <Link href="/my" className="text-base font-bold text-indigo-600">
             My Portal

@@ -266,6 +266,13 @@ export interface PublicRegisterData {
 export const registrationApi = {
   register: (ownerId: number, data: PublicRegisterData) =>
     request<Tenant>(`/public/register/${ownerId}`, { method: "POST", body: JSON.stringify(data) }),
+
+  /**
+   * The property's name, for the registration page header. Name only by
+   * design — owner ids are enumerable, so this must not grow contact details.
+   */
+  owner: (ownerId: number) =>
+    request<{ name: string }>(`/public/owners/${ownerId}`),
 };
 
 // ─── Tenant Auth ──────────────────────────────────────────────────────────────

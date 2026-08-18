@@ -239,7 +239,7 @@ deploying. Recommended execution order:
 4. Design Phase D (hero screens) ✅ + E (feedback layer) ✅
 5. **Phase 11 — Settlement calculator** ✅
 6. Design Phase F (public surfaces) — the registration page a stranger sees;
-   worth doing before real tenants are pointed at it by QR code
+   worth doing before real tenants are pointed at it by QR code ✅
 7. Phase 9.2–9.6 — deploy
 
 ---
@@ -472,6 +472,34 @@ refund. Currently done on a hand calculator; money mistakes happen there.
 - e2e: tenant with deposit + partial payments → settle with one deduction →
   correct refund shown and stored → stay ended → summary endpoint reflects it.
 - Backend validation test: mismatched refund_paise → 400.
+
+---
+
+## Design Phase F — Public surfaces ✅
+
+**Shipped:** `/register/[ownerId]` and `/my/login` converted to the kit, then
+the registration page given the one decorative frame in the product. Full
+write-up in `docs/DESIGN_PLAN.md`; the parts that matter here:
+
+- **New endpoint `GET /public/owners/:ownerId`** — name only, unauthenticated.
+  The registration page could not say which property it belonged to, which is
+  the entire trust question for someone who reached it by scanning a sticker.
+  Owner ids are enumerable, so the e2e pins the exact response key set to stop
+  contact details ever being added to it.
+- **`grep -rn "ring-stone-200" src/app` → 0.** That was Phase B's acceptance
+  test and it has been outstanding since. Finishing it meant kit-converting the
+  tenant shell header and the portal's stay card, and turning the dashboard
+  account menu into a `Card` (an overlay, so it keeps `shadow-xl` — Card sets no
+  shadow of its own, so there is no class collision).
+- **Three `grid-cols-2` blocks were broken at 375px** and now stack below 640px.
+- Two raw `ring-1` classes remain, both on the pending page's registration-link
+  panel — a tinted multi-line block with no kit equivalent. Documented, not
+  forced into `Banner`.
+
+Tests: `tests/e2e/public/registration.test.ts` (3, whole file at 375px — the
+name-only endpoint and its 404, a full end-to-end registration reaching the
+owner's pending queue with zero horizontal overflow, and the degraded path
+where the owner name fails to load).
 
 ---
 

@@ -12,7 +12,7 @@ import {
   formatCurrency,
   today,
 } from "@/lib/api";
-import { useConfirm, useToast } from "@/components/ui";
+import { Card, useConfirm, useToast } from "@/components/ui";
 
 export default function TenantPortalPage() {
   const { token, isAuthenticated, isLoading } = useTenantAuth();
@@ -123,7 +123,7 @@ function StayCard({ stay, token, onUpdate }: {
   }
 
   return (
-    <div className="rounded-2xl bg-white shadow-sm ring-1 ring-stone-200 overflow-hidden">
+    <Card padding="none" className="overflow-hidden">
       {/* Stay header */}
       <div className="px-5 py-4 border-b border-stone-100">
         <div className="flex items-start justify-between">
@@ -253,7 +253,7 @@ function StayCard({ stay, token, onUpdate }: {
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 

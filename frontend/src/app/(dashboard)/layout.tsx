@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { collectionsApi, tenantsApi } from "@/lib/api";
 import {
-  BuildingIcon, Button, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
+  BuildingIcon, Button, Card, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
   RupeeIcon, ToastProvider, UsersIcon,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
@@ -142,13 +142,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMenuOpenOn(null)} />
-                <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl bg-white p-4 shadow-xl ring-1 ring-stone-200">
+                <Card className="absolute right-0 z-20 mt-2 w-56 shadow-xl">
                   <p className="truncate text-sm font-medium text-stone-800">{owner?.name}</p>
                   <p className="truncate text-xs text-stone-500">{owner?.email}</p>
                   <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={signOut}>
                     Sign out
                   </Button>
-                </div>
+                </Card>
               </>
             )}
           </div>

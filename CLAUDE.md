@@ -41,9 +41,9 @@ hostel/
 
 **See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
 
-Current state (Aug 2026): Phases 0–9.1, design Phases A–E, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Next up is **design Phase F — public surfaces** (`/register/[ownerId]` and `/my/login`), then deploy (Phase 9.2–9.6).
+Current state (Aug 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Everything on the roadmap before deployment is done: next up is **deploy, Phase 9.2–9.6** (Neon → R2 → Render → Vercel, `docs/DEPLOYMENT.md`).
 
-UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
+UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 
 E2E tests log in with `loginAs(page, token)` from `tests/e2e/helpers/api.ts` — never `goto("/")` then `localStorage.setItem`, which races with the root redirect.
 

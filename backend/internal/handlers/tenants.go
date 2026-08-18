@@ -129,6 +129,30 @@ type publicRegisterRequest struct {
 	AadhaarNumber         string `json:"aadhaar_number"`
 }
 
+// PublicOwner returns just enough about an owner to make a registration link
+// look legitimate to the stranger who scanned it.
+//
+// Deliberately name-only. The registration page is the one screen in the
+// product shown to someone with no account, reached by pointing a phone at a
+// sticker in a corridor — without the property's name on it, the form is
+// indistinguishable from a phishing page, which is the whole problem Phase F
+// exists to fix. Email, phone and everything else stay behind auth: owner ids
+// are small integers and therefore enumerable, so this endpoint is a directory
+// of hostel names and must never become a directory of contact details.
+// GET /public/owners/:ownerId
+func (h *TenantHandler) PublicOwner(c echo.Context) error {
+	ownerID, err := strconv.ParseInt(c.Param("ownerId"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid owner id"))
+	}
+
+	var name string
+	if err := h.db.Get(&name, `SELECT name FROM owners WHERE id = $1`, ownerID); err != nil {
+		return c.JSON(http.StatusNotFound, errorResponse("registration link not found"))
+	}
+	return c.JSON(http.StatusOK, map[string]string{"name": name})
+}
+
 func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	ownerID, err := strconv.ParseInt(c.Param("ownerId"), 10, 64)
 	if err != nil {
