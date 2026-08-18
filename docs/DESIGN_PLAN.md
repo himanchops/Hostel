@@ -6,8 +6,8 @@ ordered by dependency, and scoped so a smaller model can implement it without
 extra design decisions. Do the phases in order. Do not restyle pages before
 Phase B is complete.
 
-**Status (Aug 2026): Phases A and B are done.** Next is Phase 10 (Collections
-& WhatsApp nudges), built with the new kit, then design Phase C. Phase F
+**Status (Aug 2026): Phases A, B and C are done**, as is Phase 10
+(Collections & WhatsApp nudges). Next is Phase D (hero screens). Phase F
 (public surfaces) was added later and sits after E — see its own section for
 why it is deliberately not part of the A–E sequence.
 
@@ -160,7 +160,39 @@ Rules for the implementer:
 
 ---
 
-## Phase C — Responsive shell (1 session)
+## Phase C — Responsive shell ✅ (branch `design-phase-c-responsive`)
+
+**Shipped:** sidebar from 1024px up, bottom tab bar below it, sharing one nav
+definition. Every owner page is usable at 375×812 with no horizontal scroll and
+nothing clipped inside a container.
+
+Decisions worth knowing:
+- **The mobile top bar carries the wordmark, not the page title.** The plan
+  asked for the title, but every page already opens with its own `<h1>` and the
+  tab bar shows which section is active, so a title there just said the same
+  thing twice — it read as a bug on screen. Deriving a real title for detail
+  pages (a tenant's name) would have meant publishing it from page to layout
+  through context, which is a lot of plumbing for a duplicated word.
+- **The tenants table becomes a stacked list below `sm`.** Five columns at
+  375px wrapped every single cell onto two lines. Same data, one row per
+  tenant, table returns at `sm`.
+- **Pending's action buttons wrap to their own row** on a phone. They were
+  squeezing the tenant's email until it was clipped mid-address.
+- Form grids (`grid-cols-2`, `grid-cols-3`) stack below `sm`; `CountBadge`
+  gained a `sm` size so tab-bar badges don't crowd their icon.
+- The account menu's open state is stored as *the route it was opened on*
+  rather than a boolean, so navigating closes it without an effect.
+
+**Test-infrastructure fix that came out of this:** every UI e2e test logged in
+with `goto("/")` → `setItem` → `goto(target)`, which races — the first
+navigation boots the app unauthenticated and schedules a redirect to `/login`
+that can land after the second `goto` and steal it. It had been passing by
+luck; two tests started failing about one run in two. Replaced with a shared
+`loginAs()` helper using `addInitScript`, which seeds the token before any page
+script runs. That touched the two pre-existing test files as well, and took the
+suite from flaky-and-46s to stable-and-10s.
+
+### Original spec
 
 The owner's primary device is a phone in a hallway.
 

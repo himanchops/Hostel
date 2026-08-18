@@ -72,7 +72,7 @@ export default function NewTenantPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Add new tenant"
         breadcrumb={[{ label: "Tenants", href: "/tenants" }, { label: "New tenant" }]}
@@ -80,7 +80,7 @@ export default function NewTenantPage() {
 
       <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
         <Card title="Basic information">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Full name" required>
               <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahul Sharma" />
             </Field>
@@ -101,7 +101,7 @@ export default function NewTenantPage() {
             <Field label="Workplace / College">
               <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="e.g. BITS Pilani" />
             </Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Emergency contact name">
                 <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
               </Field>
@@ -116,7 +116,7 @@ export default function NewTenantPage() {
         </Card>
 
         <Card title="Photo & documents">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Photo">
               <FileInput accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
             </Field>

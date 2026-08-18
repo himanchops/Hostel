@@ -1,4 +1,4 @@
-import { APIRequestContext } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 
 const BASE = "http://localhost:8080";
 
@@ -74,4 +74,20 @@ export async function createSiteRoomBed(
   const { id: bedId } = await bedRes.json();
 
   return { siteId, roomId, bedId };
+}
+
+/**
+ * Puts the owner's token in localStorage BEFORE any page script runs.
+ *
+ * The older pattern — goto("/"), setItem, goto(target) — races: the first
+ * navigation boots the app unauthenticated, which schedules a redirect to
+ * /login, and that redirect can land after the second goto and steal the
+ * navigation. It passed for a long time and then started failing roughly one
+ * run in two once the app got slower to boot. addInitScript removes the race
+ * rather than papering over it with a wait.
+ */
+export async function loginAs(page: Page, token: string) {
+  await page.addInitScript((t) => {
+    localStorage.setItem("hostel_token", t);
+  }, token);
 }

@@ -35,17 +35,24 @@ export function Badge({
   );
 }
 
-/** Small count bubble — sidebar badges, alert counts. */
+/**
+ * Small count bubble — sidebar badges, alert counts. `sm` is for badges that
+ * sit on top of something else, like the bottom tab bar's icons, where the
+ * default size crowds the icon it is annotating.
+ */
 export function CountBadge({
   tone = "warning",
+  size = "md",
   children,
 }: {
   tone?: BadgeTone;
+  size?: "sm" | "md";
   children: React.ReactNode;
 }) {
+  const dims = size === "sm" ? "h-4 min-w-4 px-1 text-[10px]" : "h-5 min-w-5 px-1.5 text-xs";
   return (
     <span
-      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums ring-1 ring-inset ${TONES[tone]}`}
+      className={`inline-flex items-center justify-center rounded-full font-semibold tabular-nums ring-1 ring-inset ${dims} ${TONES[tone]}`}
     >
       {children}
     </span>

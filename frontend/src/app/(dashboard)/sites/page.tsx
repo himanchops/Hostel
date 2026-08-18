@@ -71,7 +71,7 @@ export default function SitesPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Sites"
         subtitle="Manage your hostel properties"

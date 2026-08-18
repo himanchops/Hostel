@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, createSiteRoomBed } from "../helpers/api";
+import { createOwner, createSiteRoomBed, loginAs } from "../helpers/api";
 
 /**
  * Tenant profile enrichment & registration-time deposit tests.
@@ -263,8 +263,7 @@ test.describe("Tenant profile enrichment", () => {
       data: { email: ownerEmail, password: "testpassword123" },
     });
     const { token } = await loginRes.json();
-    await page.goto("/");
-    await page.evaluate((t) => localStorage.setItem("hostel_token", t), token);
+    await loginAs(page, token);
     await page.goto(`/tenants/${tenant.id}`);
 
     // Profile card should show fields
@@ -301,8 +300,7 @@ test.describe("Tenant profile enrichment", () => {
       data: { email: ownerEmail, password: "testpassword123" },
     });
     const { token } = await loginRes.json();
-    await page.goto("/");
-    await page.evaluate((t) => localStorage.setItem("hostel_token", t), token);
+    await loginAs(page, token);
     await page.goto(`/tenants/${tenantId}`);
 
     // Click "End stay" to reveal date picker
