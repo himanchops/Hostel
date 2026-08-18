@@ -32,6 +32,7 @@ import {
   Select,
   Skeleton,
   useConfirm,
+  useToast,
 } from "@/components/ui";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
@@ -402,6 +403,7 @@ function ReviewDrawer({
 export default function PendingPage() {
   const { token, owner } = useAuth();
   const confirm = useConfirm();
+  const toast = useToast();
   const [tab, setTab] = useState<"registrations" | "payments">("registrations");
 
   const [pending, setPending] = useState<Tenant[]>([]);
@@ -440,12 +442,16 @@ export default function PendingPage() {
       await tenantsApi.reject(token, id);
       setPending((prev) => prev.filter((t) => t.id !== id));
       if (drawerTenant?.id === id) setDrawerTenant(null);
-    } catch { /* ignore */ } finally { setRejectingId(null); }
+      toast.success("Registration removed");
+    } catch {
+      toast.error("Failed to remove the registration");
+    } finally { setRejectingId(null); }
   }
 
   function handleApproved(approved: Tenant) {
     setPending((prev) => prev.filter((t) => t.id !== approved.id));
     setDrawerTenant(null);
+    toast.success(`${approved.name} approved`);
   }
 
   async function handleApprovePayment(id: number) {
@@ -454,7 +460,10 @@ export default function PendingPage() {
     try {
       await pendingPaymentsApi.approve(token, id);
       setPendingPayments((prev) => prev.filter((p) => p.id !== id));
-    } catch { /* ignore */ } finally { setActioningPayId(null); }
+      toast.success("Payment approved");
+    } catch {
+      toast.error("Failed to approve the payment");
+    } finally { setActioningPayId(null); }
   }
 
   async function handleRejectPayment(id: number) {
@@ -469,7 +478,10 @@ export default function PendingPage() {
     try {
       await pendingPaymentsApi.reject(token, id);
       setPendingPayments((prev) => prev.filter((p) => p.id !== id));
-    } catch { /* ignore */ } finally { setActioningPayId(null); }
+      toast.success("Payment rejected");
+    } catch {
+      toast.error("Failed to reject the payment");
+    } finally { setActioningPayId(null); }
   }
 
   return (
@@ -503,7 +515,22 @@ export default function PendingPage() {
             <p className="mb-3 text-xs text-indigo-600">Share this link (or a QR code pointing to it) with prospective tenants.</p>
             <div className="flex items-center gap-2">
               <code className="flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-xs text-stone-700 ring-1 ring-indigo-200">{registrationUrl}</code>
-              <Button size="sm" onClick={() => navigator.clipboard.writeText(registrationUrl)}>Copy</Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  // writeText rejects on a denied permission or an unfocused
+                  // document, so the toast has to wait for it — otherwise it
+                  // claims success on a copy that never happened.
+                  try {
+                    await navigator.clipboard.writeText(registrationUrl);
+                    toast.success("Registration link copied");
+                  } catch {
+                    toast.error("Couldn't copy — select the link and copy it manually");
+                  }
+                }}
+              >
+                Copy
+              </Button>
             </div>
           </div>
 

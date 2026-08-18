@@ -60,6 +60,7 @@ export default function SiteDetailPage() {
     try {
       const room = await roomsApi.create(token, siteId, { name: roomName, floor: Number(roomFloor) });
       setRooms((prev) => [...prev, room]);
+      toast.success(`Added room ${room.name}`);
       setRoomName("");
       setRoomFloor("0");
       setShowRoomForm(false);
@@ -77,6 +78,7 @@ export default function SiteDetailPage() {
     try {
       await roomsApi.delete(token, siteId, roomId);
       setRooms((prev) => prev.filter((r) => r.id !== roomId));
+      toast.success("Room deleted");
     } catch {
       toast.error("Failed to delete room");
     }
@@ -97,16 +99,26 @@ export default function SiteDetailPage() {
 
   async function handleAddBed(roomId: number, name: string) {
     if (!token) return;
-    const bed = await bedsApi.create(token, siteId, roomId, { name });
-    setBeds((prev) => ({ ...prev, [roomId]: [...(prev[roomId] || []), bed] }));
+    try {
+      const bed = await bedsApi.create(token, siteId, roomId, { name });
+      setBeds((prev) => ({ ...prev, [roomId]: [...(prev[roomId] || []), bed] }));
+      toast.success(`Added bed ${bed.name}`);
+    } catch {
+      toast.error("Failed to add the bed");
+    }
   }
 
   async function handleDeleteBed(roomId: number, bedId: number) {
     if (!token) return;
     const ok = await confirm({ title: "Delete this bed?", confirmLabel: "Delete", tone: "danger" });
     if (!ok) return;
-    await bedsApi.delete(token, siteId, roomId, bedId);
-    setBeds((prev) => ({ ...prev, [roomId]: prev[roomId].filter((b) => b.id !== bedId) }));
+    try {
+      await bedsApi.delete(token, siteId, roomId, bedId);
+      setBeds((prev) => ({ ...prev, [roomId]: prev[roomId].filter((b) => b.id !== bedId) }));
+      toast.success("Bed removed");
+    } catch {
+      toast.error("Failed to remove the bed");
+    }
   }
 
   if (loading) {

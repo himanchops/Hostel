@@ -30,6 +30,7 @@ import {
   Skeleton,
   StatusPill,
   useConfirm,
+  useToast,
 } from "@/components/ui";
 import { EndStayDialog } from "@/components/EndStayDialog";
 
@@ -338,6 +339,7 @@ function AssignPanel({
   token: string; bed: GridBed;
   onDone: () => void; onCancel: () => void;
 }) {
+  const toast = useToast();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -393,6 +395,8 @@ function AssignPanel({
         rent_cycle: cycle,
         start_date: startDate,
       });
+      const name = tenants.find((t) => t.id === tenantId)?.name ?? "Tenant";
+      toast.success(`${name} assigned to bed ${bed.name}`);
       onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to assign");
@@ -504,6 +508,7 @@ function OccupiedPanel({
   onEndStay: () => void;
 }) {
   const confirm = useConfirm();
+  const toast = useToast();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
 
@@ -535,6 +540,7 @@ function OccupiedPanel({
         payment_date: payDate,
         notes: notes || undefined,
       });
+      toast.success(`Recorded ${formatCurrency(Math.round(parseFloat(amount) * 100))}`);
       onPaymentAdded();
     } catch (e) {
       setPayError(e instanceof ApiError ? e.message : "Failed");
@@ -546,8 +552,13 @@ function OccupiedPanel({
   async function handleDeletePayment(id: number) {
     const ok = await confirm({ title: "Delete this payment?", confirmLabel: "Delete", tone: "danger" });
     if (!ok) return;
-    await paymentsApi.delete(token, id);
-    setPayments((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await paymentsApi.delete(token, id);
+      setPayments((prev) => prev.filter((p) => p.id !== id));
+      toast.success("Payment deleted");
+    } catch {
+      toast.error("Failed to delete the payment");
+    }
   }
 
   const balance = bed.balance ?? 0;

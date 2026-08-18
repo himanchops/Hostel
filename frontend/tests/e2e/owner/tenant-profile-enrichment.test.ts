@@ -313,7 +313,9 @@ test.describe("Tenant profile enrichment", () => {
     // Confirm with today's date
     await page.getByRole("button", { name: "Confirm" }).click();
 
-    // Stay should now show "Ended"
-    await expect(page.getByText("Ended")).toBeVisible();
+    // Stay should now show the "Ended" badge. Exact match: since Phase E the
+    // success toast also says "…'s stay ended", and a substring match now
+    // resolves to both.
+    await expect(page.getByText("Ended", { exact: true })).toBeVisible();
   });
 });

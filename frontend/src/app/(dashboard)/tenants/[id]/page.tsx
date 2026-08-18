@@ -24,6 +24,7 @@ import {
   Skeleton,
   Textarea,
   useConfirm,
+  useToast,
 } from "@/components/ui";
 import { EndStayDialog } from "@/components/EndStayDialog";
 
@@ -281,6 +282,7 @@ export default function TenantDetailPage() {
   const { token } = useAuth();
   const router = useRouter();
   const confirm = useConfirm();
+  const toast = useToast();
 
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [stays, setStays] = useState<Stay[]>([]);
@@ -349,6 +351,7 @@ export default function TenantDetailPage() {
       setPayNotes("");
       setAddingPayment(null);
       loadSummary();
+      toast.success(`Recorded ${formatCurrency(p.amount)}`);
     } catch (err) {
       setPayError(err instanceof ApiError ? err.message : "Failed");
     } finally {
@@ -360,9 +363,14 @@ export default function TenantDetailPage() {
     if (!token) return;
     const ok = await confirm({ title: "Delete this payment?", confirmLabel: "Delete", tone: "danger" });
     if (!ok) return;
-    await paymentsApi.delete(token, paymentId);
-    setPayments((prev) => ({ ...prev, [stayId]: prev[stayId].filter((p) => p.id !== paymentId) }));
-    loadSummary();
+    try {
+      await paymentsApi.delete(token, paymentId);
+      setPayments((prev) => ({ ...prev, [stayId]: prev[stayId].filter((p) => p.id !== paymentId) }));
+      loadSummary();
+      toast.success("Payment deleted");
+    } catch {
+      toast.error("Failed to delete the payment");
+    }
   }
 
   if (loading) {
@@ -438,7 +446,11 @@ export default function TenantDetailPage() {
         <EditProfileForm
           tenant={tenant}
           token={token}
-          onSaved={(updated) => { setTenant(updated); setEditingProfile(false); }}
+          onSaved={(updated) => {
+            setTenant(updated);
+            setEditingProfile(false);
+            toast.success("Profile updated");
+          }}
           onCancel={() => setEditingProfile(false)}
         />
       )}
@@ -666,6 +678,7 @@ export default function TenantDetailPage() {
           onAssigned={(updated) => {
             setStays((prev) => prev.map((s) => (s.id === assigningStay ? updated : s)));
             setAssigningStay(null);
+            toast.success("Bed assigned");
           }}
           onClose={() => setAssigningStay(null)}
         />

@@ -291,7 +291,37 @@ stripes distinguishable); e2e green; before/after screenshots at 1280px and
 
 ---
 
-## Phase E — Feedback layer (half a session)
+## Phase E — Feedback layer ✅ (branch `design-phase-e-feedback`)
+
+**Shipped:** every owner mutation now says what it did — eighteen call sites
+across seven pages, with specific wording ("Added bed C", "Asha Rao assigned to
+bed A", "Recorded ₹15,000") rather than "Saved". The last `window.confirm` is
+gone, so `grep -rn "confirm(" src/app` returns zero.
+
+Things that fell out of doing it:
+- **Four mutations were swallowing their errors.** `pending`'s approve and
+  reject both ended in `catch { /* ignore */ }`, and two payment deletes had no
+  `catch` at all — a failed request left the row on screen with no explanation.
+  They now toast the failure.
+- **The clipboard button was lying.** It toasted "copied" without awaiting
+  `writeText`, which rejects on a denied permission or an unfocused document.
+  Caught because the browser threw it during verification.
+- **Width props on kit inputs had never worked.** `className="w-32"` on `Input`
+  was silently ignored for three phases: Tailwind resolves conflicts by CSS
+  source order, not attribute order, so the base `w-full` always won. `Field`
+  now drops the base width when a caller sets their own. This is why the
+  add-bed input had been running the full width of the card.
+- Errors stay inline where a form already shows `FormError`, and toast where
+  there is no inline surface (deletes, approvals). Showing both would put the
+  same failure on screen twice.
+
+Remaining spinners are the three auth-guard screens plus the tenant portal's
+load — those are "am I logged in" checks with no content to skeleton, so they
+stay spinners deliberately. Tenant-portal buttons still disable and swap their
+label rather than using the kit's `loading`; that page is Phase F.
+
+### Original spec
+
 
 - Wire `useToast()` into every mutation: payment recorded, tenant assigned,
   vacated, approved, rejected, profile saved. Success = quiet stone toast with

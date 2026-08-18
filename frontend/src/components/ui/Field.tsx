@@ -4,18 +4,33 @@
 const CONTROL =
   "block w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition duration-150 ease-out placeholder:text-stone-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:bg-stone-50 disabled:text-stone-400";
 
+/**
+ * Merges a caller's className over the base.
+ *
+ * Tailwind resolves conflicts by CSS source order, not by the order classes
+ * appear in the attribute — so `w-full` in the base beat every `w-32` a caller
+ * passed, silently, for three phases. Rather than add a class-merge dependency
+ * for one conflict, drop the base width when the caller specifies their own.
+ * `max-w-*` doesn't conflict, so it isn't matched here.
+ */
+function control(className: string): string {
+  const callerSetsWidth = /(^|\s)w-/.test(className);
+  const base = callerSetsWidth ? CONTROL.replace("w-full ", "") : CONTROL;
+  return `${base} ${className}`.trim();
+}
+
 export function Input({
   className = "",
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${CONTROL} ${className}`.trim()} />;
+  return <input {...props} className={control(className)} />;
 }
 
 export function Textarea({
   className = "",
   ...props
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={`${CONTROL} ${className}`.trim()} />;
+  return <textarea {...props} className={control(className)} />;
 }
 
 export function Select({
@@ -24,7 +39,7 @@ export function Select({
   ...props
 }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select {...props} className={`${CONTROL} ${className}`.trim()}>
+    <select {...props} className={control(className)}>
       {children}
     </select>
   );
