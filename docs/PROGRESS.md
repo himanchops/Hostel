@@ -237,7 +237,7 @@ deploying. Recommended execution order:
 2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it) ✅
 3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here ✅
 4. Design Phase D (hero screens) ✅ + E (feedback layer) ✅
-5. **Phase 11 — Settlement calculator**
+5. **Phase 11 — Settlement calculator** ✅
 6. Design Phase F (public surfaces) — the registration page a stranger sees;
    worth doing before real tenants are pointed at it by QR code
 7. Phase 9.2–9.6 — deploy
@@ -337,7 +337,73 @@ SMS, email. The owner taps; the app never messages anyone by itself.
 
 ---
 
-## Phase 11 — Settlement Calculator 🔜
+## Phase 11 — Settlement Calculator ✅
+
+**Shipped:** migration `005_settlements`, three endpoints, and a Settle & vacate
+drawer on the tenant page. The hand calculator is gone: deposit held − rent
+outstanding ± manual adjustments = what changes hands, computed live as the
+owner types and re-checked by the server before anything is written.
+
+Decisions and details worth knowing:
+
+- **Migration is `005`, not `004`.** The plan was written before
+  `004_drop_rent_due_day` landed.
+- **`deposit_paise` and `dues_paise` are snapshots**, not views onto the stay.
+  S1 made rent and start date editable, and a settlement records money that
+  actually changed hands — correcting a stay afterwards must not silently
+  rewrite what was handed over.
+- **Dues are signed.** A tenant who paid three months up front and left after
+  two has negative dues, and the refund adds it back on top of the deposit.
+  Clamping at zero would quietly keep their money. The drawer relabels the line
+  "Rent paid in advance" rather than showing a negative.
+- **The server recomputes and rejects a mismatch.** Not because the client is
+  hostile but because the drawer goes stale: a payment recorded in another tab
+  moves the dues, and the owner would otherwise hand over a refund based on
+  numbers that are no longer true. The 400 says so and tells them to reopen it.
+- **The owner never types a minus sign.** Each adjustment row is a
+  Deduct/Add-back choice plus a positive amount; the sign is applied for them.
+  `parseRupees` rejects a typed minus so the two cannot cancel out, and accepts
+  commas — `parseFloat("1,200")` is `1`, which would turn a ₹1,200 deduction
+  into ₹1 with nothing on screen to show for it.
+- **An already-ended stay settles against its own end date.** A request naming
+  a different one is refused, not ignored — the settlement and the ledger have
+  to describe the same move-out. Reachable from the UI too ("Settle deposit" on
+  an ended, unsettled stay), because ending from the grid is a normal thing to
+  do first.
+- **A settlement does not write off the rent ledger.** The tenant summary still
+  shows the outstanding rent afterwards; the settlement records what was paid
+  out, which is a different question. Pinned by a test.
+- **`GET /api/tenants/:id/settlements` replaces the planned
+  `GET /api/stays/:id/settlement`.** The tenant page badges every ended stay, so
+  the per-stay version would be N requests to render N badges — and with the
+  list endpoint in place nothing would have called it.
+- **The drawer shows its working** (`4 months × ₹8,500 = ₹34,000 billed ·
+  ₹25,500 paid`). The one number the owner will argue with is the outstanding
+  rent, and a bare total gives them nothing to check it against.
+
+**Bug found and fixed on the way:** `GET /api/stays/:id` had *always* returned
+404. `stayCols` is unqualified and that handler joins `tenants` to scope by
+owner, so `id` is ambiguous and Postgres refused the query. Nothing in the app
+calls the endpoint, so it went unnoticed. Now uses `stayColsQualified`. Worth
+noting that the settlement test's first draft asserted `end_date` was falsy —
+which passes on an error body too; asserting the status first is what exposed
+it.
+
+**Also fixed:** a stay card showed "Paid ₹0" until expanded, because payments
+load lazily. Harmless before; a false zero sitting next to a refund figure is
+not. Now shows "Paid —" until it knows.
+
+Tests: `settlements_test.go` (18 — dues across monthly/weekly/daily and
+month-end clamping, the move-out date changing the bill by exactly one cycle,
+paid-ahead, refunds going negative, the stale-preview mismatch, agreement with
+the tenant summary, date resolution, adjustment validation; three mutants killed
+on the arithmetic), `tests/unit/settlement.test.ts` (11 — the same fixture as
+the Go tests so the two implementations cannot drift, plus rupee parsing and
+cycle labels), and `tests/e2e/owner/settlement.test.ts` (5 — preview working and
+exact stored refund, double-settle 409, mismatch 400, unlabelled adjustment 400,
+already-ended path, and the full UI flow with a comma-typed deduction).
+
+### Original spec
 
 When a tenant vacates: deposit held − outstanding dues ± manual adjustments =
 refund. Currently done on a hand calculator; money mistakes happen there.

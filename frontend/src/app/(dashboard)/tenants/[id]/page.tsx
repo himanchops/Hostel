@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import {
-  tenantsApi, staysApi, paymentsApi, sitesApi, gridApi,
-  Tenant, Stay, Payment, TenantSummary, TenantUpdateData, Site, GridRoom,
+  tenantsApi, staysApi, paymentsApi, sitesApi, gridApi, settlementsApi,
+  Tenant, Stay, Payment, TenantSummary, TenantUpdateData, Site, GridRoom, Settlement,
   formatCurrency, today, maskAadhaar, ApiError, uploadApi,
 } from "@/lib/api";
 import {
@@ -27,6 +27,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { EndStayDialog } from "@/components/EndStayDialog";
+import { SettleStayDrawer } from "@/components/SettleStayDrawer";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -287,6 +288,8 @@ export default function TenantDetailPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [stays, setStays] = useState<Stay[]>([]);
   const [summary, setSummary] = useState<TenantSummary | null>(null);
+  // Keyed by stay so an ended stay can be badged without a request each.
+  const [settlements, setSettlements] = useState<Record<number, Settlement>>({});
   const [loading, setLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
 
@@ -306,8 +309,18 @@ export default function TenantDetailPage() {
   // End stay date picker
   const [endingStay, setEndingStay] = useState<number | null>(null);
 
+  // Settle & vacate drawer
+  const [settlingStay, setSettlingStay] = useState<number | null>(null);
+
   // Assign bed modal
   const [assigningStay, setAssigningStay] = useState<number | null>(null);
+
+  // Settling ends the stay server-side, and the response is the settlement
+  // rather than the stay — so the card's dates come from a refetch.
+  const reloadStays = useCallback(() => {
+    if (!token) return;
+    tenantsApi.stays(token, tenantId).then(setStays).catch(() => {});
+  }, [token, tenantId]);
 
   const loadSummary = useCallback(() => {
     if (!token) return;
@@ -319,8 +332,15 @@ export default function TenantDetailPage() {
     Promise.all([
       tenantsApi.get(token, tenantId),
       tenantsApi.stays(token, tenantId),
+      // A tenant with no settlements is the common case, so a failure here
+      // must not cost them the page — it only removes a badge.
+      settlementsApi.listByTenant(token, tenantId).catch(() => [] as Settlement[]),
     ])
-      .then(([t, s]) => { setTenant(t); setStays(s); })
+      .then(([t, s, settled]) => {
+        setTenant(t);
+        setStays(s);
+        setSettlements(Object.fromEntries(settled.map((x) => [x.stay_id, x])));
+      })
       .catch(() => router.replace("/tenants"))
       .finally(() => setLoading(false));
     loadSummary();
@@ -494,6 +514,7 @@ export default function TenantDetailPage() {
             const stayPayments = payments[stay.id];
             const totalPaid = (stayPayments || []).reduce((s, p) => s + p.amount, 0);
             const isEndingThis = endingStay === stay.id;
+            const settlement = settlements[stay.id];
 
             return (
               <Card key={stay.id} padding="none">
@@ -507,6 +528,12 @@ export default function TenantDetailPage() {
                       <Badge tone={active ? "success" : "neutral"}>
                         {active ? "Active" : "Ended"}
                       </Badge>
+                      {settlement && <Badge tone="info">Settled</Badge>}
+                      {active && stay.notice_date && (
+                        <Badge tone="warning">
+                          Notice {stay.notice_date.slice(0, 10)}
+                        </Badge>
+                      )}
                       {unassigned ? (
                         <Badge tone="warning">Bed unassigned</Badge>
                       ) : (
@@ -523,11 +550,23 @@ export default function TenantDetailPage() {
                     </p>
                   </div>
                   <div className="text-right">
+                    {/* Payments load when the card is expanded, so before that
+                        totalPaid is 0 — which is not "nothing was paid". Saying
+                        so next to a refund figure would be a money lie. */}
                     <p className="text-sm font-semibold tabular-nums text-stone-700">
-                      Paid {formatCurrency(totalPaid)}
+                      {stayPayments === undefined ? "Paid —" : `Paid ${formatCurrency(totalPaid)}`}
                     </p>
+                    {settlement && (
+                      <p className={`text-xs font-medium tabular-nums ${
+                        settlement.refund_paise >= 0 ? "text-paid-800" : "text-overdue-800"
+                      }`}>
+                        {settlement.refund_paise >= 0
+                          ? `${formatCurrency(settlement.refund_paise)} refunded`
+                          : `${formatCurrency(Math.abs(settlement.refund_paise))} recovered`}
+                      </p>
+                    )}
                     {active && (
-                      <div className="mt-1 flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="mt-1 flex flex-wrap items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                         {unassigned && !isEndingThis && (
                           <button
                             onClick={() => setAssigningStay(stay.id)}
@@ -537,13 +576,37 @@ export default function TenantDetailPage() {
                           </button>
                         )}
                         {!isEndingThis && (
-                          <button
-                            onClick={() => setEndingStay(stay.id)}
-                            className="text-xs text-stone-400 transition duration-150 ease-out hover:text-red-500"
-                          >
-                            End stay
-                          </button>
+                          <>
+                            <button
+                              onClick={() => setSettlingStay(stay.id)}
+                              className="text-xs font-medium text-indigo-600 hover:underline"
+                            >
+                              Settle &amp; vacate
+                            </button>
+                            {/* Kept alongside: not every move-out needs the
+                                money ceremony, and forcing one would push
+                                owners back to ending stays from the grid. */}
+                            <button
+                              onClick={() => setEndingStay(stay.id)}
+                              className="text-xs text-stone-400 transition duration-150 ease-out hover:text-red-500"
+                            >
+                              End without settling
+                            </button>
+                          </>
                         )}
+                      </div>
+                    )}
+                    {/* A stay ended from the grid, or with "End without
+                        settling", still has a deposit to account for. Without
+                        this the money conversation has nowhere to happen. */}
+                    {!active && !settlement && (
+                      <div className="mt-1 flex justify-end" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => setSettlingStay(stay.id)}
+                          className="text-xs font-medium text-indigo-600 hover:underline"
+                        >
+                          Settle deposit
+                        </button>
                       </div>
                     )}
                   </div>
@@ -552,6 +615,58 @@ export default function TenantDetailPage() {
                 {/* Expanded: payment ledger */}
                 {expanded === stay.id && (
                   <div className="border-t border-stone-100 px-4 py-3">
+                    {/* What the refund was made of. Kept on the page because
+                        the tenant asks about it weeks later, and the owner
+                        should not have to remember. */}
+                    {settlement && (
+                      <div className="mb-4 rounded-xl bg-stone-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                          Settlement · {settlement.created_at.slice(0, 10)}
+                        </p>
+                        <dl className="mt-2 space-y-1 text-sm">
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-stone-600">Deposit held</dt>
+                            <dd className="tabular-nums text-stone-800">
+                              {formatCurrency(settlement.deposit_paise)}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-stone-600">
+                              {settlement.dues_paise >= 0 ? "Rent outstanding" : "Rent paid in advance"}
+                            </dt>
+                            <dd className="tabular-nums text-stone-800">
+                              {settlement.dues_paise >= 0 ? "−" : "+"}
+                              {formatCurrency(Math.abs(settlement.dues_paise))}
+                            </dd>
+                          </div>
+                          {(settlement.adjustments ?? []).map((a, i) => (
+                            <div key={i} className="flex justify-between gap-4">
+                              <dt className="text-stone-600">{a.label}</dt>
+                              <dd className="tabular-nums text-stone-800">
+                                {a.amount_paise < 0 ? "−" : "+"}
+                                {formatCurrency(Math.abs(a.amount_paise))}
+                              </dd>
+                            </div>
+                          ))}
+                          <div className="flex justify-between gap-4 border-t border-stone-200 pt-1">
+                            <dt className="font-semibold text-stone-700">
+                              {settlement.refund_paise >= 0 ? "Refunded" : "Owed by tenant"}
+                            </dt>
+                            <dd className={`font-bold tabular-nums ${
+                              settlement.refund_paise >= 0 ? "text-paid-800" : "text-overdue-800"
+                            }`}>
+                              {formatCurrency(Math.abs(settlement.refund_paise))}
+                            </dd>
+                          </div>
+                        </dl>
+                        {settlement.notes && (
+                          <p className="mt-2 border-t border-stone-200 pt-2 text-xs text-stone-500">
+                            {settlement.notes}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Add payment */}
                     {active && (
                       <div className="mb-4">
@@ -667,6 +782,23 @@ export default function TenantDetailPage() {
             loadSummary();
           }}
           onClose={() => setEndingStay(null)}
+        />
+      )}
+
+      {/* Settle & vacate — the money reckoning, which also ends the stay. */}
+      {token && (
+        <SettleStayDrawer
+          open={settlingStay !== null}
+          stayId={settlingStay}
+          token={token}
+          tenantName={tenant?.name}
+          onSettled={(settlement) => {
+            setSettlements((prev) => ({ ...prev, [settlement.stay_id]: settlement }));
+            setSettlingStay(null);
+            reloadStays();
+            loadSummary();
+          }}
+          onClose={() => setSettlingStay(null)}
         />
       )}
 

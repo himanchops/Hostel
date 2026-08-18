@@ -1,6 +1,9 @@
 package models
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -108,5 +111,57 @@ type Payment struct {
 	ProofURL     *string     `db:"proof_url" json:"proof_url,omitempty"`
 	Notes        *string     `db:"notes" json:"notes,omitempty"`
 	IsApproved   bool        `db:"is_approved" json:"is_approved"` // For tenant-submitted proofs
+	CreatedAt    time.Time   `db:"created_at" json:"created_at"`
+}
+
+// Adjustment is one manual line on a settlement — something the arithmetic
+// cannot know about: a damaged chair, an unpaid electricity share, a goodwill
+// discount.
+//
+// Sign convention: NEGATIVE reduces the refund (a deduction from the tenant),
+// POSITIVE increases it (a credit to them). That reads the way the owner says
+// it out loud — "minus five hundred for the chair".
+type Adjustment struct {
+	Label       string `json:"label"`
+	AmountPaise int64  `json:"amount_paise"`
+}
+
+// Adjustments is the JSONB column. Postgres hands it back as bytes, so it
+// needs its own Scan/Value rather than relying on sqlx's defaults.
+type Adjustments []Adjustment
+
+func (a *Adjustments) Scan(src any) error {
+	switch v := src.(type) {
+	case nil:
+		*a = Adjustments{}
+		return nil
+	case []byte:
+		return json.Unmarshal(v, a)
+	case string:
+		return json.Unmarshal([]byte(v), a)
+	}
+	return fmt.Errorf("cannot scan %T into Adjustments", src)
+}
+
+func (a Adjustments) Value() (driver.Value, error) {
+	if a == nil {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(a)
+}
+
+// Settlement is the final money reckoning when a tenant moves out.
+//
+// DepositPaise and DuesPaise are snapshots taken when the settlement was
+// recorded — see migration 005. RefundPaise is negative when the tenant owes
+// the owner rather than the other way round.
+type Settlement struct {
+	ID           int64       `db:"id" json:"id"`
+	StayID       int64       `db:"stay_id" json:"stay_id"`
+	DepositPaise int64       `db:"deposit_paise" json:"deposit_paise"`
+	DuesPaise    int64       `db:"dues_paise" json:"dues_paise"`
+	Adjustments  Adjustments `db:"adjustments" json:"adjustments"`
+	RefundPaise  int64       `db:"refund_paise" json:"refund_paise"`
+	Notes        *string     `db:"notes" json:"notes,omitempty"`
 	CreatedAt    time.Time   `db:"created_at" json:"created_at"`
 }
