@@ -32,7 +32,7 @@ export default function TenantsPage() {
   );
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Tenants"
         subtitle="All registered tenants across your properties"
@@ -70,7 +70,31 @@ export default function TenantsPage() {
           message={tenants.length === 0 ? "No tenants yet." : "No tenants match your search."}
         />
       ) : (
-        <Card padding="none" className="overflow-hidden">
+        <>
+        {/* Phone: a five-column table at 375px wraps every cell onto two
+            lines. Same data, stacked. */}
+        <Card padding="none" className="divide-y divide-stone-100 sm:hidden">
+          {filtered.map((t) => (
+            <Link
+              key={t.id}
+              href={`/tenants/${t.id}`}
+              className="flex items-center justify-between gap-3 px-4 py-3 transition duration-150 ease-out active:bg-stone-50"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-stone-900">{t.name}</p>
+                <p className="truncate text-[13px] tabular-nums text-stone-500">
+                  {t.phone}
+                  {t.email ? ` · ${t.email}` : ""}
+                </p>
+              </div>
+              <span className="shrink-0 text-[13px] text-stone-400">
+                {new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+              </span>
+            </Link>
+          ))}
+        </Card>
+
+        <Card padding="none" className="hidden overflow-hidden sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-100 text-left text-xs font-semibold uppercase tracking-wide text-stone-400">
@@ -103,6 +127,7 @@ export default function TenantsPage() {
             </tbody>
           </table>
         </Card>
+        </>
       )}
     </div>
   );

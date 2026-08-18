@@ -100,7 +100,7 @@ export default function GridPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 p-8">
+      <div className="space-y-4 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-6 w-64" />
         <Skeleton className="h-8 w-96" />
         <div className="flex flex-wrap gap-3">
@@ -113,7 +113,7 @@ export default function GridPage() {
   }
 
   return (
-    <div className="h-full overflow-auto p-8">
+    <div className="h-full overflow-auto p-4 sm:p-6 lg:p-8">
       <PageHeader
         breadcrumb={[
           { label: "Sites", href: "/sites" },

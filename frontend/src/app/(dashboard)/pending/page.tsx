@@ -106,7 +106,7 @@ function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, deposi
   rentLabel: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <Field label="Billing cycle">
         <Select value={rentCycle} onChange={(e) => setRentCycle(e.target.value)}>
           <option value="monthly">Monthly</option>
@@ -120,7 +120,7 @@ function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, deposi
       <Field label="Deposit (₹)">
         <Input type="number" min="0" placeholder="e.g. 10000" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
       </Field>
-      <Field label="Start date" required className="col-span-2">
+      <Field label="Start date" required className="sm:col-span-2">
         <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
       </Field>
     </div>
@@ -471,7 +471,7 @@ export default function PendingPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader title="Pending" subtitle="Review registrations and payment submissions." />
 
       <div className="mb-6 flex w-fit gap-1 rounded-xl bg-stone-100 p-1">
@@ -520,7 +520,7 @@ export default function PendingPage() {
                   padding="none"
                   className="transition duration-150 ease-out hover:ring-indigo-200"
                 >
-                  <div className="flex items-center gap-3 px-4 py-4">
+                  <div className="flex flex-wrap items-center gap-3 px-4 py-4">
                     {/* Avatar + info — click opens drawer */}
                     <button
                       onClick={() => setDrawerTenant(t)}
@@ -542,7 +542,7 @@ export default function PendingPage() {
                     </button>
 
                     {/* Quick actions */}
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
                       <Button
                         variant="danger"
                         size="sm"
@@ -576,7 +576,7 @@ export default function PendingPage() {
             <div className="space-y-3">
               {pendingPayments.map((p) => (
                 <Card key={p.id}>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-medium tabular-nums text-stone-900">{p.tenant_name} · {formatCurrency(p.amount)}</p>
                       <p className="text-sm text-stone-500">{p.site_name} · {p.room_name} · {p.bed_name}</p>
@@ -591,7 +591,7 @@ export default function PendingPage() {
                         </a>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
                       <Button
                         variant="danger"
                         size="sm"

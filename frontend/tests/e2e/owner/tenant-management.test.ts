@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, createTenantViaApi } from "../helpers/api";
+import { createOwner, createTenantViaApi, loginAs } from "../helpers/api";
 
 /**
  * Tenant management tests.
@@ -55,8 +55,7 @@ test.describe("Tenant management", () => {
     });
     const { token } = await loginRes.json();
 
-    await page.goto("/");
-    await page.evaluate((t) => localStorage.setItem("hostel_token", t), token);
+    await loginAs(page, token);
     await page.goto("/tenants");
 
     // Click "+ Add tenant" link → navigates to /tenants/new
@@ -82,8 +81,7 @@ test.describe("Tenant management", () => {
     });
     const { token } = await loginRes.json();
 
-    await page.goto("/");
-    await page.evaluate((t) => localStorage.setItem("hostel_token", t), token);
+    await loginAs(page, token);
     await page.goto("/tenants/new");
 
     await page.getByPlaceholder("e.g. 9876543210").fill("9999999999");

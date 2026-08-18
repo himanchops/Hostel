@@ -211,7 +211,7 @@ function EditProfileForm({
     <form onSubmit={handleSave} className="mt-4 space-y-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
       <p className="text-sm font-semibold text-stone-800">Edit Profile</p>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Full name" required>
           <Input required value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
@@ -232,7 +232,7 @@ function EditProfileForm({
         <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} />
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Emergency contact name">
           <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} />
         </Field>
@@ -245,7 +245,7 @@ function EditProfileForm({
         <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} />
       </Field>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label="Photo">
           <FileInput accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
         </Field>
@@ -410,7 +410,7 @@ export default function TenantDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 p-8">
+      <div className="space-y-4 p-4 sm:p-6 lg:p-8">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-20 w-full" />
@@ -422,7 +422,7 @@ export default function TenantDetailPage() {
   const idProofBack = tenant?.id_proof_back_url;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         breadcrumb={[{ label: "Tenants", href: "/tenants" }, { label: tenant?.name ?? "" }]}
         title={

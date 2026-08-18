@@ -1,5 +1,5 @@
-import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi } from "../helpers/api";
+import { test, expect, type APIRequestContext } from "@playwright/test";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -61,11 +61,6 @@ async function seedOverdueStay(
   }
 
   return { tenant, stay, start, secondCycle, today };
-}
-
-async function loginAs(page: Page, token: string) {
-  await page.goto("/");
-  await page.evaluate((t) => localStorage.setItem("hostel_token", t), token);
 }
 
 test.describe("Collections", () => {

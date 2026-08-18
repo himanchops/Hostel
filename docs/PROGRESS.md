@@ -236,7 +236,7 @@ deploying. Recommended execution order:
 
 1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything ✅
 2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it) ✅
-3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here
+3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here ✅
 4. Design Phase D (hero screens) + E (feedback layer)
 5. **Phase 11 — Settlement calculator**
 6. Design Phase F (public surfaces) — the registration page a stranger sees;
@@ -570,6 +570,42 @@ bed reads Vacant → scroll lock released).
 Two follow-ups deliberately left for later phases: the tenant portal and public
 registration pages are untouched (Phase C–E pick them up opportunistically),
 and `Toast` is mounted but not yet wired into mutations (Phase E).
+
+---
+
+## Design Phase C — Responsive Shell ✅
+
+Full detail in `docs/DESIGN_PLAN.md`. The sidebar now appears from 1024px up;
+below that it becomes a bottom tab bar (Dashboard, Collections, Sites, Tenants,
+Pending, both count badges carried over) plus a slim top bar holding the
+wordmark and an account menu with sign out. One nav definition drives both.
+
+Every owner page was walked at 375×812: no horizontal scroll and nothing
+clipped inside a container. Three pages needed real work rather than padding —
+the tenants table became a stacked list below `sm` (five columns wrapped every
+cell onto two lines), pending's Approve/Reject buttons moved to their own row
+(they were clipping the tenant's email mid-address), and the two- and
+three-column form grids stack.
+
+**The mobile top bar shows the wordmark, not the page title.** The plan asked
+for the title, but every page already opens with its own `<h1>` and the tab bar
+shows the active section, so it read as a duplicate on screen.
+
+**A latent e2e race got fixed on the way.** Every UI test logged in with
+`goto("/")` → `setItem("hostel_token")` → `goto(target)`. The first navigation
+boots the app unauthenticated, which schedules a redirect to `/login`, and that
+redirect can land *after* the second `goto` and steal it — the test then sits on
+the dashboard (or the login page) looking for something that was never going to
+be there. It had been passing on luck; two tests started failing about one run
+in two. There is now a shared `loginAs()` helper using `addInitScript`, which
+seeds the token before any page script runs. This touched the two pre-existing
+test files too. The suite went from flaky at 46s to stable at ~10s, verified
+across three consecutive clean runs.
+
+Tests: `tests/e2e/owner/responsive.test.ts` — every page at 375px asserted for
+both horizontal overflow and clipped-inside-`main` content, tab bar vs sidebar
+at each breakpoint (by geometry, not by class name), tab navigation setting
+`aria-current`, and the account menu signing out.
 
 ---
 

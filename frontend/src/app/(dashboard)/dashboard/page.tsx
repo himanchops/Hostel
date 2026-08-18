@@ -39,7 +39,7 @@ export default function DashboardPage() {
   const alerts = data?.alerts;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
         title={`Welcome back, ${owner?.name?.split(" ")[0] ?? ""}`}
         subtitle="Here's an overview of your properties"
