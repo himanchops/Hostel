@@ -72,3 +72,22 @@ body {
 
 /* Money and counts must not jitter as digits change — use Tailwind's
    `tabular-nums` utility on any numeric cell. */
+
+/* ── Motion ────────────────────────────────────────────────────────────────
+   Used only on the public registration surface (design plan Phase F), which
+   is the one screen optimising for first impressions rather than scan speed.
+   Both are applied through Tailwind's `motion-safe:` variant, so anyone with
+   "reduce motion" set gets the final state and no animation at all.
+   ------------------------------------------------------------------------ */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The success tick draws itself on. stroke-dasharray is set on the path length
+   of the checkmark (~24 units) so it wipes rather than fades. */
+@keyframes draw {
+  from { stroke-dasharray: 24; stroke-dashoffset: 24; }
+  to   { stroke-dasharray: 24; stroke-dashoffset: 0; }
+}

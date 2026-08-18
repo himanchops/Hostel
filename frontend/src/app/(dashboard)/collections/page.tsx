@@ -14,6 +14,7 @@ import {
 import { duePhrase, nudgeMessage, roomLabel, waLink } from "@/lib/wa";
 import {
   Badge,
+  buttonClasses,
   Button,
   Card,
   EmptyState,
@@ -147,7 +148,7 @@ function CollectionCard({
                 href={link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-[13px] font-semibold text-stone-700 ring-1 ring-stone-300 transition duration-150 ease-out hover:bg-stone-50"
+                className={buttonClasses({ variant: "secondary", size: "sm" })}
                 title={`Open WhatsApp to ${row.phone}`}
               >
                 <WhatsAppIcon className="h-4 w-4" />
@@ -190,7 +191,7 @@ function CollectionCard({
                       href={waLink(row.phone, message) ?? undefined}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-[13px] font-semibold text-stone-700 ring-1 ring-stone-300 transition duration-150 ease-out hover:bg-stone-50"
+                      className={buttonClasses({ variant: "secondary", size: "sm" })}
                     >
                       <WhatsAppIcon className="h-4 w-4" />
                       Open WhatsApp

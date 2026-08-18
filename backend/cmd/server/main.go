@@ -107,6 +107,7 @@ func main() {
 	e.POST("/auth/login", authHandler.Login)
 
 	// Public tenant self-registration + auth + upload
+	e.GET("/public/owners/:ownerId", tenantHandler.PublicOwner)
 	e.POST("/public/register/:ownerId", tenantHandler.PublicRegister)
 	e.POST("/public/upload", uploadHandler.PublicUpload)
 	e.POST("/tenant-auth/login", tenantAuthHandler.Login)

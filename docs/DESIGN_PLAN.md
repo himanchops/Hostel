@@ -335,7 +335,46 @@ mutation shows a toast.
 
 ---
 
-## Phase F — Public surfaces (1 session)
+## Phase F — Public surfaces ✅ (branch `design-phase-f-public`)
+
+**Shipped:** `/register/[ownerId]` converted to the kit and then given the one
+frame in the product allowed to be decorative, with `/my/login` as the lesser
+sibling. `grep -rn "ring-stone-200" src/app` returns zero, which finishes the
+Phase B acceptance test.
+
+Things that fell out of doing it:
+- **The page never said which property you were registering with.** That is the
+  whole job of this surface and it was missing — a generic form on a stranger's
+  phone is indistinguishable from a phishing page. Added
+  `GET /public/owners/:ownerId`, returning a name and nothing else, so the
+  header reads "Register with Sunrise PG". Owner ids are small integers and
+  enumerable, so the e2e asserts the exact key set: this is a directory of
+  hostel names and must never become one of contact details. If the fetch
+  fails the heading falls back to "Tenant registration" and the form still
+  works — there is a test for that, because the applicant is standing there.
+- **The success screen now says what happens next.** "You'll be contacted"
+  left someone who had just typed their Aadhaar number with nothing to expect.
+  Three numbered steps and a link to the portal they just set a password for.
+- **A green tick would have broken the token rule.** `globals.css` reserves the
+  five status hues for bed status; the first draft of the success mark used
+  `bg-paid-50`/`text-paid-800`, which would have made emerald mean something
+  else for the first time in the app. It is indigo — the one accent.
+- **Three `grid-cols-2` blocks were unusable at 375px.** "Parent / guardian
+  name" truncated and the file pickers had no room. They stack below 640px now.
+  This is the page most likely to be opened on a phone, so the e2e runs the
+  whole file at 375px and asserts zero horizontal overflow.
+- Motion is two keyframes (`rise`, `draw`) applied through `motion-safe:`, so
+  "reduce motion" gets the final state and no animation.
+- Two raw `ring-1` classes survive, both on the pending page's registration-link
+  panel: a tinted multi-line block the kit has no component for. `Banner` is a
+  single-row strip and forcing it would fight the component. Left deliberately.
+
+**Deviation:** the plan said character comes *after* kit conversion, and it did
+— but the owner-name endpoint is backend work the plan did not anticipate. It
+earns its place because the acceptance is "does this look legitimate", and
+nothing else on the page answers that.
+
+### Original spec
 
 The screens a stranger sees: `/register/[ownerId]` and its success state,
 with `/my/login` as the lesser sibling. These are still Phase-0 code — local
