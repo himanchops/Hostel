@@ -235,7 +235,7 @@ Owner is the alpha user, running locally. Decision: ship the **UI modernization*
 deploying. Recommended execution order:
 
 1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything ✅
-2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it)
+2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it) ✅
 3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here
 4. Design Phase D (hero screens) + E (feedback layer)
 5. **Phase 11 — Settlement calculator**
@@ -245,10 +245,56 @@ deploying. Recommended execution order:
 
 ---
 
-## Phase 10 — Collections & WhatsApp Nudges 🔜
+## Phase 10 — Collections & WhatsApp Nudges ✅
 
-The core loop of the business: rent day → who hasn't paid → chase. Currently the
-dashboard shows an overdue *total*; this phase makes it a *workflow*.
+**Shipped:** `GET /api/collections` + `/collections`, built on the Phase B kit.
+The dashboard's overdue *total* is now a *worklist*: who owes, how long, one tap
+to chase, one tap to record the money.
+
+Decisions and details worth knowing:
+
+- **Sign convention.** `balance_paise` is what the tenant OWES, so it is
+  positive, and rows with nothing outstanding never reach the client. That is
+  the opposite sign from the grid's balance (`paid − expected`) and the same as
+  the tenant summary's. Documented on both the Go struct and the TS interface,
+  because three conventions in one codebase is already one too many.
+- **"Days overdue" counts from the first *unpaid* cycle**, not the current one.
+  A tenant three cycles behind has been overdue since the oldest one, and that
+  is the number that belongs in the nudge. Whole cycles paid = `totalPaid /
+  rentAmount`, so a part payment reduces the balance without resetting the
+  clock — there is a test pinning exactly that.
+- **New helper `cycleStart(start, n, cycle)`** in `collections.go` — the
+  inverse of `cyclesElapsed`, with the same month-end clamping. A test walks
+  one against the other for 14 cycles across mid-month, month-end, 30th and
+  leap-year move-ins; if they ever disagree, "days overdue" would drift from
+  the balance sitting next to it on the page.
+- **Phone normalisation is stricter than the plan said.** The plan said "if the
+  result isn't 12 digits, hide the button"; a bare length check lets
+  `098123456012` through, which is nobody's number. `normalizePhone` accepts
+  only 10 digits (prefixed `91`) or 12 digits already starting `91`. The cost
+  is that a genuine non-Indian number can't be nudged — acceptable while the
+  app is rupee-denominated, and the 10-digit branch already assumed India.
+- **Toast is now wired**, but only for this page's payment mutation. The
+  sweep across every other mutation is still design Phase E.
+
+**Known discrepancy (not fixed here):** collections includes stays with no bed
+assigned, per this phase's spec, but the dashboard's `overdue_amount` excludes
+them (`s.bed_id IS NOT NULL`). So the two figures can disagree for an owner who
+has collected a deposit without allocating a room. Worth reconciling — probably
+by dropping the dashboard's filter — but that changes a tested money figure, so
+it wants its own change rather than riding along here.
+
+**Mobile:** the page itself is fine at 375px (cards stack, actions wrap, no
+horizontal scroll). The 224px fixed sidebar is what makes the viewport unusable,
+which is exactly what design Phase C converts to a bottom tab bar.
+
+Tests: `collections_test.go` (balance, overdue age, part payments, weekly/daily
+cycles, exclusions, sorting, nullable passthrough, the cycleStart↔cyclesElapsed
+inverse), `tests/unit/wa-link.test.ts` (normalisation, encoding, the message
+template verbatim), and `tests/e2e/owner/collections.test.ts` (API row math,
+paid-up tenant absent, record-payment-clears-the-row, bad phone offers a fix).
+
+### Original spec
 
 **Backend**
 - `GET /api/collections` — one query over active stays (`end_date IS NULL`) with
