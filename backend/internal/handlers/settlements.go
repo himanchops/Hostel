@@ -54,10 +54,11 @@ type SettlementPreview struct {
 	StayID        int64  `json:"stay_id"`
 	TenantName    string `json:"tenant_name"`
 	DepositPaise  int64  `json:"deposit_paise"`
-	DuesPaise     int64  `json:"dues_paise"`     // signed: negative = tenant paid ahead
-	RefundPaise   int64  `json:"refund_paise"`   // deposit - dues, before adjustments
-	EndDate       string `json:"end_date"`       // the date dues are billed up to
-	AlreadyEnded  bool   `json:"already_ended"`  // end_date came from the stay, not the request
+	DuesPaise     int64  `json:"dues_paise"`    // signed: negative = tenant paid ahead
+	AdvancePaise  int64  `json:"advance_paise"` // rent paid beyond what was billed; 0 if they owe
+	RefundPaise   int64  `json:"refund_paise"`  // the opening position, before adjustments
+	EndDate       string `json:"end_date"`      // the date dues are billed up to
+	AlreadyEnded  bool   `json:"already_ended"` // end_date came from the stay, not the request
 	RentAmount    int64  `json:"rent_amount"`
 	RentCycle     string `json:"rent_cycle"`
 	StartDate     string `json:"start_date"`
@@ -71,6 +72,10 @@ type createSettlementRequest struct {
 	Notes       string              `json:"notes"`
 	RefundPaise int64               `json:"refund_paise"`
 	EndDate     string              `json:"end_date"` // YYYY-MM-DD; ignored if the stay already ended
+	// How much of a rent advance to hand back. Absent means all of it, which
+	// keeps the generous reading as the default: it is the tenant's money
+	// until the owner decides otherwise. Send 0 explicitly to keep it.
+	AdvanceReturnedPaise *int64 `json:"advance_returned_paise"`
 }
 
 // duesFor returns rent outstanding at `until`, and the cycle count behind it.
@@ -83,14 +88,51 @@ func duesFor(rent int64, cycle string, start, until time.Time, totalPaid int64) 
 	return rent*int64(cycles) - totalPaid, cycles
 }
 
-// refundFor is the whole calculator: deposit back, dues withheld, adjustments
+// advanceHeld is how much rent the tenant has paid beyond what was billed.
+// Zero when they owe money rather than the other way round.
+func advanceHeld(dues int64) int64 {
+	if dues < 0 {
+		return -dues
+	}
+	return 0
+}
+
+// refundFor is the whole calculator: deposit back, outstanding rent withheld,
+// whatever share of a rent advance the owner decided to return, adjustments
 // applied. Negative means the tenant owes the owner.
-func refundFor(deposit, dues int64, adjustments []models.Adjustment) int64 {
-	refund := deposit - dues
+//
+// The advance is a separate term rather than falling out of a signed `dues`.
+// Subtracting a negative would hand the whole advance back automatically, which
+// silently makes a policy decision — return all of it, some, or none is the
+// owner's call at the counter, and this app should not be quietly taking it.
+// Callers pass 0 for advanceReturned whenever dues is positive; validated in
+// validateAdvanceReturned rather than assumed here.
+func refundFor(deposit, dues, advanceReturned int64, adjustments []models.Adjustment) int64 {
+	refund := deposit + advanceReturned
+	if dues > 0 {
+		refund -= dues
+	}
 	for _, a := range adjustments {
 		refund += a.AmountPaise
 	}
 	return refund
+}
+
+// validateAdvanceReturned keeps the decision inside what actually exists: an
+// owner cannot return more advance than was paid, cannot return a negative
+// amount, and cannot return an advance at all when the tenant owes rent.
+func validateAdvanceReturned(dues, advanceReturned int64) error {
+	held := advanceHeld(dues)
+	if advanceReturned < 0 {
+		return errors.New("advance_returned_paise cannot be negative")
+	}
+	if advanceReturned > held {
+		if held == 0 {
+			return errors.New("this tenant has no rent paid in advance to return")
+		}
+		return fmt.Errorf("cannot return more advance than was paid: %d paise held", held)
+	}
+	return nil
 }
 
 // validateAdjustments rejects rows that would make the stored settlement
@@ -177,12 +219,17 @@ func settlementDate(stay settlementStayRow, requested string, today time.Time) (
 
 func (h *SettlementHandler) previewFor(stay settlementStayRow, endDate time.Time) SettlementPreview {
 	dues, cycles := duesFor(stay.RentAmount, stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
+	advance := advanceHeld(dues)
 	return SettlementPreview{
-		StayID:        stay.StayID,
-		TenantName:    stay.TenantName,
-		DepositPaise:  stay.DepositAmount,
-		DuesPaise:     dues,
-		RefundPaise:   refundFor(stay.DepositAmount, dues, nil),
+		StayID:       stay.StayID,
+		TenantName:   stay.TenantName,
+		DepositPaise: stay.DepositAmount,
+		DuesPaise:    dues,
+		AdvancePaise: advance,
+		// The opening position returns the advance in full — the same figure
+		// this endpoint gave before the choice existed, and the safer default
+		// to show an owner who never touches the control.
+		RefundPaise:   refundFor(stay.DepositAmount, dues, advance, nil),
 		EndDate:       endDate.Format("2006-01-02"),
 		AlreadyEnded:  stay.EndDate != nil,
 		RentAmount:    stay.RentAmount,
@@ -249,13 +296,24 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 	}
 
+	dues, _ := duesFor(stay.RentAmount, stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
+
+	// Omitting the field returns the whole advance, so a client written before
+	// the choice existed keeps behaving the way it always did.
+	advanceReturned := advanceHeld(dues)
+	if req.AdvanceReturnedPaise != nil {
+		advanceReturned = *req.AdvanceReturnedPaise
+	}
+	if err := validateAdvanceReturned(dues, advanceReturned); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
+	}
+
 	// The client's arithmetic is checked, never trusted. The realistic failure
 	// is not a malicious payload but a stale drawer: a payment recorded in
 	// another tab between opening the calculator and confirming it moves dues,
 	// and the owner would otherwise hand over a refund computed from numbers
 	// that are no longer true.
-	dues, _ := duesFor(stay.RentAmount, stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
-	refund := refundFor(stay.DepositAmount, dues, req.Adjustments)
+	refund := refundFor(stay.DepositAmount, dues, advanceReturned, req.Adjustments)
 	if refund != req.RefundPaise {
 		return c.JSON(http.StatusBadRequest, errorResponse(fmt.Sprintf(
 			"refund does not match: you sent %d paise, the figures give %d. Reopen the settlement to pick up the latest payments.",
@@ -281,10 +339,10 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 
 	var settlement models.Settlement
 	err = tx.QueryRowx(
-		`INSERT INTO settlements (stay_id, deposit_paise, dues_paise, adjustments, refund_paise, notes)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, stay_id, deposit_paise, dues_paise, adjustments, refund_paise, notes, created_at`,
-		stayID, stay.DepositAmount, dues, adjustments, refund, notes,
+		`INSERT INTO settlements (stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, notes)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING id, stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, notes, created_at`,
+		stayID, stay.DepositAmount, dues, advanceReturned, adjustments, refund, notes,
 	).StructScan(&settlement)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to record the settlement"))
@@ -327,8 +385,8 @@ func (h *SettlementHandler) ListByTenant(c echo.Context) error {
 
 	var settlements []models.Settlement
 	err = h.db.Select(&settlements, `
-		SELECT st.id, st.stay_id, st.deposit_paise, st.dues_paise, st.adjustments,
-		       st.refund_paise, st.notes, st.created_at
+		SELECT st.id, st.stay_id, st.deposit_paise, st.dues_paise, st.advance_returned_paise,
+		       st.adjustments, st.refund_paise, st.notes, st.created_at
 		FROM settlements st
 		JOIN stays s ON s.id = st.stay_id
 		WHERE s.tenant_id = $1

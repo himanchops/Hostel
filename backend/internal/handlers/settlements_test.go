@@ -82,8 +82,82 @@ func TestDuesFor_PaidAheadIsNegative(t *testing.T) {
 	if want := int64(-850000); dues != want {
 		t.Errorf("dues = %d, want %d", dues, want)
 	}
-	if refund := refundFor(settleDeposit, dues, nil); refund != 2550000 {
+	// Returning the advance in full is the default, not a law — see
+	// TestRefundFor_AdvanceIsTheOwnersChoice for the other two options.
+	if refund := refundFor(settleDeposit, dues, advanceHeld(dues), nil); refund != 2550000 {
 		t.Errorf("refund = %d, want 2550000 (₹17,000 deposit + ₹8,500 paid ahead)", refund)
+	}
+}
+
+// ─── What happens to a rent advance ──────────────────────────────────────────
+
+func TestAdvanceHeld(t *testing.T) {
+	if got := advanceHeld(-850000); got != 850000 {
+		t.Errorf("advanceHeld(-850000) = %d, want 850000", got)
+	}
+	// Owing rent is not a negative advance.
+	if got := advanceHeld(850000); got != 0 {
+		t.Errorf("advanceHeld(850000) = %d, want 0", got)
+	}
+	if got := advanceHeld(0); got != 0 {
+		t.Errorf("advanceHeld(0) = %d, want 0", got)
+	}
+}
+
+// Return all of it, some of it, or none — the owner decides at the counter, and
+// the arithmetic must not decide for them. Same ₹8,500 advance in each case,
+// three different refunds.
+func TestRefundFor_AdvanceIsTheOwnersChoice(t *testing.T) {
+	const dues = -850000 // ₹8,500 paid beyond what was billed
+
+	tests := []struct {
+		name     string
+		returned int64
+		want     int64
+	}{
+		{"all of it", 850000, 2550000},  // ₹17,000 + ₹8,500
+		{"half of it", 425000, 2125000}, // ₹17,000 + ₹4,250
+		{"none of it", 0, 1700000},      // the deposit alone
+	}
+	for _, tt := range tests {
+		if got := refundFor(settleDeposit, dues, tt.returned, nil); got != tt.want {
+			t.Errorf("%s: refund = %d, want %d", tt.name, got, tt.want)
+		}
+	}
+}
+
+// Withholding the advance and adding a deduction are different things and must
+// compose, not collide.
+func TestRefundFor_WithheldAdvancePlusAdjustments(t *testing.T) {
+	adjustments := []models.Adjustment{{Label: "Damaged chair", AmountPaise: -50000}}
+
+	// ₹17,000 deposit + ₹0 advance returned − ₹500 = ₹16,500
+	if got := refundFor(settleDeposit, -850000, 0, adjustments); got != 1650000 {
+		t.Errorf("refund = %d, want 1650000", got)
+	}
+}
+
+func TestValidateAdvanceReturned(t *testing.T) {
+	// A tenant who owes rent has no advance to hand back.
+	if err := validateAdvanceReturned(850000, 0); err != nil {
+		t.Errorf("returning nothing when none is held should be fine, got %v", err)
+	}
+	if err := validateAdvanceReturned(850000, 50000); err == nil {
+		t.Error("returning an advance that does not exist should be refused")
+	}
+
+	// With ₹8,500 held, anything from nothing to all of it is legitimate.
+	for _, ok := range []int64{0, 1, 425000, 850000} {
+		if err := validateAdvanceReturned(-850000, ok); err != nil {
+			t.Errorf("returning %d of 850000 should be allowed, got %v", ok, err)
+		}
+	}
+	// Beyond it is not: that would be inventing money.
+	if err := validateAdvanceReturned(-850000, 850001); err == nil {
+		t.Error("returning more advance than was paid should be refused")
+	}
+	if err := validateAdvanceReturned(-850000, -1); err == nil {
+		t.Error("a negative advance return should be refused")
 	}
 }
 
@@ -134,7 +208,7 @@ func TestRefundFor_DepositMinusDuesPlusAdjustments(t *testing.T) {
 	}
 
 	// ₹17,000 − ₹8,500 − ₹500 − ₹1,200 + ₹300 = ₹7,100
-	if got := refundFor(settleDeposit, dues, adjustments); got != 710000 {
+	if got := refundFor(settleDeposit, dues, 0, adjustments); got != 710000 {
 		t.Errorf("refund = %d, want 710000", got)
 	}
 }
@@ -146,16 +220,16 @@ func TestRefundFor_CanGoNegative(t *testing.T) {
 	dues := int64(2550000) // three months behind
 	adjustments := []models.Adjustment{{Label: "Broken window", AmountPaise: -300000}}
 
-	if got := refundFor(settleDeposit, dues, adjustments); got != -1150000 {
+	if got := refundFor(settleDeposit, dues, 0, adjustments); got != -1150000 {
 		t.Errorf("refund = %d, want -1150000 (tenant owes ₹11,500)", got)
 	}
 }
 
 func TestRefundFor_NoAdjustmentsIsDepositMinusDues(t *testing.T) {
-	if got := refundFor(settleDeposit, 850000, nil); got != 850000 {
+	if got := refundFor(settleDeposit, 850000, 0, nil); got != 850000 {
 		t.Errorf("refund = %d, want 850000", got)
 	}
-	if got := refundFor(settleDeposit, 850000, []models.Adjustment{}); got != 850000 {
+	if got := refundFor(settleDeposit, 850000, 0, []models.Adjustment{}); got != 850000 {
 		t.Errorf("refund with an empty slice = %d, want 850000", got)
 	}
 }
@@ -165,11 +239,11 @@ func TestRefundFor_NoAdjustmentsIsDepositMinusDues(t *testing.T) {
 // refund the owner is looking at is ₹8,500 too generous.
 func TestRefund_StalePreviewNoLongerMatches(t *testing.T) {
 	staleDues, _ := duesFor(settleRent, "monthly", settleStart, settleEnd, settlePaid)
-	staleRefund := refundFor(settleDeposit, staleDues, nil)
+	staleRefund := refundFor(settleDeposit, staleDues, 0, nil)
 
 	// Meanwhile the tenant pays the outstanding month.
 	freshDues, _ := duesFor(settleRent, "monthly", settleStart, settleEnd, settlePaid+850000)
-	freshRefund := refundFor(settleDeposit, freshDues, nil)
+	freshRefund := refundFor(settleDeposit, freshDues, 0, nil)
 
 	if staleRefund == freshRefund {
 		t.Fatal("a payment between preview and submit must change the refund, or the check is pointless")

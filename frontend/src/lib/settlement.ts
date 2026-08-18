@@ -1,6 +1,14 @@
 import type { Adjustment } from "./api";
 
 /**
+ * How much rent the tenant paid beyond what was billed. Zero when they owe.
+ * Mirrors handlers.advanceHeld.
+ */
+export function advanceHeld(duesPaise: number): number {
+  return duesPaise < 0 ? -duesPaise : 0;
+}
+
+/**
  * The settlement arithmetic, mirroring handlers.refundFor in the backend.
  *
  * It exists on both sides on purpose: the drawer recomputes on every keystroke
@@ -9,14 +17,21 @@ import type { Adjustment } from "./api";
  * without anyone noticing, which is why it is a pure function with its own
  * tests rather than arithmetic inlined in a component.
  *
+ * `advanceReturnedPaise` is a separate term rather than falling out of a signed
+ * `duesPaise`. Subtracting a negative would hand a rent advance back
+ * automatically, which quietly makes a policy decision that belongs to the
+ * owner — all of it, some of it, or none.
+ *
  * Negative refund = the tenant owes the owner.
  */
 export function refundFor(
   depositPaise: number,
   duesPaise: number,
+  advanceReturnedPaise: number,
   adjustments: Adjustment[]
 ): number {
-  return adjustments.reduce((sum, a) => sum + a.amount_paise, depositPaise - duesPaise);
+  const base = depositPaise + advanceReturnedPaise - Math.max(duesPaise, 0);
+  return adjustments.reduce((sum, a) => sum + a.amount_paise, base);
 }
 
 /**

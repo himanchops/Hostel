@@ -5,7 +5,7 @@ import {
   settlementsApi, ApiError, formatCurrency, today,
   Adjustment, Settlement, SettlementPreview,
 } from "@/lib/api";
-import { refundFor, parseRupees, cycleCountLabel } from "@/lib/settlement";
+import { refundFor, parseRupees, cycleCountLabel, advanceHeld } from "@/lib/settlement";
 import {
   Button, Drawer, Field, FormError, Input, Select, Skeleton, Textarea, useToast,
 } from "@/components/ui";
@@ -70,6 +70,11 @@ export function SettleStayDrawer({
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
   const [endDate, setEndDate] = useState(today());
   const [rows, setRows] = useState<Row[]>([]);
+  // What to do with rent the tenant paid ahead. "all" is the default because
+  // it is their money until the owner decides otherwise — but it is a default,
+  // not a rule, which is the whole reason this control exists.
+  const [advanceChoice, setAdvanceChoice] = useState<"all" | "part" | "none">("all");
+  const [advancePart, setAdvancePart] = useState("");
   const [notes, setNotes] = useState("");
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -81,6 +86,8 @@ export function SettleStayDrawer({
     if (!open) return;
     setPreview(null);
     setRows([]);
+    setAdvanceChoice("all");
+    setAdvancePart("");
     setNotes("");
     setError("");
     setEndDate(today());
@@ -119,7 +126,25 @@ export function SettleStayDrawer({
 
   const adjustments = rows.map(toAdjustment).filter((a): a is Adjustment => a !== null);
   const incomplete = rows.some((r) => !isBlank(r) && toAdjustment(r) === null);
-  const refund = preview ? refundFor(preview.deposit_paise, preview.dues_paise, adjustments) : 0;
+
+  const advance = preview ? advanceHeld(preview.dues_paise) : 0;
+  const partPaise = parseRupees(advancePart);
+  // Clamped so the refund on screen is always a number that could actually
+  // happen. Typing 20,000 against a ₹17,000 advance shows the ₹17,000 ceiling
+  // and an inline error, rather than quoting a refund the server would reject.
+  const advanceReturned =
+    advance === 0 ? 0
+      : advanceChoice === "all" ? advance
+      : advanceChoice === "none" ? 0
+      : Math.min(partPaise ?? 0, advance);
+  // A "part" that is blank, unparseable, or larger than the advance would be
+  // submitted as something the owner did not choose — block instead of guess.
+  const badAdvancePart =
+    advance > 0 && advanceChoice === "part" && (partPaise === null || partPaise > advance);
+
+  const refund = preview
+    ? refundFor(preview.deposit_paise, preview.dues_paise, advanceReturned, adjustments)
+    : 0;
 
   function updateRow(id: number, patch: Partial<Row>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -134,6 +159,7 @@ export function SettleStayDrawer({
         adjustments,
         notes: notes.trim() || undefined,
         refund_paise: refund,
+        advance_returned_paise: advanceReturned,
         end_date: preview.already_ended ? undefined : endDate,
       });
       toast.success(
@@ -163,7 +189,7 @@ export function SettleStayDrawer({
           <Button
             onClick={handleSubmit}
             loading={submitting}
-            disabled={!preview || loadingPreview || incomplete}
+            disabled={!preview || loadingPreview || incomplete || badAdvancePart}
           >
             {submitting ? "Settling…" : "Settle & vacate"}
           </Button>
@@ -210,15 +236,27 @@ export function SettleStayDrawer({
               </span>
             </div>
 
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-stone-600">
-                {preview.dues_paise >= 0 ? "Rent outstanding" : "Rent paid in advance"}
-              </span>
-              <span className="text-sm font-semibold tabular-nums text-stone-900">
-                {preview.dues_paise >= 0 ? "−" : "+"}
-                {formatCurrency(Math.abs(preview.dues_paise))}
-              </span>
-            </div>
+            {/* Every line here is a term of the sum, so the block always adds
+                up to the refund below. The advance line tracks the choice
+                rather than the raw figure — showing "+₹17,000" next to a
+                ₹17,000 refund because the owner chose to keep it would be the
+                drawer contradicting itself. */}
+            {preview.dues_paise > 0 && (
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-stone-600">Rent outstanding</span>
+                <span className="text-sm font-semibold tabular-nums text-stone-900">
+                  −{formatCurrency(preview.dues_paise)}
+                </span>
+              </div>
+            )}
+            {advance > 0 && (
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-stone-600">Advance returned</span>
+                <span className="text-sm font-semibold tabular-nums text-stone-900">
+                  +{formatCurrency(advanceReturned)}
+                </span>
+              </div>
+            )}
 
             <p className="border-t border-stone-200 pt-2 text-xs tabular-nums text-stone-400">
               {cycleCountLabel(preview.rent_cycle, preview.cycles_billed)}
@@ -226,6 +264,44 @@ export function SettleStayDrawer({
               {" · "}{formatCurrency(preview.total_paid)} paid
             </p>
           </div>
+
+          {/* Only when there is an advance to decide about. Defaulting to
+              "return in full" and hiding the choice would be this app quietly
+              making the owner's decision for them. */}
+          {advance > 0 && (
+            <Field
+              label={`${formatCurrency(advance)} paid in advance`}
+              hint="Rent beyond what was billed. Yours to settle however you agreed."
+            >
+              <Select
+                value={advanceChoice}
+                onChange={(e) => setAdvanceChoice(e.target.value as typeof advanceChoice)}
+                aria-label="What to do with the advance"
+              >
+                <option value="all">Return all of it</option>
+                <option value="part">Return part of it</option>
+                <option value="none">Do not return it</option>
+              </Select>
+
+              {advanceChoice === "part" && (
+                <div className="mt-2">
+                  <Input
+                    inputMode="decimal"
+                    placeholder="Amount to return (₹)"
+                    value={advancePart}
+                    onChange={(e) => setAdvancePart(e.target.value)}
+                    aria-label="Advance amount to return"
+                    className="w-44"
+                  />
+                  {badAdvancePart && (
+                    <p className="mt-1 text-[13px] text-red-600">
+                      Enter an amount up to {formatCurrency(advance)}.
+                    </p>
+                  )}
+                </div>
+              )}
+            </Field>
+          )}
 
           {/* Adjustments — the override, and the reason this beats a calculator */}
           <div>

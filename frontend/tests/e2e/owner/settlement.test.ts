@@ -245,6 +245,90 @@ test.describe("Settlement", () => {
     expect((await after.json()).end_date.slice(0, 10)).toBe(isoDate(endedOn));
   });
 
+  // A tenant who paid ahead. What happens to the advance is the owner's call,
+  // so the same fixture has to be able to end three different ways.
+  test("a rent advance can come back in full, in part, or not at all", async ({ request }) => {
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    // Six months paid against four billed → ₹17,000 of advance.
+    async function seedPaidAhead(suffix: string) {
+      const { token } = await createOwner(request, `settle-adv-${suffix}-${RUN_ID}`);
+      const { stay } = await seedStayForSettlement(request, token, {
+        name: `Settle Advance ${suffix} ${RUN_ID}`,
+        phone: `4${suffix}${RUN_ID.slice(-8)}`,
+        paid: 5100000,
+      });
+      return { token, stay };
+    }
+
+    // ── The preview names the advance and opens by returning all of it ──
+    const full = await seedPaidAhead("1");
+    const previewRes = await request.get(
+      `${BASE}/api/stays/${full.stay.id}/settlement-preview`,
+      { headers: auth(full.token) }
+    );
+    const preview = await previewRes.json();
+    expect(preview.dues_paise).toBe(-1700000);
+    expect(preview.advance_paise).toBe(1700000);
+    expect(preview.refund_paise).toBe(3400000); // ₹17,000 deposit + ₹17,000 advance
+
+    // Omitting the field keeps the generous default.
+    const fullRes = await request.post(`${BASE}/api/stays/${full.stay.id}/settlement`, {
+      headers: auth(full.token),
+      data: { adjustments: [], refund_paise: 3400000 },
+    });
+    expect(fullRes.status()).toBe(201);
+    expect((await fullRes.json()).advance_returned_paise).toBe(1700000);
+
+    // ── Part of it ──
+    const part = await seedPaidAhead("2");
+    const partRes = await request.post(`${BASE}/api/stays/${part.stay.id}/settlement`, {
+      headers: auth(part.token),
+      data: { adjustments: [], advance_returned_paise: 500000, refund_paise: 2200000 },
+    });
+    expect(partRes.status()).toBe(201);
+    const partSettlement = await partRes.json();
+    expect(partSettlement.advance_returned_paise).toBe(500000);
+    expect(partSettlement.refund_paise).toBe(2200000); // ₹17,000 + ₹5,000
+
+    // ── None of it: the deposit alone ──
+    const none = await seedPaidAhead("3");
+    const noneRes = await request.post(`${BASE}/api/stays/${none.stay.id}/settlement`, {
+      headers: auth(none.token),
+      data: { adjustments: [], advance_returned_paise: 0, refund_paise: DEPOSIT },
+    });
+    expect(noneRes.status()).toBe(201);
+    expect((await noneRes.json()).refund_paise).toBe(DEPOSIT);
+
+    // ── Returning more advance than exists is refused ──
+    const over = await seedPaidAhead("4");
+    const overRes = await request.post(`${BASE}/api/stays/${over.stay.id}/settlement`, {
+      headers: auth(over.token),
+      data: { adjustments: [], advance_returned_paise: 1700001, refund_paise: 3400001 },
+    });
+    expect(overRes.status()).toBe(400);
+    expect((await overRes.json()).error).toContain("more advance than was paid");
+  });
+
+  // A tenant who OWES rent has no advance, so the field is not a back door for
+  // inventing money.
+  test("an advance cannot be returned when none was paid", async ({ request }) => {
+    const { token } = await createOwner(request, `settle-noadv-${RUN_ID}`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { stay } = await seedStayForSettlement(request, token, {
+      name: `Settle No Advance ${RUN_ID}`,
+      phone: `3${RUN_ID.slice(-9)}`,
+      paid: 2550000, // one month behind
+    });
+
+    const res = await request.post(`${BASE}/api/stays/${stay.id}/settlement`, {
+      headers: auth,
+      data: { adjustments: [], advance_returned_paise: 100000, refund_paise: 950000 },
+    });
+    expect(res.status()).toBe(400);
+    expect((await res.json()).error).toContain("no rent paid in advance");
+  });
+
   test("owner settles from the tenant page and the stay is marked settled", async ({ page, request }) => {
     const { token } = await createOwner(request, `settle-ui-${RUN_ID}`);
     const name = `Settle UI ${RUN_ID}`;

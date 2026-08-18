@@ -518,7 +518,8 @@ export interface SettlementPreview {
   tenant_name: string;
   deposit_paise: number;
   dues_paise: number;    // signed: negative = tenant paid ahead
-  refund_paise: number;  // deposit − dues, before adjustments
+  advance_paise: number; // rent paid beyond what was billed; 0 if they owe
+  refund_paise: number;  // the opening position, before adjustments
   end_date: string;      // the date rent is billed up to
   already_ended: boolean;
   rent_amount: number;
@@ -535,6 +536,8 @@ export interface Settlement {
   stay_id: number;
   deposit_paise: number;
   dues_paise: number;
+  /** How much of a rent advance went back. Always 0 when dues_paise >= 0. */
+  advance_returned_paise: number;
   adjustments: Adjustment[];
   refund_paise: number;
   notes?: string;
@@ -555,6 +558,8 @@ export const settlementsApi = {
     notes?: string;
     refund_paise: number;
     end_date?: string;
+    /** Omit to return a rent advance in full; send 0 to keep it. */
+    advance_returned_paise?: number;
   }) => request<Settlement>(`/api/stays/${stayId}/settlement`, { method: "POST", body: JSON.stringify(data) }, token),
 
   /** Every settlement across a tenant's stays, so the page badges them in one request. */

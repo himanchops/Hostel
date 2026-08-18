@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { refundFor, parseRupees, cycleCountLabel } from "../../src/lib/settlement";
+import { refundFor, parseRupees, cycleCountLabel, advanceHeld } from "../../src/lib/settlement";
 import { formatCurrency } from "../../src/lib/api";
 
 // The drawer recomputes the refund on every keystroke while the server
@@ -14,7 +14,7 @@ import { formatCurrency } from "../../src/lib/api";
 
 test("refund is deposit minus dues plus adjustments", () => {
   expect(
-    refundFor(1700000, 850000, [
+    refundFor(1700000, 850000, 0, [
       { label: "Damaged chair", amount_paise: -50000 },
       { label: "Unpaid electricity share", amount_paise: -120000 },
       { label: "June advance returned", amount_paise: 30000 },
@@ -23,21 +23,45 @@ test("refund is deposit minus dues plus adjustments", () => {
 });
 
 test("no adjustments leaves deposit minus dues", () => {
-  expect(refundFor(1700000, 850000, [])).toBe(850000);
-  expect(refundFor(1700000, 0, [])).toBe(1700000);
+  expect(refundFor(1700000, 850000, 0, [])).toBe(850000);
+  expect(refundFor(1700000, 0, 0, [])).toBe(1700000);
 });
 
-// A tenant who paid ahead has negative dues, and subtracting a negative has to
-// increase the refund — the overpayment comes back on top of the deposit.
-test("negative dues increase the refund", () => {
-  expect(refundFor(1700000, -850000, [])).toBe(2550000);
+// ─── A rent advance is the owner's decision, not the formula's ───────────────
+
+test("advance held is the overpayment, and owing rent is not a negative one", () => {
+  expect(advanceHeld(-850000)).toBe(850000);
+  expect(advanceHeld(850000)).toBe(0);
+  expect(advanceHeld(0)).toBe(0);
+});
+
+// The same ₹8,500 advance, three legitimate answers. If this were derived from
+// the sign of dues instead of passed in, only the first would be reachable and
+// the app would be quietly deciding for the owner.
+test("all, part, or none of the advance comes back", () => {
+  expect(refundFor(1700000, -850000, 850000, [])).toBe(2550000); // all
+  expect(refundFor(1700000, -850000, 425000, [])).toBe(2125000); // half
+  expect(refundFor(1700000, -850000, 0, [])).toBe(1700000);      // none
+});
+
+// Withholding an advance and deducting for damage are separate decisions and
+// have to compose.
+test("a withheld advance still takes adjustments", () => {
+  expect(refundFor(1700000, -850000, 0, [{ label: "Damaged chair", amount_paise: -50000 }]))
+    .toBe(1650000);
+});
+
+// Outstanding rent is withheld; a negative dues must never also subtract.
+test("only positive dues reduce the refund", () => {
+  expect(refundFor(1700000, 850000, 0, [])).toBe(850000);
+  expect(refundFor(1700000, -850000, 0, [])).toBe(1700000);
 });
 
 // Deductions larger than the deposit mean the tenant leaves owing money. The
 // sign has to survive to the screen: an owner shown ₹11,500 when the tenant
 // owes ₹11,500 hands over cash they should be collecting.
 test("refund goes negative when the tenant owes", () => {
-  const refund = refundFor(1700000, 2550000, [{ label: "Broken window", amount_paise: -300000 }]);
+  const refund = refundFor(1700000, 2550000, 0, [{ label: "Broken window", amount_paise: -300000 }]);
   expect(refund).toBe(-1150000);
   expect(formatCurrency(refund)).toBe("-₹11,500");
 });

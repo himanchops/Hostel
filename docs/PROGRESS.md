@@ -352,10 +352,24 @@ Decisions and details worth knowing:
   S1 made rent and start date editable, and a settlement records money that
   actually changed hands — correcting a stay afterwards must not silently
   rewrite what was handed over.
-- **Dues are signed.** A tenant who paid three months up front and left after
-  two has negative dues, and the refund adds it back on top of the deposit.
-  Clamping at zero would quietly keep their money. The drawer relabels the line
-  "Rent paid in advance" rather than showing a negative.
+- **What happens to a rent advance is the owner's decision, not the formula's.**
+  A tenant who paid three months up front and left after two has an advance
+  sitting there, and the settlement offers *return all of it / return part of it
+  / do not return it*. The chosen amount is stored in
+  `advance_returned_paise` — a decision, not a derivation, so a settlement row
+  can be told apart from one where no advance existed.
+
+  The first cut let this fall out of a signed `dues` (`deposit − dues`), which
+  handed the whole advance back automatically. That is a policy, and not one
+  this app gets to set: "partial" in particular cannot be derived from anything.
+  `refundFor` now takes the returned amount as an explicit term, and
+  `validateAdvanceReturned` keeps it inside what exists — no negatives, no more
+  than was paid, and nothing at all when the tenant owes rent.
+
+  **Returning it in full stays the default**, so an owner who never touches the
+  control gets the generous reading and nothing changed silently. If the same
+  option gets picked every time, an account-level default can sit on top of
+  this later; it would need this control underneath it either way.
 - **The server recomputes and rejects a mismatch.** Not because the client is
   hostile but because the drawer goes stale: a payment recorded in another tab
   moves the dues, and the owner would otherwise hand over a refund based on
@@ -393,15 +407,17 @@ it.
 load lazily. Harmless before; a false zero sitting next to a refund figure is
 not. Now shows "Paid —" until it knows.
 
-Tests: `settlements_test.go` (18 — dues across monthly/weekly/daily and
+Tests: `settlements_test.go` (23 — dues across monthly/weekly/daily and
 month-end clamping, the move-out date changing the bill by exactly one cycle,
 paid-ahead, refunds going negative, the stale-preview mismatch, agreement with
 the tenant summary, date resolution, adjustment validation; three mutants killed
-on the arithmetic), `tests/unit/settlement.test.ts` (11 — the same fixture as
+the advance returning in full/part/none and its validation; six mutants killed
+on the arithmetic), `tests/unit/settlement.test.ts` (16 — the same fixture as
 the Go tests so the two implementations cannot drift, plus rupee parsing and
-cycle labels), and `tests/e2e/owner/settlement.test.ts` (5 — preview working and
+cycle labels), and `tests/e2e/owner/settlement.test.ts` (7 — preview working and
 exact stored refund, double-settle 409, mismatch 400, unlabelled adjustment 400,
-already-ended path, and the full UI flow with a comma-typed deduction).
+already-ended path, all three advance outcomes plus both advance rejections, and
+the full UI flow with a comma-typed deduction).
 
 ### Original spec
 

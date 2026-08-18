@@ -630,15 +630,32 @@ export default function TenantDetailPage() {
                               {formatCurrency(settlement.deposit_paise)}
                             </dd>
                           </div>
-                          <div className="flex justify-between gap-4">
-                            <dt className="text-stone-600">
-                              {settlement.dues_paise >= 0 ? "Rent outstanding" : "Rent paid in advance"}
-                            </dt>
-                            <dd className="tabular-nums text-stone-800">
-                              {settlement.dues_paise >= 0 ? "−" : "+"}
-                              {formatCurrency(Math.abs(settlement.dues_paise))}
-                            </dd>
-                          </div>
+                          {/* Only terms of the sum get a line, so the
+                              breakdown adds up to the refund below it. */}
+                          {settlement.dues_paise > 0 && (
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-stone-600">Rent outstanding</dt>
+                              <dd className="tabular-nums text-stone-800">
+                                −{formatCurrency(settlement.dues_paise)}
+                              </dd>
+                            </div>
+                          )}
+                          {settlement.dues_paise < 0 && (
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-stone-600">
+                                Advance returned
+                                {/* What was kept is the decision worth seeing
+                                    again months later, so it goes on the record
+                                    rather than being inferable from the sum. */}
+                                <span className="block text-xs text-stone-400">
+                                  of {formatCurrency(-settlement.dues_paise)} paid in advance
+                                </span>
+                              </dt>
+                              <dd className="tabular-nums text-stone-800">
+                                +{formatCurrency(settlement.advance_returned_paise)}
+                              </dd>
+                            </div>
+                          )}
                           {(settlement.adjustments ?? []).map((a, i) => (
                             <div key={i} className="flex justify-between gap-4">
                               <dt className="text-stone-600">{a.label}</dt>
