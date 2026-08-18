@@ -66,6 +66,7 @@ func main() {
 	gridHandler := handlers.NewGridHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
 	collectionsHandler := handlers.NewCollectionsHandler(db)
+	settlementHandler := handlers.NewSettlementHandler(db)
 	uploadHandler := handlers.NewUploadHandler(storageSvc)
 
 	e := echo.New()
@@ -163,12 +164,17 @@ func main() {
 	api.DELETE("/tenants/:id/reject", tenantHandler.Reject)
 	api.GET("/tenants/:id/stays", stayHandler.ListByTenant)
 	api.GET("/tenants/:id/summary", tenantHandler.Summary)
+	api.GET("/tenants/:id/settlements", settlementHandler.ListByTenant)
 
 	// Stays
 	api.POST("/stays", stayHandler.Create)
 	api.GET("/stays/:id", stayHandler.Get)
 	api.PUT("/stays/:id", stayHandler.Update)
 	api.PUT("/stays/:id/assign-bed", stayHandler.AssignBed)
+
+	// Settlements (move-out money reckoning)
+	api.GET("/stays/:id/settlement-preview", settlementHandler.Preview)
+	api.POST("/stays/:id/settlement", settlementHandler.Create)
 
 	// Payments (nested under stays)
 	api.GET("/stays/:stayId/payments", paymentHandler.List)

@@ -24,6 +24,13 @@ func NewStayHandler(db *sqlx.DB) *StayHandler {
 
 const stayCols = `id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, created_at, updated_at`
 
+// The same columns qualified, for the queries that join tenants to scope by
+// owner. Unqualified, `id` is ambiguous across stays and tenants and Postgres
+// refuses the query — which is what Get did for every stay it was ever asked
+// for. Nothing in the app calls that endpoint, so it 404'd unnoticed until a
+// settlement test read a stay back to check it had been ended.
+const stayColsQualified = `s.id, s.tenant_id, s.bed_id, s.rent_amount, s.deposit_amount, s.rent_cycle, s.start_date, s.end_date, s.notice_date, s.created_at, s.updated_at`
+
 type createStayRequest struct {
 	TenantID      int64  `json:"tenant_id"`
 	BedID         *int64 `json:"bed_id"`         // optional: null = pending bed assignment
@@ -358,7 +365,7 @@ func (h *StayHandler) Get(c echo.Context) error {
 
 	var stay models.Stay
 	err = h.db.QueryRowx(
-		`SELECT `+stayCols+`
+		`SELECT `+stayColsQualified+`
 		 FROM stays s JOIN tenants t ON t.id = s.tenant_id
 		 WHERE s.id = $1 AND t.owner_id = $2`,
 		stayID, ownerID,

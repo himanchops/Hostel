@@ -303,8 +303,9 @@ test.describe("Tenant profile enrichment", () => {
     await loginAs(page, token);
     await page.goto(`/tenants/${tenantId}`);
 
-    // Click "End stay" to reveal date picker
-    await page.getByRole("button", { name: "End stay" }).click();
+    // Renamed in Phase 11: "End stay" became "End without settling" when
+    // "Settle & vacate" joined it. This path is the one that skips the money.
+    await page.getByRole("button", { name: "End without settling" }).click();
 
     // Date picker and confirm button should be visible
     await expect(page.getByText("Select move-out date:")).toBeVisible();

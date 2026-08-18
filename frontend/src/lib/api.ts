@@ -497,3 +497,72 @@ export function maskAadhaar(aadhaar: string): string {
   if (digits.length < 4) return "XXXX-XXXX-XXXX";
   return `XXXX-XXXX-${digits.slice(-4)}`;
 }
+
+// ─── Settlements ─────────────────────────────────────────────────────────────
+
+/**
+ * One manual line on a settlement.
+ *
+ * Sign convention: NEGATIVE reduces the refund (a deduction from the tenant),
+ * POSITIVE increases it. The drawer never asks the owner to type a minus sign —
+ * it offers "Deduct"/"Add back" and applies the sign itself.
+ */
+export interface Adjustment {
+  label: string;
+  amount_paise: number;
+}
+
+/** The calculator's opening position, before any adjustment is typed. */
+export interface SettlementPreview {
+  stay_id: number;
+  tenant_name: string;
+  deposit_paise: number;
+  dues_paise: number;    // signed: negative = tenant paid ahead
+  advance_paise: number; // rent paid beyond what was billed; 0 if they owe
+  refund_paise: number;  // the opening position, before adjustments
+  end_date: string;      // the date rent is billed up to
+  already_ended: boolean;
+  rent_amount: number;
+  rent_cycle: "daily" | "weekly" | "monthly";
+  start_date: string;
+  cycles_billed: number;
+  total_expected: number;
+  total_paid: number;
+}
+
+/** A recorded settlement. `refund_paise` negative = the tenant owes the owner. */
+export interface Settlement {
+  id: number;
+  stay_id: number;
+  deposit_paise: number;
+  dues_paise: number;
+  /** How much of a rent advance went back. Always 0 when dues_paise >= 0. */
+  advance_returned_paise: number;
+  adjustments: Adjustment[];
+  refund_paise: number;
+  notes?: string;
+  created_at: string;
+}
+
+export const settlementsApi = {
+  /** `endDate` moves the date rent is billed to; omitted means today. */
+  preview: (token: string, stayId: number, endDate?: string) =>
+    request<SettlementPreview>(
+      `/api/stays/${stayId}/settlement-preview${endDate ? `?end_date=${endDate}` : ""}`,
+      {},
+      token
+    ),
+
+  create: (token: string, stayId: number, data: {
+    adjustments: Adjustment[];
+    notes?: string;
+    refund_paise: number;
+    end_date?: string;
+    /** Omit to return a rent advance in full; send 0 to keep it. */
+    advance_returned_paise?: number;
+  }) => request<Settlement>(`/api/stays/${stayId}/settlement`, { method: "POST", body: JSON.stringify(data) }, token),
+
+  /** Every settlement across a tenant's stays, so the page badges them in one request. */
+  listByTenant: (token: string, tenantId: number) =>
+    request<Settlement[]>(`/api/tenants/${tenantId}/settlements`, {}, token),
+};
