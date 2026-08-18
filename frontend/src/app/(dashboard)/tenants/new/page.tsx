@@ -14,11 +14,13 @@ import {
   Input,
   PageHeader,
   Textarea,
+  useToast,
 } from "@/components/ui";
 
 export default function NewTenantPage() {
   const { token } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -63,6 +65,9 @@ export default function NewTenantPage() {
       };
 
       const tenant = await tenantsApi.create(token, data);
+      // ToastProvider lives in the dashboard layout, so this survives the
+      // navigation and lands on the tenant's page.
+      toast.success(`${tenant.name} added`);
       router.push(`/tenants/${tenant.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create tenant");

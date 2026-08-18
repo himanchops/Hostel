@@ -12,6 +12,7 @@ import {
   formatCurrency,
   today,
 } from "@/lib/api";
+import { useConfirm, useToast } from "@/components/ui";
 
 export default function TenantPortalPage() {
   const { token, isAuthenticated, isLoading } = useTenantAuth();
@@ -71,6 +72,8 @@ function StayCard({ stay, token, onUpdate }: {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [noticeLoading, setNoticeLoading] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function handleSubmitPayment(e: React.FormEvent) {
     e.preventDefault();
@@ -100,13 +103,20 @@ function StayCard({ stay, token, onUpdate }: {
   }
 
   async function handleGiveNotice() {
-    if (!confirm("Submit notice to vacate? This will notify your owner.")) return;
+    const ok = await confirm({
+      title: "Submit notice to vacate?",
+      message: "Your owner will be notified. They will contact you about the move-out date.",
+      confirmLabel: "Submit notice",
+      tone: "danger",
+    });
+    if (!ok) return;
     setNoticeLoading(true);
     try {
       const updated = await tenantPortalApi.submitNotice(token, stay.id);
       onUpdate({ ...stay, notice_date: updated.notice_date as string | undefined });
+      toast.success("Notice submitted — your owner has been notified");
     } catch {
-      // ignore
+      toast.error("Could not submit your notice. Please try again.");
     } finally {
       setNoticeLoading(false);
     }

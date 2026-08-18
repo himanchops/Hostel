@@ -3,12 +3,17 @@
 import { useTenantAuth } from "@/contexts/tenantAuth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ConfirmProvider, ToastProvider } from "@/components/ui";
 
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, tenant, logout } = useTenantAuth();
   const router = useRouter();
 
+  // The portal is otherwise out of scope until Phase F, but it had the last
+  // window.confirm in the app, and useConfirm needs a provider above it.
   return (
+    <ConfirmProvider>
+    <ToastProvider>
     <div className="min-h-screen bg-stone-50">
       <header className="bg-white shadow-sm ring-1 ring-stone-200">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
@@ -32,5 +37,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
         {children}
       </main>
     </div>
+    </ToastProvider>
+    </ConfirmProvider>
   );
 }

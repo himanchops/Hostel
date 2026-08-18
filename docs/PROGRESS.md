@@ -236,7 +236,7 @@ deploying. Recommended execution order:
 1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything ✅
 2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it) ✅
 3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here ✅
-4. Design Phase D (hero screens) ✅ + E (feedback layer)
+4. Design Phase D (hero screens) ✅ + E (feedback layer) ✅
 5. **Phase 11 — Settlement calculator**
 6. Design Phase F (public surfaces) — the registration page a stranger sees;
    worth doing before real tenants are pointed at it by QR code
@@ -628,10 +628,61 @@ taken by hand instead.
 
 ---
 
+## Design Phase E — Feedback Layer ✅
+
+Detail in `docs/DESIGN_PLAN.md`. Toasts on all eighteen owner mutations, the
+last `window.confirm` replaced (it was the tenant portal's notice-to-vacate,
+which meant mounting `ConfirmProvider` and `ToastProvider` in the tenant shell),
+and a sweep of loading states.
+
+Three real defects surfaced while wiring it, none of them cosmetic:
+
+1. **Silent failures.** `pending`'s approve/reject ended in
+   `catch { /* ignore */ }`, and two payment deletes had no `catch` at all. A
+   failed request left the row sitting there as though nothing had happened.
+2. **The clipboard button claimed success it hadn't earned** — it toasted
+   before awaiting `navigator.clipboard.writeText`, which rejects on a denied
+   permission or an unfocused document.
+3. **Width props on kit inputs had never worked.** `<Input className="w-32" />`
+   was silently ignored since Phase B, because Tailwind resolves conflicting
+   utilities by CSS source order rather than by the order in the class
+   attribute, so the base `w-full` always won. `Field` now strips the base
+   width when the caller sets one. Worth remembering the next time a kit
+   component takes a `className`.
+
+One e2e assertion was tightened rather than the code changed: the tenant test
+looked for `getByText("Ended")`, which now also matches the toast's "…'s stay
+ended". It asserts the badge exactly.
+
+---
+
 ## Deferred
 
 Things we decided are worth doing, but not now. Nothing here is half-built —
 if it were, it would be under Known Issues instead.
+
+### Go-live blockers, deliberately bypassed for the alpha 🅿️
+
+**Decision (Aug 2026):** deploy without multi-tenancy isolation tests and
+without password reset. Both were raised as go-live blockers in a status
+report; the owner's call is that the alpha does not need them.
+
+The reasoning holds, and it is worth writing down so this is not re-argued:
+with exactly one owner account there is nobody for an isolation bug to leak
+*to*, so the risk is unobservable. Every handler already scopes by `owner_id`
+(42 query sites) — what is missing is the test proving it, not the scoping.
+
+**The trigger is a second owner signing up, not the deploy.** Before anyone
+else gets an account, write the 12b multi-tenancy tests: owner A must not be
+able to read or mutate owner B's sites, rooms, beds, tenants, stays or
+payments — one test per endpoint family.
+
+Password reset stays parked until there is a second human who can lock
+themselves out. Until then the fix is a `psql` update on `owners.password_hash`.
+
+Also unaddressed and worth the same note: there is no rate limiting on
+`/auth/login` or `/public/register/:ownerId`. Low risk while the registration
+link is not public; a problem the day it is printed on a QR code by the door.
 
 ### Automated design review 🅿️
 

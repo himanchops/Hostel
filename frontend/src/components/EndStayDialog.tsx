@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { staysApi, Stay, ApiError, today } from "@/lib/api";
-import { Button, Field, FormError, Input, Modal } from "@/components/ui";
+import { Button, Field, FormError, Input, Modal, useToast } from "@/components/ui";
 
 /**
  * Ending a stay, with a date.
@@ -29,6 +29,7 @@ export function EndStayDialog({
   onEnded: (stay: Stay) => void;
   onClose: () => void;
 }) {
+  const toast = useToast();
   const [date, setDate] = useState(today());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +41,9 @@ export function EndStayDialog({
     setLoading(true);
     try {
       const updated = await staysApi.update(token, stayId, { end_date: date });
+      // Toasting here rather than in each caller keeps the wording identical
+      // on the grid and the tenant page.
+      toast.success(tenantName ? `${tenantName}'s stay ended` : "Stay ended");
       onEnded(updated);
       setDate(today());
     } catch (err) {

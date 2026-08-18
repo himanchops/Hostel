@@ -44,6 +44,7 @@ export default function SitesPage() {
     try {
       const site = await sitesApi.create(token, { name: formName, address: formAddress || undefined });
       setSites((prev) => [site, ...prev]);
+      toast.success(`Added ${site.name}`);
       setFormName("");
       setFormAddress("");
       setShowForm(false);
@@ -56,6 +57,7 @@ export default function SitesPage() {
 
   async function handleDelete(id: number) {
     if (!token) return;
+    const name = sites.find((s) => s.id === id)?.name ?? "Site";
     const ok = await confirm({
       title: "Delete this site?",
       message: "All rooms and data will be removed.",
@@ -66,6 +68,7 @@ export default function SitesPage() {
     try {
       await sitesApi.delete(token, id);
       setSites((prev) => prev.filter((s) => s.id !== id));
+      toast.success(`Deleted ${name}`);
     } catch {
       toast.error("Failed to delete site");
     }
