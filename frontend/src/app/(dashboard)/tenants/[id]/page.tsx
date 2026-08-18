@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import {
   Badge,
+  BedIcon,
   Button,
   Card,
   EmptyState,
@@ -24,6 +25,7 @@ import {
   Textarea,
   useConfirm,
 } from "@/components/ui";
+import { EndStayDialog } from "@/components/EndStayDialog";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -271,51 +273,6 @@ function EditProfileForm({
   );
 }
 
-// ─── End-stay date picker ────────────────────────────────────────────────────
-
-function EndStayPicker({
-  stayId, token, onEnded, onCancel,
-}: {
-  stayId: number; token: string; onEnded: (stay: Stay) => void; onCancel: () => void;
-}) {
-  const [date, setDate] = useState(today());
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const updated = await staysApi.update(token, stayId, { end_date: date });
-      onEnded(updated);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
-      <Input
-        type="date"
-        value={date}
-        max={today()}
-        onChange={(e) => setDate(e.target.value)}
-        className="w-auto"
-      />
-      <Button type="submit" variant="danger" size="sm" loading={loading}>
-        {loading ? "…" : "Confirm"}
-      </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-        Cancel
-      </Button>
-      {error && <span className="text-xs text-red-600">{error}</span>}
-    </form>
-  );
-}
-
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function TenantDetailPage() {
@@ -512,7 +469,11 @@ export default function TenantDetailPage() {
       <h2 className="mb-3 text-base font-semibold text-stone-900">Stays &amp; Ledger</h2>
 
       {stays.length === 0 ? (
-        <EmptyState message="No stays recorded yet." />
+        <EmptyState
+          icon={<BedIcon className="h-8 w-8" />}
+          title="No stays yet"
+          message="Assign this tenant to a bed and their rent ledger starts here."
+        />
       ) : (
         <div className="space-y-3">
           {stays.map((stay) => {
@@ -575,23 +536,6 @@ export default function TenantDetailPage() {
                     )}
                   </div>
                 </div>
-
-                {/* End-stay date picker */}
-                {isEndingThis && token && (
-                  <div className="border-t border-stone-100 px-4 py-3">
-                    <p className="mb-2 text-xs font-medium text-stone-500">Select move-out date:</p>
-                    <EndStayPicker
-                      stayId={stay.id}
-                      token={token}
-                      onEnded={(updated) => {
-                        setStays((prev) => prev.map((s) => (s.id === stay.id ? updated : s)));
-                        setEndingStay(null);
-                        loadSummary();
-                      }}
-                      onCancel={() => setEndingStay(null)}
-                    />
-                  </div>
-                )}
 
                 {/* Expanded: payment ledger */}
                 {expanded === stay.id && (
@@ -695,6 +639,23 @@ export default function TenantDetailPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Ending a stay is the same dialog the grid uses, so a departure
+          recorded late is billed to the day it happened either way. */}
+      {token && (
+        <EndStayDialog
+          open={endingStay !== null}
+          stayId={endingStay}
+          token={token}
+          tenantName={tenant?.name}
+          onEnded={(updated) => {
+            setStays((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            setEndingStay(null);
+            loadSummary();
+          }}
+          onClose={() => setEndingStay(null)}
+        />
       )}
 
       {/* Assign bed modal */}

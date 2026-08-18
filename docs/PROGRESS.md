@@ -237,7 +237,7 @@ deploying. Recommended execution order:
 1. Design Phase A (foundations) + Phase B (component kit) — B blocks everything ✅
 2. **Phase 10 — Collections & WhatsApp nudges** (built WITH the new component kit, not before it) ✅
 3. Design Phase C (mobile shell) — nudges are used from a phone, so mobile matters here ✅
-4. Design Phase D (hero screens) + E (feedback layer)
+4. Design Phase D (hero screens) ✅ + E (feedback layer)
 5. **Phase 11 — Settlement calculator**
 6. Design Phase F (public surfaces) — the registration page a stranger sees;
    worth doing before real tenants are pointed at it by QR code
@@ -609,20 +609,32 @@ at each breakpoint (by geometry, not by class name), tab navigation setting
 
 ---
 
+## Design Phase D — Hero Screens ✅
+
+Detail in `docs/DESIGN_PLAN.md`. The grid became room cards with 96px bed tiles
+(status as a left stripe over a pale tint, initials avatar, amount owed), the
+legend became a filter with counts, and the dashboard got tinted stat-card
+icons, a collected/expected progress bar, a red stripe on overdue, and one
+consolidated "Needs attention" card. D3 landed with it: Fraunces on the wordmark
+and page titles only, and an icon plus a real next step on all nine empty
+states.
+
+**This closes the vacate-backfill known issue.** The grid and the tenant page
+now render the same `EndStayDialog`, so a departure recorded three days late is
+billed to the day it happened from either screen.
+
+`make review-design` was not run — it needs `ANTHROPIC_API_KEY`, which this
+environment doesn't have. Before/after screenshots were taken by hand instead.
+
+---
+
 ## Known Issues
 
 Found while verifying the billing fixes (Aug 2026). None are fixed yet.
 
-### Vacate-from-grid can't backfill a date 🐞 (deferred to design Phase D)
-Deliberately not fixed standalone: Phase D replaces this panel with a
-`ConfirmDialog` + date picker anyway. Workaround until then — end the stay from
-the tenant detail page, which already has a date picker.
-
-The tenant detail page ends a stay via a date picker (so a departure can be
-recorded days later), but the grid's vacate path uses `confirm()` and hardcodes
-today — see `handleVacate` in `sites/[id]/grid/page.tsx`. The two paths disagree.
-Design Phase D already plans to replace it with a `ConfirmDialog` plus date
-picker; until then, backfilling only works from the tenant page.
+### ~~Vacate-from-grid can't backfill a date~~ ✅ fixed in design Phase D
+Both paths now render the shared `components/EndStayDialog.tsx`, so the grid and
+the tenant page ask for a move-out date the same way and bill to the same day.
 
 ### Collapsed stay cards show "Paid ₹0" 🐞 (cosmetic)
 On the tenant detail page the ledger is lazy-loaded on expand, but the card's

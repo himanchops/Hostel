@@ -25,7 +25,9 @@ import {
   EmptyState,
   Field,
   FormError,
+  InboxIcon,
   Input,
+  ReceiptIcon,
   PageHeader,
   Select,
   Skeleton,
@@ -511,7 +513,11 @@ export default function PendingPage() {
               <Skeleton className="h-20 w-full" />
             </div>
           ) : pending.length === 0 ? (
-            <EmptyState message="No pending registrations." />
+            <EmptyState
+              icon={<InboxIcon className="h-8 w-8" />}
+              title="Nothing waiting"
+              message="Registrations from your link land here for approval."
+            />
           ) : (
             <div className="space-y-3">
               {pending.map((t) => (
@@ -571,7 +577,11 @@ export default function PendingPage() {
               <Skeleton className="h-24 w-full" />
             </div>
           ) : pendingPayments.length === 0 ? (
-            <EmptyState message="No pending payment submissions." />
+            <EmptyState
+              icon={<ReceiptIcon className="h-8 w-8" />}
+              title="No payment proofs"
+              message="Screenshots submitted from the tenant portal appear here."
+            />
           ) : (
             <div className="space-y-3">
               {pendingPayments.map((p) => (

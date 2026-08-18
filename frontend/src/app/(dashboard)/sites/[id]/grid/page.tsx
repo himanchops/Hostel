@@ -11,9 +11,15 @@ import {
   ApiError,
 } from "@/lib/api";
 import {
+  Avatar,
   Badge,
+  BedIcon,
+  FilterIcon,
   Button,
+  buttonClasses,
+  Card,
   Drawer,
+  EmptyAvatar,
   EmptyState,
   Field,
   FormError,
@@ -25,6 +31,7 @@ import {
   StatusPill,
   useConfirm,
 } from "@/components/ui";
+import { EndStayDialog } from "@/components/EndStayDialog";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -33,7 +40,6 @@ export default function GridPage() {
   const siteId = Number(id);
   const { token } = useAuth();
   const router = useRouter();
-  const confirm = useConfirm();
 
   const [site, setSite] = useState<Site | null>(null);
   const [grid, setGrid] = useState<GridRoom[]>([]);
@@ -43,6 +49,13 @@ export default function GridPage() {
   const [selectedBed, setSelectedBed] = useState<GridBed | null>(null);
   const [showAssign, setShowAssign] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+
+  // Legend doubles as a filter: "who is overdue" is the question this page gets
+  // asked most, and on a wall of beds that is faster than reading every tile.
+  const [filter, setFilter] = useState<BedStatus | "all">("all");
+
+  // Which stay the end-stay dialog is for, if any.
+  const [endingStay, setEndingStay] = useState<GridBed | null>(null);
 
   const fetchGrid = useCallback(() => {
     if (!token) return;
@@ -84,19 +97,27 @@ export default function GridPage() {
     await fetchGrid();
   }
 
-  async function handleVacate(stayId: number) {
-    if (!token) return;
-    const ok = await confirm({
-      title: "Mark this tenant as vacated today?",
-      message: "The stay will be ended with today's date.",
-      confirmLabel: "Vacate",
-      tone: "danger",
-    });
-    if (!ok) return;
-    await staysApi.update(token, stayId, { end_date: today() });
+  async function handleEnded() {
+    setEndingStay(null);
     setSelectedBed(null);
     await fetchGrid();
   }
+
+  const allBeds = grid.flatMap((room) => room.beds);
+  const totalBeds = allBeds.length;
+  const statusCounts = allBeds.reduce((acc, bed) => {
+    acc[bed.status] = (acc[bed.status] ?? 0) + 1;
+    return acc;
+  }, {} as Record<BedStatus, number>);
+
+  // Rooms keep their place in the layout when filtering; only their beds are
+  // narrowed, and a room with nothing left drops out entirely.
+  const visibleRooms = grid
+    .map((room) => ({
+      room,
+      beds: filter === "all" ? room.beds : room.beds.filter((b) => b.status === filter),
+    }))
+    .filter(({ beds }) => beds.length > 0 || filter === "all");
 
   if (loading) {
     return (
@@ -131,38 +152,77 @@ export default function GridPage() {
         }
       />
 
-      {/* Legend */}
-      <div className="mb-6 flex flex-wrap gap-3">
-        {(Object.keys(STATUS_STYLES) as BedStatus[]).map((status) => (
-          <StatusPill key={status} status={status} />
-        ))}
+      {/* Legend, which is also the filter. Sticks under the mobile top bar so
+          it stays reachable while scrolling a tall site. */}
+      <div className="sticky top-14 z-10 -mx-4 mb-4 border-b border-stone-200 bg-stone-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-8 lg:px-8">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            aria-pressed={filter === "all"}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition duration-150 ease-out ${
+              filter === "all"
+                ? "border-stone-400 bg-white text-stone-800 ring-2 ring-stone-400 ring-offset-1"
+                : "border-stone-200 bg-white text-stone-500 hover:text-stone-700"
+            }`}
+          >
+            All {totalBeds}
+          </button>
+          {(Object.keys(STATUS_STYLES) as BedStatus[]).map((status) => (
+            <StatusPill
+              key={status}
+              status={status}
+              count={statusCounts[status] ?? 0}
+              active={filter === status}
+              onClick={() => setFilter(filter === status ? "all" : status)}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Grid */}
       {grid.length === 0 ? (
         <EmptyState
-          message="No rooms found. Add rooms and beds first."
+          icon={<BedIcon className="h-8 w-8" />}
+          title="No rooms yet"
+          message="Add rooms and beds, and they will show up here."
           action={
-            <Link href={`/sites/${siteId}`} className="text-sm text-indigo-600 hover:text-indigo-500">
-              Manage rooms →
+            <Link href={`/sites/${siteId}`} className={buttonClasses({ size: "sm" })}>
+              Manage rooms
             </Link>
           }
         />
+      ) : visibleRooms.length === 0 ? (
+        <EmptyState
+          icon={<FilterIcon className="h-8 w-8" />}
+          title="Nothing matches that filter"
+          message={`No beds are ${STATUS_STYLES[filter as BedStatus]?.label.toLowerCase()}.`}
+          action={
+            <Button variant="secondary" size="sm" onClick={() => setFilter("all")}>
+              Show all beds
+            </Button>
+          }
+        />
       ) : (
-        <div className="space-y-6">
-          {grid.map((room) => (
-            <div key={room.id}>
-              <div className="mb-2 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-stone-700">{room.name}</h2>
-                {room.floor > 0 && <Badge tone="neutral">Floor {room.floor}</Badge>}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {visibleRooms.map(({ room, beds }) => (
+            <Card key={room.id} padding="none" className="overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-semibold text-stone-900">{room.name}</h2>
+                  {room.floor > 0 && <Badge tone="neutral">Floor {room.floor}</Badge>}
+                </div>
+                <RoomSummary room={room} />
               </div>
 
-              {room.beds.length === 0 ? (
-                <p className="text-xs text-stone-400">No beds — add beds to this room.</p>
+              {beds.length === 0 ? (
+                <p className="px-4 py-4 text-xs text-stone-400">
+                  No beds — add beds to this room.
+                </p>
               ) : (
-                <div className="flex flex-wrap gap-3">
-                  {room.beds.map((bed) => (
-                    <BedCard
+                <div className="flex flex-wrap gap-2 p-4">
+                  {beds.map((bed) => (
+                    <BedTile
                       key={bed.id}
                       bed={bed}
                       selected={selectedBed?.id === bed.id}
@@ -171,7 +231,7 @@ export default function GridPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -196,37 +256,75 @@ export default function GridPage() {
             showPaymentForm={showPayment}
             onShowPayment={() => setShowPayment(true)}
             onPaymentAdded={handlePaymentAdded}
-            onVacate={handleVacate}
+            onEndStay={() => setEndingStay(selectedBed)}
           />
         ))}
       </Drawer>
+
+      {/* Same dialog the tenant page uses, so a late-recorded departure is
+          billed to the day it actually happened. */}
+      <EndStayDialog
+        open={endingStay !== null}
+        stayId={endingStay?.stay_id ?? null}
+        token={token ?? ""}
+        tenantName={endingStay?.tenant?.name}
+        onEnded={handleEnded}
+        onClose={() => setEndingStay(null)}
+      />
     </div>
   );
 }
 
-// ─── Bed card ─────────────────────────────────────────────────────────────────
+// ─── Room summary + bed tile ──────────────────────────────────────────────────
 
-function BedCard({ bed, selected, onClick }: { bed: GridBed; selected: boolean; onClick: () => void }) {
+/** "3/4 occupied · ₹24,000 due" — the room's state without opening anything. */
+function RoomSummary({ room }: { room: GridRoom }) {
+  const occupied = room.beds.filter((b) => b.status !== "vacant").length;
+  const owed = room.beds.reduce(
+    (sum, b) => sum + (b.balance !== undefined && b.balance < 0 ? -b.balance : 0),
+    0
+  );
+  if (room.beds.length === 0) return null;
+  return (
+    <p className="text-xs tabular-nums text-stone-500">
+      {occupied}/{room.beds.length} occupied
+      {owed > 0 && (
+        <>
+          {" · "}
+          <span className="font-semibold text-overdue-700">{formatCurrency(owed)} due</span>
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
+ * A bed at a glance. Status is carried by a 3px left stripe plus a pale tint
+ * rather than a saturated block: at a wall's distance the stripes are what you
+ * read, and a grid of full-strength colour is exhausting to look at all day.
+ */
+function BedTile({ bed, selected, onClick }: { bed: GridBed; selected: boolean; onClick: () => void }) {
   const cfg = STATUS_STYLES[bed.status];
+  const owes = bed.balance !== undefined && bed.balance < 0 ? -bed.balance : 0;
+  const firstName = bed.tenant?.name.trim().split(/\s+/)[0];
+
   return (
     <button
       onClick={onClick}
-      className={`w-36 rounded-xl border-2 p-3 text-left transition duration-150 ease-out ${cfg.bg} ${cfg.border} ${cfg.text}
-        ${selected ? "ring-2 ring-indigo-400 ring-offset-1" : "hover:brightness-95"}`}
+      title={bed.tenant ? `${bed.tenant.name} — ${cfg.label}` : `Bed ${bed.name} — vacant`}
+      className={`w-24 rounded-lg border border-l-[3px] border-stone-200 p-2 text-left transition duration-150 ease-out ${cfg.tint} ${cfg.stripe} ${
+        selected ? "ring-2 ring-indigo-400 ring-offset-1" : "hover:border-stone-300"
+      }`}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider opacity-60">{cfg.label}</p>
-      <p className="mt-0.5 text-base font-bold">{bed.name}</p>
-      {bed.tenant ? (
-        <>
-          <p className="mt-1 truncate text-xs font-medium">{bed.tenant.name}</p>
-          {bed.balance !== undefined && bed.balance < 0 && (
-            <p className="mt-0.5 text-xs tabular-nums opacity-75">
-              Owes {formatCurrency(Math.abs(bed.balance))}
-            </p>
-          )}
-        </>
-      ) : (
-        <p className="mt-1 text-xs opacity-50">Tap to assign</p>
+      {bed.tenant ? <Avatar name={bed.tenant.name} size="xs" /> : <EmptyAvatar size="xs" />}
+      <p className="mt-1.5 truncate text-xs font-semibold text-stone-800">
+        {firstName ?? "Vacant"}
+      </p>
+      <p className="truncate text-[11px] text-stone-500">Bed {bed.name}</p>
+      {owes > 0 && (
+        <p className="mt-0.5 truncate text-[11px] font-semibold tabular-nums text-overdue-700">
+          {formatCurrency(owes)}
+        </p>
       )}
     </button>
   );
@@ -396,14 +494,14 @@ function AssignPanel({
 // ─── Occupied panel ───────────────────────────────────────────────────────────
 
 function OccupiedPanel({
-  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onVacate,
+  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onEndStay,
 }: {
   token: string;
   bed: GridBed;
   showPaymentForm: boolean;
   onShowPayment: () => void;
   onPaymentAdded: () => void;
-  onVacate: (stayId: number) => void;
+  onEndStay: () => void;
 }) {
   const confirm = useConfirm();
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -462,7 +560,9 @@ function OccupiedPanel({
       </div>
 
       {bed.tenant && (
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-3">
+          <Avatar name={bed.tenant.name} size="md" />
+          <div className="min-w-0">
           <p className="text-lg font-bold text-stone-900">{bed.tenant.name}</p>
           <p className="text-sm tabular-nums text-stone-500">{bed.tenant.phone}</p>
           {bed.tenant.id && (
@@ -473,6 +573,7 @@ function OccupiedPanel({
               View profile →
             </Link>
           )}
+          </div>
         </div>
       )}
 
@@ -498,13 +599,8 @@ function OccupiedPanel({
         <div className="mb-4 flex gap-2">
           <Button className="flex-1" onClick={onShowPayment}>+ Add payment</Button>
           {bed.stay_id && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onVacate(bed.stay_id!)}
-              title="Mark as vacated today"
-            >
-              Vacate
+            <Button variant="secondary" size="sm" onClick={onEndStay} title="Record a move-out date">
+              End stay
             </Button>
           )}
         </div>

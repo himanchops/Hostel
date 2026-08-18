@@ -5,7 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { collectionsApi, tenantsApi } from "@/lib/api";
-import { Button, ConfirmProvider, CountBadge, ToastProvider } from "@/components/ui";
+import {
+  BuildingIcon, Button, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
+  RupeeIcon, ToastProvider, UsersIcon,
+} from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 
 /**
@@ -80,7 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar — 1024px and up */}
       <aside className="hidden w-56 shrink-0 flex-col border-r border-stone-200 bg-white lg:flex">
         <div className="flex h-16 items-center px-5">
-          <span className="text-lg font-bold text-indigo-600">Hostel Manager</span>
+          <span className="font-display text-xl font-semibold text-indigo-600">Hostel Manager</span>
         </div>
 
         <nav aria-label="Primary" className="flex-1 space-y-0.5 px-3 py-3">
@@ -122,7 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* The wordmark, not the page title: every page already opens with
               its own <h1>, and the tab bar below shows which section is
               active — a title here would just say the same thing twice. */}
-          <span className="truncate text-base font-bold text-indigo-600">
+          <span className="truncate font-display text-lg font-semibold text-indigo-600">
             Hostel Manager
           </span>
 
@@ -186,45 +189,5 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
     </ToastProvider>
     </ConfirmProvider>
-  );
-}
-
-function GridIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" />
-    </svg>
-  );
-}
-
-function BuildingIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M9 21V7l6-4v18M9 11h6M9 15h6" />
-    </svg>
-  );
-}
-
-function UsersIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-}
-
-function RupeeIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h12M6 9h12M15.5 4c0 4-2.5 5-5.5 5m0 0c4.5 0 7 2 7 5.5S14 20 10 20l8-8" />
-    </svg>
-  );
-}
-
-function ClockIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
   );
 }

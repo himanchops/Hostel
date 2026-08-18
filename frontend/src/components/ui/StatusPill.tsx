@@ -12,27 +12,27 @@ import { BedStatus } from "@/lib/api";
  */
 export const STATUS_STYLES: Record<
   BedStatus,
-  { bg: string; border: string; text: string; dot: string; label: string }
+  { bg: string; border: string; text: string; dot: string; tint: string; stripe: string; label: string }
 > = {
   vacant: {
     bg: "bg-vacant-100", border: "border-vacant-200", text: "text-vacant-500",
-    dot: "bg-vacant-500", label: "Vacant",
+    dot: "bg-vacant-500", tint: "bg-vacant-50", stripe: "border-l-vacant-200", label: "Vacant",
   },
   paid: {
     bg: "bg-paid-100", border: "border-paid-200", text: "text-paid-800",
-    dot: "bg-paid-500", label: "Paid",
+    dot: "bg-paid-500", tint: "bg-paid-50", stripe: "border-l-paid-500", label: "Paid",
   },
   partial: {
     bg: "bg-partial-100", border: "border-partial-200", text: "text-partial-800",
-    dot: "bg-partial-500", label: "Partial",
+    dot: "bg-partial-500", tint: "bg-partial-50", stripe: "border-l-partial-500", label: "Partial",
   },
   overdue: {
     bg: "bg-overdue-100", border: "border-overdue-200", text: "text-overdue-800",
-    dot: "bg-overdue-500", label: "Overdue",
+    dot: "bg-overdue-500", tint: "bg-overdue-50", stripe: "border-l-overdue-500", label: "Overdue",
   },
   vacating_soon: {
     bg: "bg-vacating-100", border: "border-vacating-200", text: "text-vacating-800",
-    dot: "bg-vacating-500", label: "Vacating",
+    dot: "bg-vacating-500", tint: "bg-vacating-50", stripe: "border-l-vacating-500", label: "Vacating",
   },
 };
 

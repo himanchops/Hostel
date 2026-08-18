@@ -38,7 +38,7 @@ export function PageHeader({
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-bold text-stone-900">{title}</h1>
+          <h1 className="font-display text-[22px] font-semibold tracking-tight text-stone-900 sm:text-[26px]">{title}</h1>
           {subtitle && <p className="mt-1 text-[13px] text-stone-500">{subtitle}</p>}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}

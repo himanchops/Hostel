@@ -21,6 +21,7 @@ import {
   FormError,
   Input,
   PageHeader,
+  RupeeIcon,
   Select,
   Skeleton,
   Textarea,
@@ -74,6 +75,7 @@ export default function CollectionsPage() {
         </div>
       ) : rows.length === 0 ? (
         <EmptyState
+          icon={<RupeeIcon className="h-8 w-8" />}
           title="Everyone is paid up 🎉"
           message="No outstanding balances across any of your sites."
         />
