@@ -41,7 +41,7 @@ hostel/
 
 **See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
 
-Current state (Aug 2026): Phases 0–9.1, design Phases A–C and **Phase 10 (Collections & WhatsApp nudges)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Next up is **design Phase D** (hero screens — the occupancy grid and dashboard).
+Current state (Aug 2026): Phases 0–9.1, design Phases A–D and **Phase 10 (Collections & WhatsApp nudges)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Next up is **design Phase E** (feedback layer — toasts on every mutation, skeletons, button loading states).
 
 UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 

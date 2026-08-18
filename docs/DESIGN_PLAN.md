@@ -6,8 +6,8 @@ ordered by dependency, and scoped so a smaller model can implement it without
 extra design decisions. Do the phases in order. Do not restyle pages before
 Phase B is complete.
 
-**Status (Aug 2026): Phases A, B and C are done**, as is Phase 10
-(Collections & WhatsApp nudges). Next is Phase D (hero screens). Phase F
+**Status (Aug 2026): Phases A–D are done**, as is Phase 10 (Collections &
+WhatsApp nudges). Next is Phase E (feedback layer). Phase F
 (public surfaces) was added later and sits after E — see its own section for
 why it is deliberately not part of the A–E sequence.
 
@@ -211,7 +211,43 @@ Playwright viewport spot-check added for dashboard + grid.
 
 ---
 
-## Phase D — Hero screens (1–2 sessions)
+## Phase D — Hero screens ✅ (branch `design-phase-d-hero-screens`)
+
+**Shipped:** the grid and dashboard rebuilt, plus the typographic character and
+empty states from D3.
+
+- **Grid.** Rooms are Cards with a summary line ("2/2 occupied · ₹31,500 due").
+  Beds are 96px tiles carrying status as a 3px left stripe over a 50-level tint
+  rather than a saturated block — at a distance the stripes are what you read,
+  and a wall of full-strength colour is tiring to look at all day. Each tile has
+  the tenant's initials avatar (deterministic colour, shared with the pending
+  queue), their first name, and the amount owed in red when there is one.
+- **The legend is the filter.** Clicking a status pill narrows the grid to those
+  beds and drops rooms that have none left; counts sit in the pills, zero
+  included, because "Overdue 0" is worth seeing. It sticks below the mobile top
+  bar while scrolling.
+- **Vacating from the grid can finally backfill a date.** Both the grid and the
+  tenant page now render one `EndStayDialog`, so the two paths cannot disagree
+  again — this closes the known issue that has been open since S1.
+- **Dashboard.** Stat cards get a tinted icon square; "Collected this month"
+  gets a progress bar against expected; the overdue card gets a red left stripe
+  and becomes a link to Collections when non-zero. The two alert banners became
+  one "Needs attention" card. Occupancy bars go emerald above 90% — utilisation,
+  not bed status, and the one deliberate exception to "green means paid".
+- **Typography (D3).** Fraunces for the wordmark and page titles only; Geist
+  keeps every number, table cell and form control. Titles scale 22px → 26px at
+  `sm` so a serif headline doesn't eat a phone screen.
+- **Empty states (D3).** All nine now carry an icon, a title and — where there
+  is an obvious next step — a button that does it.
+- **Icons moved to `components/ui/icons.tsx`.** A bed and a rupee had already
+  been duplicated across the grid, the dashboard and the shell, and an icon that
+  differs by a stroke width between screens looks like a bug.
+
+**Note:** the automated design review did not run, and could not have — the
+script it calls has never existed (see "Deferred" in `PROGRESS.md`). Before and
+after screenshots were taken by hand at 1280px and 375px instead.
+
+### Original spec
 
 **D1. Occupancy grid** (the flagship — most of the effort goes here):
 - Rooms become **cards** (Card component) with room name, floor badge, and a
@@ -250,8 +286,8 @@ Playwright viewport spot-check added for dashboard + grid.
   up 🎉" (Phase 10) is the tone to match.
 
 **Acceptance:** grid readable at a glance from 2m away (squint test: status
-stripes distinguishable); e2e green; `make review-design` run before/after and
-the report attached to the PR.
+stripes distinguishable); e2e green; before/after screenshots at 1280px and
+375px attached to the PR.
 
 ---
 
@@ -317,9 +353,16 @@ is worth screenshotting; zero raw ring/radius/colour classNames left in
 
 ## Evaluation loop
 
-After each phase: run `make test-e2e`, then `make review-design` (screenshots
-every page → Claude vision review in `test-results/design-review.md`). Keep the
-before-screenshots from the first run as the baseline for comparison.
+After each phase: `make test-e2e`, then walk the changed pages by hand at 1280px
+and 375px and attach before/after screenshots to the PR. Check for horizontal
+scroll *and* for content clipped inside a container — the second is invisible in
+a screenshot and has hidden a real bug before (see Phase C).
+
+An automated version of this was planned — screenshot every page, send the
+images to Claude's vision API, write the critique to
+`test-results/design-review.md` — and `make review-design` existed as a target,
+but the script behind it was never written. The target has been removed rather
+than left as a trap; the idea is parked under "Deferred" in `PROGRESS.md`.
 
 ## Execution notes for the implementing model
 

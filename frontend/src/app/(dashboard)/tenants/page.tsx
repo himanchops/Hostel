@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import { tenantsApi, Tenant } from "@/lib/api";
 import {
+  Button,
   Card,
   EmptyState,
   Input,
   PageHeader,
+  SearchIcon,
   Skeleton,
+  UsersIcon,
   buttonClasses,
 } from "@/components/ui";
 
@@ -66,9 +69,29 @@ export default function TenantsPage() {
           </div>
         </Card>
       ) : filtered.length === 0 ? (
-        <EmptyState
-          message={tenants.length === 0 ? "No tenants yet." : "No tenants match your search."}
-        />
+        tenants.length === 0 ? (
+          <EmptyState
+            icon={<UsersIcon className="h-8 w-8" />}
+            title="No tenants yet"
+            message="Add tenants here, or share your registration link and let them register themselves."
+            action={
+              <Link href="/tenants/new" className={buttonClasses({ size: "sm" })}>
+                + Add tenant
+              </Link>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={<SearchIcon className="h-8 w-8" />}
+            title="No matches"
+            message={`Nothing matches "${search}".`}
+            action={
+              <Button variant="secondary" size="sm" onClick={() => setSearch("")}>
+                Clear search
+              </Button>
+            }
+          />
+        )
       ) : (
         <>
         {/* Phone: a five-column table at 375px wraps every cell onto two

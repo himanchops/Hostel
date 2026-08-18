@@ -8,6 +8,7 @@ import { sitesApi, roomsApi, bedsApi, Site, Room, Bed, ApiError } from "@/lib/ap
 import {
   Button,
   Card,
+  DoorIcon,
   EmptyState,
   FormError,
   Input,
@@ -173,7 +174,12 @@ export default function SiteDetailPage() {
 
       {/* Rooms list */}
       {rooms.length === 0 ? (
-        <EmptyState message="No rooms yet. Add one above." />
+        <EmptyState
+          icon={<DoorIcon className="h-8 w-8" />}
+          title="No rooms yet"
+          message="Add rooms, then add the beds in each one. The grid fills in from there."
+          action={<Button onClick={() => setShowRoomForm(true)}>+ Add room</Button>}
+        />
       ) : (
         <div className="space-y-3">
           {rooms.map((room) => (

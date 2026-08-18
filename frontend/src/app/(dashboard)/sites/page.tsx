@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import { sitesApi, Site, ApiError } from "@/lib/api";
 import {
+  BuildingIcon,
   Button,
   Card,
   EmptyState,
@@ -120,7 +121,12 @@ export default function SitesPage() {
           <SkeletonCard />
         </div>
       ) : sites.length === 0 ? (
-        <EmptyState message="No sites yet. Add your first one above." />
+        <EmptyState
+          icon={<BuildingIcon className="h-8 w-8" />}
+          title="No sites yet"
+          message="A site is one building or PG. Add your first one to start setting up rooms."
+          action={<Button onClick={() => setShowForm(true)}>+ Add site</Button>}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sites.map((site) => (
