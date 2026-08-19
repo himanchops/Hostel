@@ -26,14 +26,20 @@ type createPaymentRequest struct {
 	Notes       string `json:"notes"`
 }
 
-// stayOwnerCheck verifies a stay belongs to the calling owner. Returns stay's ID or error.
-func (h *PaymentHandler) stayOwnerCheck(stayID, ownerID int64) bool {
+// stayOwnerCheck reports whether a stay belongs to the calling owner.
+//
+// Returns an error rather than folding a failed query into `false`: a database
+// problem is not the same answer as "this is not yours", and collapsing the
+// two showed the caller a 404 while the real fault went unrecorded.
+func (h *PaymentHandler) stayOwnerCheck(stayID, ownerID int64) (bool, error) {
 	var count int
-	h.db.Get(&count,
+	if err := h.db.Get(&count,
 		`SELECT COUNT(*) FROM stays s JOIN tenants t ON t.id = s.tenant_id WHERE s.id = $1 AND t.owner_id = $2`,
 		stayID, ownerID,
-	)
-	return count > 0
+	); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (h *PaymentHandler) List(c echo.Context) error {
@@ -43,7 +49,11 @@ func (h *PaymentHandler) List(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid stay id"))
 	}
 
-	if !h.stayOwnerCheck(stayID, ownerID) {
+	owned, err := h.stayOwnerCheck(stayID, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to verify the stay")
+	}
+	if !owned {
 		return c.JSON(http.StatusNotFound, errorResponse("stay not found"))
 	}
 
@@ -54,7 +64,7 @@ func (h *PaymentHandler) List(c echo.Context) error {
 		stayID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch payments"))
+		return serverError(c, err, "failed to fetch payments")
 	}
 	if payments == nil {
 		payments = []models.Payment{}
@@ -69,7 +79,11 @@ func (h *PaymentHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid stay id"))
 	}
 
-	if !h.stayOwnerCheck(stayID, ownerID) {
+	owned, err := h.stayOwnerCheck(stayID, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to verify the stay")
+	}
+	if !owned {
 		return c.JSON(http.StatusNotFound, errorResponse("stay not found"))
 	}
 
@@ -100,7 +114,7 @@ func (h *PaymentHandler) Create(c echo.Context) error {
 		stayID, req.Amount, req.PaymentType, paymentDate, req.Notes, time.Now(),
 	).StructScan(&payment)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create payment"))
+		return serverError(c, err, "failed to create payment")
 	}
 	return c.JSON(http.StatusCreated, payment)
 }
@@ -135,7 +149,7 @@ func (h *PaymentHandler) ListPending(c echo.Context) error {
 		ownerID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch pending payments"))
+		return serverError(c, err, "failed to fetch pending payments")
 	}
 	if payments == nil {
 		payments = []pendingPayment{}
@@ -157,7 +171,7 @@ func (h *PaymentHandler) Approve(c echo.Context) error {
 		paymentID, ownerID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to approve payment"))
+		return serverError(c, err, "failed to approve payment")
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
@@ -181,7 +195,7 @@ func (h *PaymentHandler) Delete(c echo.Context) error {
 		paymentID, ownerID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to delete payment"))
+		return serverError(c, err, "failed to delete payment")
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {

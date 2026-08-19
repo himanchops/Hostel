@@ -51,27 +51,25 @@ row — chasing a payment and wanting the full ledger is one thought.
 
 ## Observability
 
-Full picture in `docs/DEPLOYMENT.md` → "Where the logs go". The work:
+Full picture in `docs/DEPLOYMENT.md` → "Where the logs go".
 
-### 50 handlers return a 500 and discard the error — M
-Exactly one logs it, added only after a bug hid behind a generic message for
-months. Wants a single `serverError(c, err, msg)` helper that logs with context
-and returns the response, applied everywhere — which then gives one place to
-wire error tracking into instead of fifty.
+### ~~50 handlers return a 500 and discard the error~~ ✅ done
+`serverError(c, err, msg)` logs method, route, message and cause behind all of
+them. One chokepoint, so error tracking wires in once rather than seventy times.
 
-### 19 `db.Get` / `db.Select` calls drop their error entirely — M
-Mostly ownership checks like `h.db.Get(&count, ...)`. If the query fails,
-`count` stays 0 and the handler reports "not found" — so a database problem
-looks to the user like a missing record, and to us like nothing at all.
+### ~~19 `db.Get` / `db.Select` calls drop their error entirely~~ ✅ done
+They were ownership checks: a failed query left `count` at 0, so the handler
+answered "not found" and a database problem looked like a missing record.
 
-### The frontend has no `global-error.tsx` — S
-A React crash shows Next's default page and is recorded nowhere. Needed both as
-a deliberate screen and as the hook error tracking attaches to.
+### ~~The frontend has no `global-error.tsx`~~ ✅ done
+`error.tsx` and `global-error.tsx`, both reporting through `lib/reportError.ts`.
 
 ### No error tracking or alerting — M, needs an account
-Sentry, or GlitchTip self-hosted if storing ID documents makes a third party
-unattractive. Free tiers are ample at one-owner volume. Do it *after* the
-`serverError` chokepoint exists, not before.
+The remaining gap, and the one that matters once this is live: errors reach
+stdout on Render, which is a tail with short retention and no alerting, and
+client-side errors reach only the user's own browser console. Sentry or
+self-hosted GlitchTip — it is account #5 in the deployment guide's setup table.
+Small change now that both chokepoints exist.
 
 ## Correctness / consistency
 

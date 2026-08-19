@@ -20,18 +20,18 @@ func NewTenantPortalHandler(db *sqlx.DB) *TenantPortalHandler {
 }
 
 type tenantStay struct {
-	ID            int64      `db:"id" json:"id"`
-	BedID         *int64     `db:"bed_id" json:"bed_id,omitempty"`
-	BedName       string     `db:"bed_name" json:"bed_name"`
-	RoomName      string     `db:"room_name" json:"room_name"`
-	SiteName      string     `db:"site_name" json:"site_name"`
-	RentAmount    int64      `db:"rent_amount" json:"rent_amount"`
-	DepositAmount int64      `db:"deposit_amount" json:"deposit_amount"`
-	RentCycle     string     `db:"rent_cycle" json:"rent_cycle"`
-	StartDate     time.Time  `db:"start_date" json:"start_date"`
-	EndDate       *time.Time `db:"end_date" json:"end_date,omitempty"`
-	NoticeDate    *time.Time `db:"notice_date" json:"notice_date,omitempty"`
-	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
+	ID            int64            `db:"id" json:"id"`
+	BedID         *int64           `db:"bed_id" json:"bed_id,omitempty"`
+	BedName       string           `db:"bed_name" json:"bed_name"`
+	RoomName      string           `db:"room_name" json:"room_name"`
+	SiteName      string           `db:"site_name" json:"site_name"`
+	RentAmount    int64            `db:"rent_amount" json:"rent_amount"`
+	DepositAmount int64            `db:"deposit_amount" json:"deposit_amount"`
+	RentCycle     string           `db:"rent_cycle" json:"rent_cycle"`
+	StartDate     time.Time        `db:"start_date" json:"start_date"`
+	EndDate       *time.Time       `db:"end_date" json:"end_date,omitempty"`
+	NoticeDate    *time.Time       `db:"notice_date" json:"notice_date,omitempty"`
+	CreatedAt     time.Time        `db:"created_at" json:"created_at"`
 	Payments      []models.Payment `json:"payments"`
 }
 
@@ -55,7 +55,7 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 		tenantID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch stays"))
+		return serverError(c, err, "failed to fetch stays")
 	}
 	if stays == nil {
 		stays = []tenantStay{}
@@ -64,11 +64,13 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 	// Load payments per stay
 	for i := range stays {
 		var payments []models.Payment
-		h.db.Select(&payments,
+		if err := h.db.Select(&payments,
 			`SELECT id, stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at
 			 FROM payments WHERE stay_id = $1 ORDER BY payment_date DESC`,
 			stays[i].ID,
-		)
+		); err != nil {
+			return serverError(c, err, "failed to load payments")
+		}
 		if payments == nil {
 			payments = []models.Payment{}
 		}
@@ -93,7 +95,9 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 
 	// Verify stay belongs to this tenant
 	var count int
-	h.db.Get(&count, `SELECT COUNT(*) FROM stays WHERE id = $1 AND tenant_id = $2`, stayID, tenantID)
+	if err := h.db.Get(&count, `SELECT COUNT(*) FROM stays WHERE id = $1 AND tenant_id = $2`, stayID, tenantID); err != nil {
+		return serverError(c, err, "failed to verify the stay")
+	}
 	if count == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("stay not found"))
 	}
@@ -128,10 +132,7 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 		stayID, req.Amount, now, proofURL, req.Notes, now,
 	).StructScan(&payment)
 	if err != nil {
-		// Logged, not just swallowed: a 500 with a generic message and no
-		// server-side trace is undiagnosable once this is on Render.
-		c.Logger().Errorf("tenant %d submit payment on stay %d: %v", tenantID, stayID, err)
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to submit payment"))
+		return serverError(c, err, "failed to submit payment")
 	}
 	return c.JSON(http.StatusCreated, payment)
 }
@@ -145,10 +146,12 @@ func (h *TenantPortalHandler) SubmitNotice(c echo.Context) error {
 
 	// Verify stay belongs to this tenant and is active
 	var count int
-	h.db.Get(&count,
+	if err := h.db.Get(&count,
 		`SELECT COUNT(*) FROM stays WHERE id = $1 AND tenant_id = $2 AND end_date IS NULL`,
 		stayID, tenantID,
-	)
+	); err != nil {
+		return serverError(c, err, "failed to submit notice")
+	}
 	if count == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("active stay not found"))
 	}
@@ -163,7 +166,7 @@ func (h *TenantPortalHandler) SubmitNotice(c echo.Context) error {
 		noticeDate, time.Now(), stayID,
 	).StructScan(&stay)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to submit notice"))
+		return serverError(c, err, "failed to submit notice")
 	}
 	return c.JSON(http.StatusOK, stay)
 }
