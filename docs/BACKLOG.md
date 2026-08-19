@@ -87,7 +87,7 @@ the registration link is on a fridge; a real one the day it is printed on a QR
 code by the door. Tracked in PROGRESS.md under Deferred as well, because it is
 also a go-live consideration.
 
-### `frontend/.env.example` does not exist — S
-`backend/.env.example` does. The frontend needs `NEXT_PUBLIC_API_URL` and
-nothing else, but a deploy walkthrough that mentions one and not the other is
-how a variable gets missed.
+### ~~`frontend/.env.example` does not exist~~ ✅ done
+Added before the deploy. One variable, `NEXT_PUBLIC_API_URL`, with a note that
+missing it on Vercel produces a clean build whose every request then fails
+against localhost in the browser.
