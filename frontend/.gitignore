@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the example, which documents the vars and holds no secrets.
+# Next.js ships `.env*` here, which silently swallows `.env.example` —
+# `git commit` reports success and the file is simply never added.
+!.env.example
 
 # vercel
 .vercel
