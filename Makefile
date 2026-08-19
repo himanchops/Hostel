@@ -1,6 +1,6 @@
 export PATH := /opt/homebrew/opt/node/bin:/opt/homebrew/bin:$(PATH)
 
-.PHONY: dev setup db-up db-down migrate backend frontend verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
+.PHONY: dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -86,6 +86,25 @@ storage-check:
 test:
 	cd backend && go test ./...
 	cd frontend && npm run test:unit
+
+# ── Demo data ──────────────────────────────────────────────────────────────────
+
+# Seed a demo owner covering every state the UI can show — all five bed
+# statuses, a bed-less stay, a settled move-out, a pending registration and a
+# payment awaiting approval. Backend must be running.
+#
+# The owner is demo@seed.invalid: .invalid is reserved by RFC 2606 and can
+# never be a real address. An earlier version of this script guessed a
+# plausible-looking demo email, hit a real account, and wrote fake tenants into
+# live data — hence the reserved domain and the refusal to reuse an owner.
+seed-demo:
+	python3 scripts/seed-demo.py
+
+# Scoped to the reserved seed address, so it cannot reach a real account.
+seed-demo-reset:
+	psql "postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable" \
+	  -c "DELETE FROM owners WHERE email = 'demo@seed.invalid';"
+	python3 scripts/seed-demo.py
 
 # ── E2E ────────────────────────────────────────────────────────────────────────
 

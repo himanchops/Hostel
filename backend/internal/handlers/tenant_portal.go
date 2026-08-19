@@ -114,14 +114,23 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 		proofURL = &req.ProofURL
 	}
 
+	now := time.Now()
 	var payment models.Payment
 	err = h.db.QueryRowx(
+		// $3 and $6 are the same instant but must be separate placeholders:
+		// payment_date is DATE and created_at is TIMESTAMPTZ, and reusing one
+		// parameter across both makes Postgres fail to deduce its type
+		// (42P08, "inconsistent types deduced for parameter $3"). This is why
+		// no tenant-submitted payment ever reached the database.
 		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at)
-		 VALUES ($1, $2, 'online', $3, $4, $5, false, $3)
+		 VALUES ($1, $2, 'online', $3, $4, $5, false, $6)
 		 RETURNING id, stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at`,
-		stayID, req.Amount, time.Now(), proofURL, req.Notes,
+		stayID, req.Amount, now, proofURL, req.Notes, now,
 	).StructScan(&payment)
 	if err != nil {
+		// Logged, not just swallowed: a 500 with a generic message and no
+		// server-side trace is undiagnosable once this is on Render.
+		c.Logger().Errorf("tenant %d submit payment on stay %d: %v", tenantID, stayID, err)
 		return c.JSON(http.StatusInternalServerError, errorResponse("failed to submit payment"))
 	}
 	return c.JSON(http.StatusCreated, payment)
