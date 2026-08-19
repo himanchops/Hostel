@@ -37,7 +37,7 @@ type createStayRequest struct {
 	RentAmount    int64  `json:"rent_amount"`    // in paise
 	DepositAmount int64  `json:"deposit_amount"` // in paise
 	RentCycle     string `json:"rent_cycle"`     // "daily"|"weekly"|"monthly"
-	StartDate     string `json:"start_date"` // YYYY-MM-DD
+	StartDate     string `json:"start_date"`     // YYYY-MM-DD
 }
 
 // stayPatch is a partial update. Every field is optional, and a field that is
@@ -144,14 +144,18 @@ func (h *StayHandler) Create(c echo.Context) error {
 
 	// Verify tenant belongs to owner
 	var tenantCount int
-	h.db.Get(&tenantCount, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, req.TenantID, ownerID)
+	if err := h.db.Get(&tenantCount, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, req.TenantID, ownerID); err != nil {
+		return serverError(c, err, "failed to create stay")
+	}
 	if tenantCount == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
 
 	// Check tenant doesn't already have an active stay
 	var activeTenantStays int
-	h.db.Get(&activeTenantStays, `SELECT COUNT(*) FROM stays WHERE tenant_id = $1 AND end_date IS NULL`, req.TenantID)
+	if err := h.db.Get(&activeTenantStays, `SELECT COUNT(*) FROM stays WHERE tenant_id = $1 AND end_date IS NULL`, req.TenantID); err != nil {
+		return serverError(c, err, "failed to create stay")
+	}
 	if activeTenantStays > 0 {
 		return c.JSON(http.StatusConflict, errorResponse("tenant already has an active stay"))
 	}
@@ -159,20 +163,24 @@ func (h *StayHandler) Create(c echo.Context) error {
 	if req.BedID != nil {
 		// Verify bed belongs to a site owned by the owner
 		var bedCount int
-		h.db.Get(&bedCount,
+		if err := h.db.Get(&bedCount,
 			`SELECT COUNT(*) FROM beds b
 			 JOIN rooms r ON r.id = b.room_id
 			 JOIN hostel_sites s ON s.id = r.site_id
 			 WHERE b.id = $1 AND s.owner_id = $2`,
 			*req.BedID, ownerID,
-		)
+		); err != nil {
+			return serverError(c, err, "failed to create stay")
+		}
 		if bedCount == 0 {
 			return c.JSON(http.StatusNotFound, errorResponse("bed not found"))
 		}
 
 		// Check bed is not already occupied
 		var activeStays int
-		h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, *req.BedID)
+		if err := h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, *req.BedID); err != nil {
+			return serverError(c, err, "failed to create stay")
+		}
 		if activeStays > 0 {
 			return c.JSON(http.StatusConflict, errorResponse("bed is already occupied"))
 		}
@@ -187,7 +195,7 @@ func (h *StayHandler) Create(c echo.Context) error {
 		req.RentCycle, startDate, time.Now(),
 	).StructScan(&stay)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create stay"))
+		return serverError(c, err, "failed to create stay")
 	}
 	return c.JSON(http.StatusCreated, stay)
 }
@@ -201,10 +209,12 @@ func (h *StayHandler) Update(c echo.Context) error {
 
 	// Verify ownership via tenant
 	var count int
-	h.db.Get(&count,
+	if err := h.db.Get(&count,
 		`SELECT COUNT(*) FROM stays s JOIN tenants t ON t.id = s.tenant_id WHERE s.id = $1 AND t.owner_id = $2`,
 		stayID, ownerID,
-	)
+	); err != nil {
+		return serverError(c, err, "failed to load stay")
+	}
 	if count == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("stay not found"))
 	}
@@ -213,7 +223,7 @@ func (h *StayHandler) Update(c echo.Context) error {
 	// resulting date range can be validated as a whole.
 	var current models.Stay
 	if err := h.db.QueryRowx(`SELECT `+stayCols+` FROM stays WHERE id = $1`, stayID).StructScan(&current); err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to load stay"))
+		return serverError(c, err, "failed to load stay")
 	}
 
 	patch, err := parseStayPatch(c)
@@ -271,10 +281,12 @@ func (h *StayHandler) Update(c echo.Context) error {
 	// the bed now.
 	if current.EndDate != nil && next.EndDate == nil && next.BedID != nil {
 		var occupied int
-		h.db.Get(&occupied,
+		if err := h.db.Get(&occupied,
 			`SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL AND id <> $2`,
 			*next.BedID, stayID,
-		)
+		); err != nil {
+			return serverError(c, err, "failed to update stay")
+		}
 		if occupied > 0 {
 			return c.JSON(http.StatusConflict, errorResponse("bed is already occupied by another active stay"))
 		}
@@ -291,7 +303,7 @@ func (h *StayHandler) Update(c echo.Context) error {
 		next.RentAmount, next.DepositAmount, next.RentCycle, time.Now(), stayID,
 	).StructScan(&stay)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to update stay"))
+		return serverError(c, err, "failed to update stay")
 	}
 	return c.JSON(http.StatusOK, stay)
 }
@@ -326,20 +338,24 @@ func (h *StayHandler) AssignBed(c echo.Context) error {
 
 	// Verify bed belongs to owner
 	var bedCount int
-	h.db.Get(&bedCount,
+	if err := h.db.Get(&bedCount,
 		`SELECT COUNT(*) FROM beds b
 		 JOIN rooms r ON r.id = b.room_id
 		 JOIN hostel_sites s ON s.id = r.site_id
 		 WHERE b.id = $1 AND s.owner_id = $2`,
 		req.BedID, ownerID,
-	)
+	); err != nil {
+		return serverError(c, err, "failed to assign bed")
+	}
 	if bedCount == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("bed not found"))
 	}
 
 	// Verify bed is not already occupied
 	var activeStays int
-	h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, req.BedID)
+	if err := h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, req.BedID); err != nil {
+		return serverError(c, err, "failed to assign bed")
+	}
 	if activeStays > 0 {
 		return c.JSON(http.StatusConflict, errorResponse("bed is already occupied"))
 	}
@@ -351,7 +367,7 @@ func (h *StayHandler) AssignBed(c echo.Context) error {
 		req.BedID, time.Now(), stayID,
 	).StructScan(&stay)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to assign bed"))
+		return serverError(c, err, "failed to assign bed")
 	}
 	return c.JSON(http.StatusOK, stay)
 }
@@ -385,7 +401,9 @@ func (h *StayHandler) ListByTenant(c echo.Context) error {
 
 	// Verify tenant ownership
 	var count int
-	h.db.Get(&count, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID)
+	if err := h.db.Get(&count, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID); err != nil {
+		return serverError(c, err, "failed to fetch stays")
+	}
 	if count == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
@@ -396,7 +414,7 @@ func (h *StayHandler) ListByTenant(c echo.Context) error {
 		tenantID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch stays"))
+		return serverError(c, err, "failed to fetch stays")
 	}
 	if stays == nil {
 		stays = []models.Stay{}

@@ -35,7 +35,7 @@ func (h *SiteHandler) List(c echo.Context) error {
 		ownerID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch sites"))
+		return serverError(c, err, "failed to fetch sites")
 	}
 	if sites == nil {
 		sites = []models.HostelSite{}
@@ -64,7 +64,7 @@ func (h *SiteHandler) Create(c echo.Context) error {
 		ownerID, req.Name, req.Address, time.Now(),
 	).StructScan(&site)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create site"))
+		return serverError(c, err, "failed to create site")
 	}
 
 	return c.JSON(http.StatusCreated, site)
@@ -132,7 +132,7 @@ func (h *SiteHandler) Delete(c echo.Context) error {
 		siteID, ownerID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to delete site"))
+		return serverError(c, err, "failed to delete site")
 	}
 
 	rows, _ := result.RowsAffected()

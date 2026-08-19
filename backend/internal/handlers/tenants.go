@@ -56,7 +56,7 @@ func (h *TenantHandler) List(c echo.Context) error {
 	var tenants []models.Tenant
 	err := h.db.Select(&tenants, query, ownerID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch tenants"))
+		return serverError(c, err, "failed to fetch tenants")
 	}
 	if tenants == nil {
 		tenants = []models.Tenant{}
@@ -109,7 +109,7 @@ func (h *TenantHandler) Create(c echo.Context) error {
 		time.Now(),
 	).StructScan(&tenant)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create tenant"))
+		return serverError(c, err, "failed to create tenant")
 	}
 	return c.JSON(http.StatusCreated, tenant)
 }
@@ -180,7 +180,7 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 
 	hash, err := h.authService.HashPassword(req.Password)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to process password"))
+		return serverError(c, err, "failed to process password")
 	}
 
 	// Validate upload URLs
@@ -236,7 +236,7 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		time.Now(),
 	).StructScan(&tenant)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to register"))
+		return serverError(c, err, "failed to register")
 	}
 	return c.JSON(http.StatusCreated, tenant)
 }
@@ -302,7 +302,9 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 
 			// Check bed is not already occupied
 			var activeStays int
-			h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, *req.BedID)
+			if err := h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, *req.BedID); err != nil {
+				return serverError(c, err, "failed to approve tenant")
+			}
 			if activeStays > 0 {
 				return c.JSON(http.StatusConflict, errorResponse("bed is already occupied"))
 			}
@@ -310,7 +312,9 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 
 		// Check tenant doesn't already have an active stay
 		var activeTenantStays int
-		h.db.Get(&activeTenantStays, `SELECT COUNT(*) FROM stays WHERE tenant_id = $1 AND end_date IS NULL`, tenantID)
+		if err := h.db.Get(&activeTenantStays, `SELECT COUNT(*) FROM stays WHERE tenant_id = $1 AND end_date IS NULL`, tenantID); err != nil {
+			return serverError(c, err, "failed to approve tenant")
+		}
 		if activeTenantStays > 0 {
 			return c.JSON(http.StatusConflict, errorResponse("tenant already has an active stay"))
 		}
@@ -321,7 +325,11 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 			tenantID, req.BedID, req.RentAmount, req.DepositAmount, req.RentCycle, startDate, time.Now(),
 		)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, errorResponse("tenant approved but failed to create stay: "+err.Error()))
+			// The message stays specific because a partial success is worth
+			// telling the client about — the tenant IS approved. The raw
+			// error does not go with it: it can carry query text and column
+			// values, and it now goes to the log instead.
+			return serverError(c, err, "tenant approved but failed to create stay")
 		}
 	}
 
@@ -340,7 +348,7 @@ func (h *TenantHandler) Reject(c echo.Context) error {
 		tenantID, ownerID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to reject"))
+		return serverError(c, err, "failed to reject")
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
@@ -428,7 +436,9 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 
 	// Verify tenant belongs to owner
 	var count int
-	h.db.Get(&count, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID)
+	if err := h.db.Get(&count, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID); err != nil {
+		return serverError(c, err, "failed to compute summary")
+	}
 	if count == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
@@ -460,7 +470,7 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 		tenantID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to compute summary"))
+		return serverError(c, err, "failed to compute summary")
 	}
 
 	// Billing cycles use cyclesElapsed so this agrees with the grid and the

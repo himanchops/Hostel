@@ -184,7 +184,7 @@ func (h *CollectionsHandler) GetCollections(c echo.Context) error {
 		  AND s.end_date IS NULL
 	`, ownerID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch collections"))
+		return serverError(c, err, "failed to fetch collections")
 	}
 
 	return c.JSON(http.StatusOK, buildCollections(stays, today))

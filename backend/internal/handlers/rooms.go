@@ -64,7 +64,7 @@ func (h *RoomHandler) ListRooms(c echo.Context) error {
 		siteID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch rooms"))
+		return serverError(c, err, "failed to fetch rooms")
 	}
 	if rooms == nil {
 		rooms = []models.Room{}
@@ -96,7 +96,7 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 		siteID, req.Name, req.Floor, time.Now(),
 	).StructScan(&room)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create room"))
+		return serverError(c, err, "failed to create room")
 	}
 
 	return c.JSON(http.StatusCreated, room)
@@ -152,7 +152,7 @@ func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 		roomID, siteID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to delete room"))
+		return serverError(c, err, "failed to delete room")
 	}
 
 	rows, _ := result.RowsAffected()
@@ -199,7 +199,7 @@ func (h *RoomHandler) ListBeds(c echo.Context) error {
 		roomID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch beds"))
+		return serverError(c, err, "failed to fetch beds")
 	}
 	if beds == nil {
 		beds = []models.Bed{}
@@ -235,7 +235,7 @@ func (h *RoomHandler) CreateBed(c echo.Context) error {
 		roomID, req.Name, time.Now(),
 	).StructScan(&bed)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create bed"))
+		return serverError(c, err, "failed to create bed")
 	}
 
 	return c.JSON(http.StatusCreated, bed)
@@ -299,7 +299,7 @@ func (h *RoomHandler) DeleteBed(c echo.Context) error {
 		bedID, roomID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to delete bed"))
+		return serverError(c, err, "failed to delete bed")
 	}
 
 	rows, _ := result.RowsAffected()
