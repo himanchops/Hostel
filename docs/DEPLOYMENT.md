@@ -15,9 +15,44 @@ makes this possible — `S3Storage`, `render.yaml`, `.env.example` — see Phase
 
 ---
 
+## Accounts to create first (do these in one sitting)
+
+Every step below stalls on one of these, and each needs a human at a signup
+form — Claude cannot create accounts or enter credentials. Get them all out of
+the way in one go, keep the secrets somewhere you can paste from, and the rest
+of the guide is mostly copying values between dashboards.
+
+| # | Service | What for | What you leave with |
+|---|---|---|---|
+| 1 | [Neon](https://neon.tech) | Postgres | `DATABASE_URL` |
+| 2 | [Cloudflare](https://dash.cloudflare.com) (R2) | Tenant photos and ID documents | Account ID, access key + secret, bucket name, public bucket URL |
+| 3 | [Render](https://render.com) | The Go backend | — (reads `render.yaml`; you paste the secrets in) |
+| 4 | [Vercel](https://vercel.com) | The Next.js frontend | — (you set `NEXT_PUBLIC_API_URL`) |
+| 5 | [Sentry](https://sentry.io) *or* self-hosted [GlitchTip](https://glitchtip.com) | Seeing errors after they happen | A DSN for the Go SDK and one for the Next.js SDK |
+
+**On #5.** Not strictly required to deploy, and the guide works without it —
+but it is the difference between "here is the error" and "try to make it happen
+again". The code is already shaped for it: every backend 500 goes through one
+`serverError` helper and every client-side crash through one `reportError`, so
+wiring a DSN in is a small change in two files rather than seventy. Free tiers
+are ample at one-owner volume.
+
+Worth a thought before picking: this app stores photographs of government ID.
+Stack traces should not contain them, but Sentry is a third party receiving
+error data from a service that handles them, and GlitchTip is the
+self-hostable equivalent if you would rather that did not leave your
+infrastructure. See "Where the logs go" below for what happens with and
+without it.
+
+**Not an account, but same category:** decide now whether the R2 bucket is
+public. The app serves tenant photos and ID scans by URL; a public bucket means
+those URLs are readable by anyone who has them.
+
+---
+
 ## 1. Database (Neon) — ~10 min
 
-1. Sign up at https://neon.tech.
+1. Sign up at https://neon.tech (see the accounts table above).
 2. Create a new project. Region: pick the closest one to where you'll deploy the backend.
 3. Once created, copy the **connection string** — looks like:
    ```
@@ -133,14 +168,15 @@ You now have the 5 values you need:
 
 ## Where the logs go (read this before you need it)
 
-**Today, honestly: mostly nowhere.** Worth knowing the shape of it before
-something breaks at 11pm rather than after.
+**Short version: errors now have a cause attached, but nothing stores or
+announces them.** Worth knowing the shape of it before something breaks at
+11pm rather than after.
 
 | Source | Where it lands | Retention | Anyone told? |
 |---|---|---|---|
 | Backend request lines + panics | Render's log tab (stdout) | short, and rolls off | no |
-| Backend 500s | **nothing** — 49 of 50 sites return the error to the client and discard it | — | no |
-| Frontend crashes in the browser | **nowhere at all** | — | no |
+| Backend 500s | Render's log tab — every one now logs method, route and cause | short, and rolls off | no |
+| Frontend crashes in the browser | the user's browser console only | none | no |
 | Postgres | Neon's own console | per Neon's plan | no |
 
 Render captures stdout, so `middleware.Logger()` output and any
@@ -154,20 +190,17 @@ can reach.
 
 ### The plan, in the order it is worth doing
 
-1. **Stop discarding errors** (before deploy, ~1 session). One `serverError`
-   helper that logs with context and returns the 500, applied to all 50 sites,
-   plus the 19 `db.Get` calls whose error is currently dropped — several of
-   those turn a database failure into a misleading 404. This is the step that
-   makes everything after it useful; without it there is nothing to capture.
-2. **Add `global-error.tsx`** to the frontend so a client-side crash shows
-   something deliberate instead of Next's default, and has a hook to report from.
-3. **Error tracking** (at or just after deploy). Sentry's free tier covers
-   this comfortably at one-owner volume and has both a Go SDK and a Next.js
-   one: stack traces, grouping, and an email when something new breaks. Wire it
-   into the single `serverError` chokepoint from step 1 and into
-   `global-error.tsx`. GlitchTip is the self-hostable equivalent if you would
-   rather not send data to a third party — worth a thought given this app
-   stores ID documents.
+1. ~~**Stop discarding errors.**~~ ✅ Done. One `serverError` helper logs the
+   cause behind every backend 500, and the 19 `db.Get` calls that silently
+   dropped their error — turning a database failure into a misleading 404 —
+   now check it. This was the step that made everything after it useful.
+2. ~~**Add an error boundary.**~~ ✅ Done. `error.tsx` and `global-error.tsx`
+   catch client-side crashes, reporting through `lib/reportError.ts`.
+3. **Error tracking** (at or just after deploy). Account #5 in the table at
+   the top. Wire the DSN into the single `serverError` chokepoint on the
+   backend and `reportError` on the frontend — both already exist, so it is a
+   change in two files rather than seventy. Gives stack traces, grouping, and
+   an email when something new breaks.
 4. **Log drain** (optional, later). Render can forward stdout to Better Stack
    or Papertrail for searchable retention. Only worth it once there is enough
    traffic that "tail the dashboard" stops working.
