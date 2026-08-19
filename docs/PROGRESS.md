@@ -503,6 +503,114 @@ where the owner name fails to load).
 
 ---
 
+## Phase 13 — Intake documents & tenant photo 🔜
+
+Today the app collects ID proof only if the tenant uploads it themselves during
+registration, and every field is optional. In practice the owner photographs
+the person and their ID at the door on the day they move in, and that is the
+copy that actually exists. The app has nowhere to put it.
+
+**What is missing**
+- **A photo taken at intake.** `tenants.photo_url` exists and the owner's edit
+  form can upload one, but only as a file picked from disk. On a phone this
+  should open the camera — `<input type="file" accept="image/*" capture="user">`
+  — because the owner is standing in front of the person.
+- **ID documents captured owner-side.** `id_proof_front_url` / `_back_url` are
+  filled at registration or not at all. The owner needs to add or replace them
+  later, from the tenant page, with the same camera affordance.
+- **A view of what is actually on file.** Nothing on the tenant page or the
+  pending queue says "no ID on record". An owner cannot see the gap, so the gap
+  persists until they need the document and it is not there.
+- **More than two slots.** Front and back of one ID is an assumption. Some
+  tenants hand over a passport plus a college letter.
+
+**Deliberately not decided here:** whether an ID is *required* before approval.
+That is a policy, and per the settlement lesson the app should not freeze one —
+surface the gap loudly at approval time and let the owner proceed anyway.
+
+**Storage:** goes through the existing R2/S3 path and `ValidateUploadedURL`, so
+this phase depends on 9.3 being done and is best built against real object
+storage rather than the local disk backend.
+
+**Privacy note worth carrying:** this turns the app into a store of
+government-ID photographs for real people. Access is already owner-scoped, but
+the retention question — what happens to these when a tenant leaves — has never
+been asked and should be, in this phase.
+
+---
+
+## Incident — seed script wrote into a live account (2026-08-19)
+
+A throwaway script written to populate a demo dataset guessed
+`demo@hostel.local` for its owner. That was the actual owner's login. Signup
+returned a conflict, and the script's `except: log in instead` fallback treated
+that identically to a re-run, so it appended two sites, ten fake tenants, nine
+stays and twenty-eight payments to real data. Cleaned up the same session —
+everything it wrote was scoped to one owner, one day and one phone prefix, so
+the delete was precise and the account returned to its exact prior state.
+
+**Two causes, both worth remembering:**
+- A "demo" identifier plausible enough to belong to someone. Seed data now uses
+  `demo@seed.invalid`; `.invalid` is reserved by RFC 2606 and can never be a
+  real address.
+- A fallback that made "this already exists" indistinguishable from "you are
+  about to write into something that is not yours". The script now refuses to
+  reuse an owner at all; `make seed-demo-reset` deletes and reseeds explicitly.
+
+Nothing here was specific to seeding. Any script that writes on a user's behalf
+should fail loudly on an identity it did not create, rather than proceeding on
+a guess.
+
+---
+
+## Phase 14 — Flow & UX review 🔎
+
+A deliberate pass over the whole product as a *user* rather than as its author,
+against the deployed environment. Everything has been verified feature by
+feature as it was built; nothing has ever been walked end to end by someone
+asking "is this actually good".
+
+**Run it against the deploy, not localhost.** Half of what this is for only
+exists in production: CORS between Vercel and Render, uploads landing in R2,
+cold starts on the free tier, real latency on a phone on mobile data.
+
+**The flows to walk, each start to finish**
+1. Owner signs up → creates a site, rooms, beds
+2. Prospective tenant scans the QR → registers → owner sees them in Pending
+3. Owner approves, assigns a bed, sets rent and deposit
+4. Owner records payments — including a part payment and a backdated one
+5. Rent day: collections list, the WhatsApp nudge, recording from the list
+6. Tenant gives notice, from the portal and from the owner side
+7. Settle & vacate — with dues, with an advance, with adjustments, and the
+   "end without settling" path
+8. Tenant portal: login, ledger, submit a payment proof, notice to vacate
+9. The awkward ones: correcting a wrong start date, a stay with no bed, a
+   tenant with two stays over time, month-end move-ins
+
+**For each, three questions:** does it work, is the UX right, and what does the
+backend do when the input is odd. Findings that are one-liners go to
+`docs/BACKLOG.md`; anything structural gets promoted to a phase.
+
+**Worth doing with fresh eyes.** A subagent reviewing flows it did not build is
+genuinely better at this than the author is — ask before spawning one.
+
+**Evidence this phase is not optional:** ten minutes of seeding a demo dataset
+(2026-08-19) found that `POST /tenant/stays/:stayId/payments` had returned 500
+on *every call since it was written* — the INSERT reused one placeholder across
+a `DATE` and a `TIMESTAMPTZ` column, so Postgres rejected it with 42P08.
+Tenants have never been able to submit a payment proof, which is a headline
+feature of the portal. It survived because the e2e suite had `owner/` and
+`public/` directories and no `tenant/` one, and because the handler returned a
+generic 500 with the real error discarded. Both are fixed; the lesson is that a
+surface with no test directory is a surface nobody has tested.
+
+**Run the review against `make seed-demo`.** It builds every state the UI can
+show, including the awkward ones — a bed-less stay, a paid-ahead tenant, a
+settled move-out, a payment awaiting approval — which is most of the list above
+already standing up.
+
+---
+
 ## Phase 12 — Test Hardening 🔜
 
 **Why this exists.** The tenant-summary bug (payments inflating the balance
@@ -833,11 +941,10 @@ Found while verifying the billing fixes (Aug 2026). None are fixed yet.
 Both paths now render the shared `components/EndStayDialog.tsx`, so the grid and
 the tenant page ask for a move-out date the same way and bill to the same day.
 
-### Collapsed stay cards show "Paid ₹0" 🐞 (cosmetic)
-On the tenant detail page the ledger is lazy-loaded on expand, but the card's
-"Paid ₹X" total is computed from the not-yet-loaded payments array, so a
-collapsed stay always reads ₹0. Either load totals up front or omit the figure
-until expanded.
+### ~~Collapsed stay cards show "Paid ₹0"~~ ✅ fixed in Phase 11
+The ledger is still lazy-loaded on expand, but the card now reads "Paid —"
+until the payments arrive rather than claiming zero. Fixed when the settlement
+work put a refund figure next to it, where a false zero stops being cosmetic.
 
 ---
 

@@ -131,6 +131,53 @@ You now have the 5 values you need:
 
 ---
 
+## Where the logs go (read this before you need it)
+
+**Today, honestly: mostly nowhere.** Worth knowing the shape of it before
+something breaks at 11pm rather than after.
+
+| Source | Where it lands | Retention | Anyone told? |
+|---|---|---|---|
+| Backend request lines + panics | Render's log tab (stdout) | short, and rolls off | no |
+| Backend 500s | **nothing** — 49 of 50 sites return the error to the client and discard it | — | no |
+| Frontend crashes in the browser | **nowhere at all** | — | no |
+| Postgres | Neon's own console | per Neon's plan | no |
+
+Render captures stdout, so `middleware.Logger()` output and any
+`c.Logger().Errorf` line is visible in the dashboard. That is a *tail*, not a
+search: no grouping, no history worth relying on, and nothing raises a hand
+when a 500 happens. If you are not looking at the moment it breaks, it is gone.
+
+The frontend is worse — it is a client-rendered app on Vercel, so a React crash
+or a failed fetch happens in someone's browser and leaves no trace anywhere you
+can reach.
+
+### The plan, in the order it is worth doing
+
+1. **Stop discarding errors** (before deploy, ~1 session). One `serverError`
+   helper that logs with context and returns the 500, applied to all 50 sites,
+   plus the 19 `db.Get` calls whose error is currently dropped — several of
+   those turn a database failure into a misleading 404. This is the step that
+   makes everything after it useful; without it there is nothing to capture.
+2. **Add `global-error.tsx`** to the frontend so a client-side crash shows
+   something deliberate instead of Next's default, and has a hook to report from.
+3. **Error tracking** (at or just after deploy). Sentry's free tier covers
+   this comfortably at one-owner volume and has both a Go SDK and a Next.js
+   one: stack traces, grouping, and an email when something new breaks. Wire it
+   into the single `serverError` chokepoint from step 1 and into
+   `global-error.tsx`. GlitchTip is the self-hostable equivalent if you would
+   rather not send data to a third party — worth a thought given this app
+   stores ID documents.
+4. **Log drain** (optional, later). Render can forward stdout to Better Stack
+   or Papertrail for searchable retention. Only worth it once there is enough
+   traffic that "tail the dashboard" stops working.
+
+Steps 1 and 2 are ours and cost a session. Step 3 needs an account and a DSN,
+so it needs you.
+
+**Rule going forward:** a 500 that reaches a user and leaves no trace is a bug
+in its own right, separate from whatever caused it. See CLAUDE.md.
+
 ## Things deliberately not automated yet
 
 - **Migrations** are still run manually from your laptop against the Neon URL.

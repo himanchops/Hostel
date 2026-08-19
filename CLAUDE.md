@@ -39,17 +39,28 @@ hostel/
 
 ## Current Status
 
-**See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
+**See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session. `docs/BACKLOG.md` holds the loose ends that are too small to be a phase.
 
 Current state (Aug 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Everything on the roadmap before deployment is done: next up is **deploy, Phase 9.2–9.6** (Neon → R2 → Render → Vercel, `docs/DEPLOYMENT.md`).
 
 UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 
-E2E tests log in with `loginAs(page, token)` from `tests/e2e/helpers/api.ts` — never `goto("/")` then `localStorage.setItem`, which races with the root redirect.
+Test dirs are `tests/e2e/{owner,tenant,public}/` — a whole surface with no directory is a surface nobody has tested. E2E tests log in with `loginAs(page, token)` from `tests/e2e/helpers/api.ts` — never `goto("/")` then `localStorage.setItem`, which races with the root redirect.
 
 **Roadmap decision (Apr 2026): deployment is deferred until after the UI modernization and two value features.** Execution order: design Phases A–B (`docs/DESIGN_PLAN.md`) → Phase 10 Collections & WhatsApp nudges (`docs/PROGRESS.md`) → design Phases C–E → Phase 11 Settlement calculator → design Phase F → deploy (Phase 9.2–9.6, `docs/DEPLOYMENT.md`).
 
 Key conventions to carry forward:
+- **Never swallow an error.** A handler that returns 500 must log the underlying
+  error first — `c.Logger().Errorf(...)` with enough context to identify the row
+  — and a `db.Get`/`db.Select` whose error is discarded is a bug, not a
+  shortcut. The tenant portal's payment submission was broken from its first
+  commit and nobody could see why, because the only trace was a generic
+  "failed to submit payment". Same rule on the frontend: every catch either
+  shows the user something or reports it.
+- **Demo/seed data uses `demo@seed.invalid`.** `.invalid` is reserved by
+  RFC 2606 and cannot collide with a real account. A seed script must never
+  fall back to logging in when signup fails — that once appended ten fake
+  tenants to a live owner's data. `make seed-demo` / `make seed-demo-reset`.
 - Every new feature ships with a Playwright e2e test in `frontend/tests/e2e/`
 - Money math ships with a unit test too — `backend/internal/handlers/*_test.go` or `frontend/tests/unit/`. Exact values, non-degenerate fixtures (see Phase 12a in `docs/PROGRESS.md`)
 - Amounts stored in **paise** (₹1 = 100 paise), displayed via `formatCurrency()`
