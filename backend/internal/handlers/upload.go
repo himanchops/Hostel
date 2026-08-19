@@ -16,9 +16,9 @@ import (
 const maxUploadSize = 10 << 20 // 10 MB
 
 var allowedMIME = map[string]string{
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/webp": ".webp",
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/webp":      ".webp",
 	"application/pdf": ".pdf",
 }
 
@@ -63,14 +63,14 @@ func (h *UploadHandler) handle(c echo.Context, prefix string) error {
 
 	src, err := file.Open()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to read file"))
+		return serverError(c, err, "failed to read file")
 	}
 	defer src.Close()
 
 	key := fmt.Sprintf("%s/%s%s", prefix, randomHex(16), ext)
 	url, err := h.storage.Upload(context.Background(), key, ct, src)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to store file"))
+		return serverError(c, err, "failed to store file")
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"url": url})

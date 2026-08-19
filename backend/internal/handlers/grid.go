@@ -87,7 +87,9 @@ func (h *GridHandler) GetGrid(c echo.Context) error {
 
 	// Verify site ownership
 	var count int
-	h.db.Get(&count, `SELECT COUNT(*) FROM hostel_sites WHERE id = $1 AND owner_id = $2`, siteID, ownerID)
+	if err := h.db.Get(&count, `SELECT COUNT(*) FROM hostel_sites WHERE id = $1 AND owner_id = $2`, siteID, ownerID); err != nil {
+		return serverError(c, err, "failed to load the grid")
+	}
 	if count == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("site not found"))
 	}
@@ -124,7 +126,7 @@ func (h *GridHandler) GetGrid(c echo.Context) error {
 		ORDER BY r.floor, r.name, b.name
 	`, siteID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch grid"))
+		return serverError(c, err, "failed to fetch grid")
 	}
 
 	grid := buildGrid(rows)
@@ -233,4 +235,3 @@ func computeBedStatus(balance, rentAmount int64, noticeDate, endDate *time.Time,
 	}
 	return StatusOverdue // >= 1 full cycle behind
 }
-

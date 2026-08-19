@@ -286,7 +286,9 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 	}
 
 	var existing int
-	h.db.Get(&existing, `SELECT COUNT(*) FROM settlements WHERE stay_id = $1`, stayID)
+	if err := h.db.Get(&existing, `SELECT COUNT(*) FROM settlements WHERE stay_id = $1`, stayID); err != nil {
+		return serverError(c, err, "failed to check for an existing settlement")
+	}
 	if existing > 0 {
 		return c.JSON(http.StatusConflict, errorResponse("this stay has already been settled"))
 	}
@@ -333,7 +335,7 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 	// stay would leave the bed occupied by someone who has been paid out.
 	tx, err := h.db.Beginx()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to settle stay"))
+		return serverError(c, err, "failed to settle stay")
 	}
 	defer tx.Rollback()
 
@@ -345,7 +347,7 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 		stayID, stay.DepositAmount, dues, advanceReturned, adjustments, refund, notes,
 	).StructScan(&settlement)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to record the settlement"))
+		return serverError(c, err, "failed to record the settlement")
 	}
 
 	if stay.EndDate == nil {
@@ -353,12 +355,12 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 			`UPDATE stays SET end_date = $1, updated_at = NOW() WHERE id = $2`,
 			endDate, stayID,
 		); err != nil {
-			return c.JSON(http.StatusInternalServerError, errorResponse("failed to end the stay"))
+			return serverError(c, err, "failed to end the stay")
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to settle stay"))
+		return serverError(c, err, "failed to settle stay")
 	}
 	return c.JSON(http.StatusCreated, settlement)
 }
@@ -378,7 +380,9 @@ func (h *SettlementHandler) ListByTenant(c echo.Context) error {
 	}
 
 	var count int
-	h.db.Get(&count, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID)
+	if err := h.db.Get(&count, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID); err != nil {
+		return serverError(c, err, "failed to fetch settlements")
+	}
 	if count == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
@@ -394,7 +398,7 @@ func (h *SettlementHandler) ListByTenant(c echo.Context) error {
 		tenantID,
 	)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch settlements"))
+		return serverError(c, err, "failed to fetch settlements")
 	}
 	if settlements == nil {
 		settlements = []models.Settlement{}

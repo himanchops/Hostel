@@ -151,7 +151,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		ORDER BY hs.name
 	`, ownerID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch occupancy"))
+		return serverError(c, err, "failed to fetch occupancy")
 	}
 
 	occupancy := OccupancySummary{Sites: []SiteOccupancy{}}
@@ -189,7 +189,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		  AND p.payment_date <  $3
 	`, ownerID, firstOfMonth.Format("2006-01-02"), nextMonth.Format("2006-01-02"))
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch revenue"))
+		return serverError(c, err, "failed to fetch revenue")
 	}
 
 	// 3. Active stays for expected/overdue calculation
@@ -209,7 +209,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		GROUP BY s.id, s.rent_amount, s.rent_cycle, s.start_date
 	`, ownerID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch stay data"))
+		return serverError(c, err, "failed to fetch stay data")
 	}
 
 	revenue := computeRevenue(stayRows, collectedThisMonth, today)
@@ -225,7 +225,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			 WHERE t.owner_id = $1 AND p.is_approved = false) AS pending_payments
 	`, ownerID).Scan(&pendingTenants, &pendingPayments)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch alerts"))
+		return serverError(c, err, "failed to fetch alerts")
 	}
 
 	// 5. Vacating soon
@@ -264,7 +264,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		LIMIT 10
 	`, ownerID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch vacating tenants"))
+		return serverError(c, err, "failed to fetch vacating tenants")
 	}
 
 	vacating := make([]VacatingTenant, 0, len(vacRows))
@@ -319,7 +319,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		LIMIT 10
 	`, ownerID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to fetch recent payments"))
+		return serverError(c, err, "failed to fetch recent payments")
 	}
 
 	recent := make([]RecentPayment, 0, len(recentRows))

@@ -58,7 +58,7 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 	var count int
 	err := h.db.Get(&count, "SELECT COUNT(*) FROM owners WHERE email = $1", req.Email)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("database error"))
+		return serverError(c, err, "database error")
 	}
 	if count > 0 {
 		return c.JSON(http.StatusConflict, errorResponse("email already registered"))
@@ -66,7 +66,7 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 
 	hash, err := h.authService.HashPassword(req.Password)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to process password"))
+		return serverError(c, err, "failed to process password")
 	}
 
 	var owner models.Owner
@@ -77,12 +77,12 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 		req.Email, hash, req.Name, req.Phone, time.Now(),
 	).StructScan(&owner)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to create account"))
+		return serverError(c, err, "failed to create account")
 	}
 
 	token, err := h.authService.GenerateToken(owner.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to generate token"))
+		return serverError(c, err, "failed to generate token")
 	}
 
 	return c.JSON(http.StatusCreated, authResponse{Token: token, Owner: owner})
@@ -114,7 +114,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	token, err := h.authService.GenerateToken(owner.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to generate token"))
+		return serverError(c, err, "failed to generate token")
 	}
 
 	return c.JSON(http.StatusOK, authResponse{Token: token, Owner: owner})
@@ -133,9 +133,4 @@ func (h *AuthHandler) Me(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, owner)
-}
-
-// errorResponse is a shared helper used across handlers.
-func errorResponse(msg string) map[string]string {
-	return map[string]string{"error": msg}
 }

@@ -56,7 +56,7 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 
 	token, err := h.authService.GenerateTenantToken(tenant.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, errorResponse("failed to generate token"))
+		return serverError(c, err, "failed to generate token")
 	}
 
 	return c.JSON(http.StatusOK, tenantAuthResponse{Token: token, Tenant: tenant})
