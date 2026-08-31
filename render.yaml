@@ -20,6 +20,14 @@ services:
     startCommand: ./bin/server
     healthCheckPath: /health
     envVars:
+      # Go toolchain version. backend/go.mod requires go 1.25.7 and carries no
+      # `toolchain` directive, so without this Render builds with its own
+      # default — which lags — and fails with "go.mod requires go >= 1.25.7",
+      # an error that reads like a dependency problem rather than a runtime one.
+      # Bump this whenever the go directive in backend/go.mod moves.
+      - key: GO_VERSION
+        value: "1.25.7"
+
       # Auto-generated random secret — Render fills this in on first deploy.
       - key: JWT_SECRET
         generateValue: true
