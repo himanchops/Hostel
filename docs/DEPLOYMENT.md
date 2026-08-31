@@ -103,12 +103,30 @@ because the DB stores absolute URLs rather than keys.
    Expected, exactly nine lines: `beds`, `hostel_sites`, `owners`, `payments`,
    `rooms`, `schema_migrations`, `settlements`, `stays`, `tenants`.
 
-> **Future migrations:** every time you ship a new schema change, re-run the
-> `migrate ... up` command against the Neon URL before deploying the new
-> backend binary. Until automation is in place, this is a manual step — and the
-> expected `version` number above goes up by one each time, so treat it as a
-> value to re-derive from `ls backend/migrations/*.up.sql | wc -l` rather than a
-> constant.
+> **Future migrations:** every time you ship a new schema change, run this
+> against Neon *before* deploying the new backend binary:
+>
+> ```bash
+> make migrate DATABASE_URL="$NEON_URL"
+> ```
+>
+> It echoes `LOCAL` or `REMOTE` first and prints the resulting version, so a
+> mis-set variable is visible rather than silent. Bare `make migrate` targets
+> the local database — it used to be hardcoded to localhost, which meant a
+> deploy-time migration could report success having touched the wrong database
+> entirely, and the missing column then surfaced as a 500 in production.
+>
+> `make seed-demo-reset` is deliberately **not** overridable this way; it writes
+> rows, so it stays pinned to local. Clear the seed owner from a deployed
+> database by hand instead:
+>
+> ```bash
+> psql "$NEON_URL" -c "DELETE FROM owners WHERE email = 'demo@seed.invalid';"
+> ```
+>
+> Until automation is in place this is all manual. The expected `version` number
+> goes up by one per migration, so re-derive it from
+> `ls backend/migrations/*.up.sql | wc -l` rather than treating 5 as a constant.
 
 ---
 

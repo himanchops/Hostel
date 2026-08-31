@@ -91,6 +91,39 @@ cost only goes up.
 Related: a custom domain on the bucket is wanted regardless — Cloudflare treats
 `pub-*.r2.dev` as a development subdomain and rate-limits it.
 
+### The app collects full Aadhaar numbers and card images — M, and it is a product question first
+Registration asks for a 12-digit Aadhaar number (`page.tsx:312`, optional) plus
+front and back ID images. The number is stored as `aadhaar_number VARCHAR(20)`
+in plaintext — `grep` finds no encryption anywhere in the backend — and the
+images sit at permanent public URLs (see the item above).
+
+Three separate things tangled together, worth pulling apart before any of them
+is "fixed":
+
+**1. The form makes a promise the storage does not keep.** The hint reads "Your
+Aadhaar number is stored securely and only visible to the property owner." It is
+not untrue — TLS in transit, Neon encrypts at rest, queries are owner-scoped —
+but "stored securely" reads as something stronger than a plaintext column, and
+it is shown at the exact moment someone decides whether to type the number.
+Either soften the wording or make it accurate. The cheap honest version costs
+nothing; the wording change is S on its own.
+
+**2. UIDAI guidance discourages storing Aadhaar copies at all**, and points to
+masked Aadhaar (last four digits) where identity confirmation is the actual
+need. India's DPDP Act adds its own obligations for personal data at rest. This
+is not legal advice and nobody here is a lawyer — the point is that it is a real
+question for an app whose registration form asks for this, and it should be
+answered deliberately rather than by default.
+
+**3. Does the app need the full number?** Nothing computes on it — it is stored
+and displayed, never validated, never matched. If the purpose is "the owner can
+confirm who this person is", the ID images already do that and the last four
+digits are enough to cross-check. Dropping to masked storage would remove most
+of the exposure without removing the feature.
+
+Cheapest first step is (1). Do not touch the column without deciding (3), or the
+migration gets done twice.
+
 ### `/public/upload` is unauthenticated by design — S, once registration has a token
 A stranger scanning the QR code has to upload their ID before any account exists,
 so the endpoint cannot require auth as things stand. The rate limiter caps abuse
