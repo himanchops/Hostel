@@ -264,7 +264,82 @@ Follow-ups in `docs/BACKLOG.md` → "Security / privacy": presigned URLs (grows
 more expensive per real tenant row, because the DB stores absolute URLs rather
 than keys) and a registration token gating the upload.
 
-### Phase 9.3–9.6 — Deploy walkthrough 🔜
+### Phase 9.2 — Database (Neon) ✅ (Aug 2026)
+
+Project on AWS `ap-southeast-1` (Singapore). Neon offers no India region — its
+list stops at Singapore for APAC — and the backend is pinned to Render's
+`singapore` anyway. Co-locating DB with compute is what matters: user→backend is
+one round trip per page, backend→DB is several.
+
+Neon Auth, Object storage, Functions and the AI gateway were all left off. Neon
+Auth in particular would have added its own tables and broken the "exactly nine
+tables" verification below.
+
+Verified, not assumed: 5 migrations applied, `migrate ... version` → `5` clean,
+and `pg_tables` returns exactly the nine expected names. Then the real server
+binary was run locally against the Neon URL and a signup round-tripped, which is
+what actually proves the driver and pooler work — `/health` only proves the
+process booted.
+
+**The connection string is the pooled endpoint** (`...-pooler...`, PgBouncer in
+transaction mode). Checked that nothing in the app depends on session state:
+no `LISTEN`/`NOTIFY`, no advisory locks, no temp tables, no `SET SESSION`. The
+one explicit transaction (`settlements.go:336`) is fine — a transaction is the
+unit PgBouncer pools by. Driver is `lib/pq` via sqlx and it accepts
+`channel_binding=require`.
+
+### Makefile: `make migrate` could target the wrong database ✅ (Aug 2026)
+
+Found while cleaning up the smoke-test row. `make migrate`, `make migrate-down`
+and `make seed-demo-reset` were hardcoded to `localhost:5432`. Harmless with one
+database; a real trap with two, because a deploy-time `make migrate` would
+report success having migrated local, and the missing column would surface as a
+production 500 — precisely the failure DEPLOYMENT.md warns is easy to forget.
+
+- `LOCAL_DB` and `DATABASE_URL ?= $(LOCAL_DB)` at the top of the Makefile.
+- `migrate` / `migrate-down` honour the override, echo `LOCAL` or `REMOTE`
+  before running, and `migrate` prints the resulting version afterwards.
+- `seed-demo-reset` is deliberately **not** overridable and now announces that
+  it is local-only. It writes rows; a typo in a remote URL is not a mistake
+  worth making cheap — same reasoning as the `demo@seed.invalid` convention.
+
+Deploy usage: `make migrate DATABASE_URL="$NEON_URL"`.
+
+### Phase 9.3 — File storage (Cloudflare R2) ✅ (Aug 2026)
+
+Bucket `hostel-uploads`, location Asia-Pacific, Standard storage class.
+Infrequent Access was rejected deliberately: it bills per retrieval and imposes
+a 30-day minimum per object, and tenant photos are fetched every time an owner
+opens a profile — IA would charge for the app working normally.
+
+Public read is served by the **R2.dev development subdomain**, because the app
+needs two hostnames for two jobs: the S3 API endpoint takes SigV4-signed writes
+from the Go backend, and an `<img src>` in the browser cannot sign anything. The
+code already enforces the split — `NewS3Storage` refuses to start with an empty
+`PublicURL`. Cloudflare labels it "Public Development URL" and rate-limits it;
+a custom domain is the eventual answer and is noted in BACKLOG.md.
+
+API token: `Object Read & Write` — the least privilege that permits `PutObject`,
+since reads never touch the API — scoped to `hostel-uploads` alone, no IP
+filter (Render's free tier has no stable outbound IPs, so a filter would work
+once and then break on redeploy).
+
+Verified with `cmd/storage-check`: `Backend: *storage.S3Storage`, upload
+succeeded, and the returned URL rendered in a private window.
+
+No CORS policy on the bucket, and none needed: browsers do not apply CORS to
+`<img>` display, and uploads go browser → backend → R2, never browser → R2.
+
+Gotchas worth keeping, both of which cost real time to spot:
+- `S3_ENDPOINT` is the **host only**. The dashboard shows it with the bucket
+  path appended; leaving that on produces `.../hostel-uploads/hostel-uploads/...`
+  because the SDK uses path-style addressing.
+- The token result screen shows a prominent **"Token value"** that is for
+  Cloudflare's own API, not S3. The needed pair is Access Key ID / Secret Access
+  Key further down; using the token value gives a signature error that reads
+  like a typo.
+
+### Phase 9.4–9.6 — Deploy walkthrough 🔜
 
 Steps live in `docs/DEPLOYMENT.md`:
 - 9.2 Database (Neon) — create project, run migrations against the `DATABASE_URL`

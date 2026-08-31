@@ -1,5 +1,19 @@
 export PATH := /opt/homebrew/opt/node/bin:/opt/homebrew/bin:$(PATH)
 
+# The local docker-compose / brew Postgres. Never a remote database.
+LOCAL_DB := postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable
+
+# Which database `make migrate` targets. Defaults to local; override for a
+# deploy:
+#
+#   make migrate DATABASE_URL="$$NEON_URL"
+#
+# This exists because the previous hardcoded localhost made `make migrate`
+# succeed loudly against the wrong database. Shipping a schema change then
+# looked done, and the missing column only turned up as a 500 in production.
+# See docs/DEPLOYMENT.md, "Future migrations".
+DATABASE_URL ?= $(LOCAL_DB)
+
 .PHONY: dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
@@ -15,7 +29,7 @@ setup:
 	@echo "→ Waiting for Postgres to be ready..."
 	@until docker compose exec -T db pg_isready -U hostel -q 2>/dev/null; do sleep 1; done
 	@echo "→ Running migrations..."
-	migrate -path backend/migrations -database "postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable" up
+	migrate -path backend/migrations -database "$(LOCAL_DB)" up
 	@echo "→ Creating uploads directory..."
 	mkdir -p backend/uploads
 	@echo ""
@@ -37,12 +51,17 @@ db-up:
 db-down:
 	docker compose down
 
-# Run database migrations (requires golang-migrate CLI)
+# Run database migrations (requires golang-migrate CLI).
+# Targets $(DATABASE_URL), which defaults to the local DB — see the top of this
+# file for the deploy override.
 migrate:
-	migrate -path backend/migrations -database "postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable" up
+	@echo "→ migrating $(if $(filter $(DATABASE_URL),$(LOCAL_DB)),LOCAL,REMOTE) database"
+	migrate -path backend/migrations -database "$(DATABASE_URL)" up
+	@migrate -path backend/migrations -database "$(DATABASE_URL)" version
 
 migrate-down:
-	migrate -path backend/migrations -database "postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable" down
+	@echo "→ rolling back $(if $(filter $(DATABASE_URL),$(LOCAL_DB)),LOCAL,REMOTE) database"
+	migrate -path backend/migrations -database "$(DATABASE_URL)" down
 
 # Run backend
 backend:
@@ -77,10 +96,19 @@ import-data-dry:
 	cd backend && go run ./cmd/import --owner $(OWNER) --file ../$(FILE) --dry-run
 
 # Storage smoke test — uploads a single file through whichever backend STORAGE_BACKEND points to.
-# Usage: make storage-check FILE=path/to/image.png
+# Smoke-test the object store. Usage: make storage-check FILE=path/to/image.png
+#
+# Defaults STORAGE_BACKEND to s3, because verifying local disk is not what this
+# is for. The target never set it at all, so it silently exercised LocalStorage
+# and printed a cheerful "OK" having never contacted R2 — read the "Backend:"
+# line in the output either way.
+#
+# Reads S3_* from the environment (see docs/DEPLOYMENT.md on ~/.hostel-deploy.env).
+# Override with STORAGE_BACKEND=local make storage-check FILE=...
 storage-check:
 	@test -n "$(FILE)" || (echo "Error: FILE=<path> required" && exit 1)
-	cd backend && go run ./cmd/storage-check --file ../$(FILE)
+	@test -n "$$S3_BUCKET" || echo "Warning: S3_BUCKET is empty — did you source your env file?"
+	cd backend && STORAGE_BACKEND=$${STORAGE_BACKEND:-s3} go run ./cmd/storage-check --file ../$(FILE)
 
 # Run all unit tests (e2e is a separate target — see test-e2e)
 test:
@@ -101,8 +129,15 @@ seed-demo:
 	python3 scripts/seed-demo.py
 
 # Scoped to the reserved seed address, so it cannot reach a real account.
+#
+# Deliberately pinned to $(LOCAL_DB) and NOT overridable by DATABASE_URL. Seeding
+# writes rows; a typo in a remote URL is not a mistake worth making cheap. To
+# clear the seed owner from a deployed database, run the DELETE by hand:
+#
+#   psql "$$NEON_URL" -c "DELETE FROM owners WHERE email = 'demo@seed.invalid';"
 seed-demo-reset:
-	psql "postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable" \
+	@echo "→ resetting demo data in the LOCAL database only"
+	psql "$(LOCAL_DB)" \
 	  -c "DELETE FROM owners WHERE email = 'demo@seed.invalid';"
 	python3 scripts/seed-demo.py
 
