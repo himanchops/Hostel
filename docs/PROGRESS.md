@@ -216,7 +216,55 @@ Target stack: **Render** (backend) + **Neon** (Postgres) + **Cloudflare R2** (fi
 
 **New backend deps:** `github.com/aws/aws-sdk-go-v2`, `.../config`, `.../credentials`, `.../service/s3`. Will be pulled in by `go mod tidy`.
 
-### Phase 9.2–9.6 — Deploy walkthrough 🔜 (deliberately deferred — see roadmap below)
+### Phase 9.2 prep — decisions + upload rate limiting ✅ (deploy session, Aug 2026)
+
+Two questions that had been left open in `docs/DEPLOYMENT.md` were settled
+before touching any dashboard. Both are written up in full there under
+"Decisions taken"; the short version:
+
+- **Error tracking: skipped.** No Sentry/GlitchTip account for this deploy. The
+  `serverError` / `reportError` chokepoints are untouched, so it stays a
+  two-file change later. Consequence accepted: nothing stores or announces an
+  error yet.
+- **R2 bucket: public.** Keys are `public/<32 hex>.ext` from `crypto/rand` and
+  r2.dev does not list directories, so it is unguessable-link, not browsable.
+
+The second decision made `POST /public/upload` — unauthenticated by necessity,
+since a stranger uploads ID before any account exists — an open file host on the
+Cloudflare account. Fixed in this session:
+
+- `backend/internal/middleware/ratelimit.go` — `PublicUploadRateLimiter()`,
+  per-client-IP token bucket. Burst 10, refill one per three minutes, idle IPs
+  forgotten after an hour. Sized from the legitimate worst case: one
+  registration is three files, and a whole hostel can share one NAT'd IP.
+  Denies return the API's `{"error": ...}` envelope, not Echo's
+  `{"message": ...}`, because `lib/api.ts` reads `body.error` and would
+  otherwise show a generic "Upload failed".
+- `backend/cmd/server/main.go` — `e.IPExtractor = echo.ExtractIPFromXFFHeader()`.
+  Without it, Echo's fallback reads the *first* `X-Forwarded-For` entry, which
+  the client writes and can forge — enough to walk past the limiter by rotating
+  a header. Verified against a running binary: 12 requests with rotating forged
+  XFF values all resolved to the proxy-observed client and were limited at the
+  11th. This also fixes `remote_ip` in the request log, which behind Render
+  would otherwise have been the proxy on every line.
+- `backend/internal/middleware/ratelimit_test.go` — 3 tests: burst allowed,
+  denial past it with the right envelope, buckets independent per client.
+
+**Deliberately not logged in the DenyHandler.** `middleware.Logger()` already
+records the 429 with the resolved `remote_ip`. A `c.Logger().Warnf` was written
+and then removed — Echo's default logger level is ERROR, so it emitted nothing
+while reading as though it did, which is the swallowed-error pattern CLAUDE.md
+forbids wearing a disguise.
+
+Not covered by e2e: no test in `frontend/tests/e2e/` touches file upload at all,
+so the limiter cannot regress the 34-test suite — and uploads have no e2e
+coverage to begin with. Noted rather than fixed here.
+
+Follow-ups in `docs/BACKLOG.md` → "Security / privacy": presigned URLs (grows
+more expensive per real tenant row, because the DB stores absolute URLs rather
+than keys) and a registration token gating the upload.
+
+### Phase 9.3–9.6 — Deploy walkthrough 🔜
 
 Steps live in `docs/DEPLOYMENT.md`:
 - 9.2 Database (Neon) — create project, run migrations against the `DATABASE_URL`

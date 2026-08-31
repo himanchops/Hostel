@@ -28,50 +28,87 @@ of the guide is mostly copying values between dashboards.
 | 2 | [Cloudflare](https://dash.cloudflare.com) (R2) | Tenant photos and ID documents | Account ID, access key + secret, bucket name, public bucket URL |
 | 3 | [Render](https://render.com) | The Go backend | — (reads `render.yaml`; you paste the secrets in) |
 | 4 | [Vercel](https://vercel.com) | The Next.js frontend | — (you set `NEXT_PUBLIC_API_URL`) |
-| 5 | [Sentry](https://sentry.io) *or* self-hosted [GlitchTip](https://glitchtip.com) | Seeing errors after they happen | A DSN for the Go SDK and one for the Next.js SDK |
+| ~~5~~ | ~~Sentry / GlitchTip~~ — **deferred, Aug 2026** | Seeing errors after they happen | nothing; skipped for this deploy |
 
-**On #5.** Not strictly required to deploy, and the guide works without it —
-but it is the difference between "here is the error" and "try to make it happen
-again". The code is already shaped for it: every backend 500 goes through one
-`serverError` helper and every client-side crash through one `reportError`, so
-wiring a DSN in is a small change in two files rather than seventy. Free tiers
-are ample at one-owner volume.
+### Decisions taken (Aug 2026)
 
-Worth a thought before picking: this app stores photographs of government ID.
-Stack traces should not contain them, but Sentry is a third party receiving
-error data from a service that handles them, and GlitchTip is the
-self-hostable equivalent if you would rather that did not leave your
-infrastructure. See "Where the logs go" below for what happens with and
-without it.
+Both of these were open questions in earlier drafts of this doc. They are
+settled; the reasoning is here so it does not get re-litigated next session.
 
-**Not an account, but same category:** decide now whether the R2 bucket is
-public. The app serves tenant photos and ID scans by URL; a public bucket means
-those URLs are readable by anyone who has them.
+**Error tracking: skipped for this deploy.** No account #5, no DSN. The two
+chokepoints stay exactly as they are — `serverError` in
+`backend/internal/handlers/errors.go` and `reportError` in
+`frontend/src/lib/reportError.ts` — so adding it later is still a change in two
+files rather than seventy. The consequence to be clear-eyed about is in "Where
+the logs go" below: until it is wired, nothing stores or announces an error, and
+a frontend crash leaves no trace anywhere reachable.
+
+For the record on the privacy question that made this worth asking: the ID
+photographs never enter the error path. The upload handler streams the file
+straight to storage and logs only the object key on failure. What *any* tracker
+would collect by default is the request URL, the `Authorization` header, and
+registration request bodies (name, phone, email) — real PII, and identical for
+Sentry and GlitchTip. It is fixed with a `BeforeSend` scrubber, not by choice of
+vendor. GlitchTip also speaks the Sentry protocol, so the SDK and the scrubber
+are the same code either way; the decision stays reversible.
+
+**R2 bucket: public.** Object keys are `public/<32 hex chars>.ext` generated
+from `crypto/rand` (`backend/internal/handlers/upload.go`) and the r2.dev
+subdomain does not list directories, so the model is unguessable-link, not
+browsable — the same posture as a "anyone with the link" document share. What
+you accept in exchange: those URLs never expire and are readable by anything
+that ever observes one.
+
+Public also made `POST /public/upload` — unauthenticated, because a stranger
+scanning the QR code uploads their ID before any account exists — into an open
+file host on the Cloudflare account. **That is now rate-limited per client IP**
+(`middleware.PublicUploadRateLimiter()`, 10-upload burst refilling one per three
+minutes). Note that this raises the cost of abuse rather than removing it.
+
+Both of the follow-ups these imply — presigned URLs, and a registration token
+gating the upload — are written up in `docs/BACKLOG.md` under "Security /
+privacy". The presigned-URL one gets more expensive with every real tenant row,
+because the DB stores absolute URLs rather than keys.
 
 ---
 
 ## 1. Database (Neon) — ~10 min
 
 1. Sign up at https://neon.tech (see the accounts table above).
-2. Create a new project. Region: pick the closest one to where you'll deploy the backend.
-3. Once created, copy the **connection string** — looks like:
-   ```
-   postgres://user:pass@ep-xxx.aws.neon.tech/neondb?sslmode=require
+2. Create a new project. Region: **Singapore**, to match `region: singapore` in
+   `render.yaml` — every request the backend serves makes at least one DB round
+   trip, so a mismatch here is felt on every page.
+3. Once created, copy the **connection string** and export it once, so it stays
+   out of your shell history's reach and out of anything you paste elsewhere:
+   ```bash
+   export NEON_URL='postgres://USER:PASSWORD@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require'
    ```
 4. From your laptop, run the migrations against the new database:
    ```bash
-   migrate -path backend/migrations \
-     -database "postgres://user:pass@ep-xxx.aws.neon.tech/neondb?sslmode=require" \
-     up
+   migrate -path backend/migrations -database "$NEON_URL" up
    ```
-5. (Optional) Connect with `psql` to verify tables exist:
+5. **Verify the schema actually landed** — not optional. A half-applied
+   migration and a fully-applied one both leave tables behind, and the
+   difference only shows up as a confusing 500 after deploy.
    ```bash
-   psql "postgres://user:pass@ep-xxx.aws.neon.tech/neondb?sslmode=require" -c "\dt"
+   migrate -path backend/migrations -database "$NEON_URL" version
    ```
+   Must print `5` — the number of migrations in `backend/migrations` — with no
+   `(dirty)` suffix. If it says dirty, a migration failed partway: fix the cause,
+   `migrate ... force <n>` back to the last good version, and re-run `up`. Do not
+   just run `up` again.
+   ```bash
+   psql "$NEON_URL" -Atc "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY 1;"
+   ```
+   Expected, exactly nine lines: `beds`, `hostel_sites`, `owners`, `payments`,
+   `rooms`, `schema_migrations`, `settlements`, `stays`, `tenants`.
 
 > **Future migrations:** every time you ship a new schema change, re-run the
 > `migrate ... up` command against the Neon URL before deploying the new
-> backend binary. Until automation is in place, this is a manual step.
+> backend binary. Until automation is in place, this is a manual step — and the
+> expected `version` number above goes up by one each time, so treat it as a
+> value to re-derive from `ls backend/migrations/*.up.sql | wc -l` rather than a
+> constant.
 
 ---
 
@@ -119,13 +156,26 @@ You now have the 5 values you need:
    Hit `/health` in a browser — should return `{"status":"ok"}`.
 7. Run the storage smoke test from your laptop (any small image will do):
    ```bash
-   STORAGE_BACKEND=s3 \
-   S3_ENDPOINT=... S3_BUCKET=... \
-   S3_ACCESS_KEY=... S3_SECRET_KEY=... \
-   S3_PUBLIC_URL=... \
-     cd backend && go run ./cmd/storage-check --file ./some-image.png
+   cd backend && STORAGE_BACKEND=s3 \
+     S3_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com" \
+     S3_BUCKET="hostel-uploads" \
+     S3_ACCESS_KEY="<access-key>" \
+     S3_SECRET_KEY="<secret-key>" \
+     S3_PUBLIC_URL="https://pub-<hash>.r2.dev" \
+     go run ./cmd/storage-check --file ./some-image.png
    ```
-   It should print "OK" and a URL. Open the URL in a browser — if you see the image, R2 is wired correctly.
+   It should print `Backend: *storage.S3Storage`, then "OK" and a URL. Check
+   that backend line — the selector falls back to local storage on an
+   unrecognised `STORAGE_BACKEND` rather than erroring, so `*storage.LocalStorage`
+   means the variable did not reach the process and the test proved nothing.
+   Open the URL in a browser — if you see the image, R2 is wired correctly.
+
+   > The `cd` comes **first** on purpose. An earlier version of this doc put the
+   > assignments before `cd backend && go run ...`; prefix assignments apply only
+   > to the `cd`, so every variable was gone by the time `go run` started and the
+   > check silently exercised local disk. `make storage-check FILE=path/to.png`
+   > has the same trap — it does not set the S3 variables at all, so it only
+   > works if they are already exported in your shell.
 
 ---
 
@@ -149,8 +199,12 @@ You now have the 5 values you need:
 4. Visit the Vercel URL. Sign up an owner. Verify:
    - Login works.
    - You can create a site, room, bed.
-   - You can register a tenant (try uploading an ID proof to test R2 end-to-end).
+   - You can register a tenant through the public link (upload an ID proof — this
+     is the end-to-end R2 test, and the only path that exercises the upload rate
+     limiter in production).
    - The image URL in the tenant profile should point at `pub-xxx.r2.dev`, not `localhost`.
+   - Open the uploaded image URL in a private window. It should load — that is
+     the public-bucket decision working as intended, not a bug.
 
 ---
 
@@ -159,6 +213,13 @@ You now have the 5 values you need:
 **CORS errors in the browser console.** `FRONTEND_URL` on Render doesn't match the actual Vercel URL exactly (including https/http and trailing slash). Update it and redeploy.
 
 **File uploads succeed but the URL 403s.** The R2 bucket's "Public access" subdomain isn't enabled, or `S3_PUBLIC_URL` doesn't match the `pub-xxx.r2.dev` URL.
+
+**Uploads start failing with "too many uploads from this network".** The
+per-IP limiter on `/public/upload` (10 burst, one token back every three
+minutes). Expected if you are testing repeatedly from one address; wait it out,
+or restart the Render service, since the store is in-memory and resets with the
+process. If real tenants hit it, the numbers are in
+`backend/internal/middleware/ratelimit.go`.
 
 **Backend cold starts take ~30s.** Render free tier spins down after 15 min idle. Upgrade to the `starter` plan ($7/mo) to keep it warm.
 
@@ -196,11 +257,13 @@ can reach.
    now check it. This was the step that made everything after it useful.
 2. ~~**Add an error boundary.**~~ ✅ Done. `error.tsx` and `global-error.tsx`
    catch client-side crashes, reporting through `lib/reportError.ts`.
-3. **Error tracking** (at or just after deploy). Account #5 in the table at
-   the top. Wire the DSN into the single `serverError` chokepoint on the
-   backend and `reportError` on the frontend — both already exist, so it is a
-   change in two files rather than seventy. Gives stack traces, grouping, and
-   an email when something new breaks.
+3. **Error tracking** — ⏸ **deferred at the Aug 2026 deploy** (see "Decisions
+   taken" at the top). When picked up: wire the DSN into the single
+   `serverError` chokepoint on the backend and `reportError` on the frontend —
+   both already exist, so it is a change in two files rather than seventy.
+   Gives stack traces, grouping, and an email when something new breaks. Add a
+   `BeforeSend` scrubber in the same change; the default SDK payload carries the
+   `Authorization` header and registration request bodies.
 4. **Log drain** (optional, later). Render can forward stdout to Better Stack
    or Papertrail for searchable retention. Only worth it once there is enough
    traffic that "tail the dashboard" stops working.

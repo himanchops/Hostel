@@ -71,6 +71,38 @@ client-side errors reach only the user's own browser console. Sentry or
 self-hosted GlitchTip — it is account #5 in the deployment guide's setup table.
 Small change now that both chokepoints exist.
 
+## Security / privacy
+
+### Tenant ID scans live at permanent public URLs — M, and gets worse with time
+The R2 bucket is publicly readable (decided at deploy, Aug 2026). Object keys are
+`public/<32 hex>.jpg` from `crypto/rand`, so they are unguessable and the r2.dev
+subdomain does not list directories — the model is a Google Docs "anyone with the
+link" share. But the links never expire, and they leak by being *seen*: Render's
+request log, the owner's browser history and cache, any link-preview fetcher, and
+an error tracker if one is ever wired in.
+
+The fix is presigned GET URLs minted per read. **The reason this is M and not S:**
+`id_proof_url`, `id_proof_front_url`, `id_proof_back_url` and `photo_url` store
+absolute URLs, so it is a new `storage.Service` method, a change to every read
+path that returns one of those fields, *and* a data migration turning stored URLs
+into stored keys. Every real tenant row added makes the migration bigger, so the
+cost only goes up.
+
+Related: a custom domain on the bucket is wanted regardless — Cloudflare treats
+`pub-*.r2.dev` as a development subdomain and rate-limits it.
+
+### `/public/upload` is unauthenticated by design — S, once registration has a token
+A stranger scanning the QR code has to upload their ID before any account exists,
+so the endpoint cannot require auth as things stand. The rate limiter caps abuse
+but does not remove it: someone with a handful of IPs can still fill the free
+tier with arbitrary jpg/png/webp/pdf.
+
+The real fix is a short-lived token issued by `GET /public/owners/:ownerId` and
+required by the upload, so an upload has to belong to a registration in progress.
+Small change on both sides — worth doing when the QR code goes somewhere public.
+
+---
+
 ## Correctness / consistency
 
 ### Collections and the dashboard disagree about bed-less stays — S
@@ -81,11 +113,17 @@ money. Probably fixed by dropping the dashboard's filter, but that changes a
 tested figure, so it wants its own change rather than riding along with
 something else. Flagged during Phase 10.
 
-### No rate limiting on the public endpoints — M
-`/auth/login` and `/public/register/:ownerId` are unthrottled. Low risk while
-the registration link is on a fridge; a real one the day it is printed on a QR
-code by the door. Tracked in PROGRESS.md under Deferred as well, because it is
-also a go-live consideration.
+### No rate limiting on the remaining public endpoints — M
+`/auth/login`, `/tenant-auth/login` and `/public/register/:ownerId` are still
+unthrottled. Low risk while the registration link is on a fridge; a real one the
+day it is printed on a QR code by the door. Tracked in PROGRESS.md under
+Deferred as well, because it is also a go-live consideration.
+
+`/public/upload` is **done** — `middleware.PublicUploadRateLimiter()` caps it
+per client IP (deploy session, Aug 2026). The pattern is there to copy; the
+logins want different numbers (credential stuffing, not bulk storage) and
+`/public/register` writes rows, so neither is a straight reuse of the upload
+budget.
 
 ### ~~`frontend/.env.example` does not exist~~ ✅ done
 Added before the deploy. One variable, `NEXT_PUBLIC_API_URL`, with a note that
