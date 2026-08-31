@@ -2,6 +2,16 @@
 
 Step-by-step guide to deploying the app to a free/cheap public stack.
 
+> **Live as of Aug 2026.**
+> Frontend: https://hostel-ten-kappa.vercel.app
+> Backend: https://hostel-backend-k7ar.onrender.com
+>
+> The steps below are kept as the record of how it was set up, and as the guide
+> for doing it again. For day-to-day operation the things worth remembering are:
+> run `make migrate DATABASE_URL="$NEON_URL"` before deploying any schema
+> change, and editing `render.yaml` on master applies to production
+> automatically.
+
 **Target stack**
 - Backend (Go) → Render
 - Database (Postgres) → Neon
@@ -221,7 +231,14 @@ You now have the 5 values you need:
 
 1. Sign up at https://vercel.com. Connect your GitHub account.
 2. Click "Add New…" → "Project" → pick this repo.
-3. **Root Directory:** `frontend`.
+3. **Root Directory:** `frontend`. Not optional, and not merely cosmetic —
+   Vercel auto-detects the monorepo and will otherwise propose deploying the Go
+   backend as `/api/backend` alongside the frontend, prompting for a
+   `vercel.json` to formalise it. **Decline that.** Echo is a long-lived HTTP
+   server, not a request-scoped function; the result is a second, unconfigured
+   copy of an app that handles government ID sitting at a public URL. Setting
+   the root directory collapses the detection to a single Next.js service and
+   the prompt disappears.
 4. **Environment Variables:**
    - `NEXT_PUBLIC_API_URL` = the Render backend URL from step 3.6.
 5. Click "Deploy". First build takes ~3 min.
@@ -232,8 +249,23 @@ You now have the 5 values you need:
 ## 5. Wire frontend ↔ backend — ~5 min
 
 1. Go back to Render → your backend service → **Environment** tab.
-2. Update `FRONTEND_URL` to the Vercel URL from step 4.6.
-3. Render auto-redeploys.
+2. Update `FRONTEND_URL` to the Vercel URL from step 4.6. **Exactly** — `https://`,
+   no trailing slash, no `www`. CORS compares the `Origin` header as a literal
+   string, so a trailing slash yields a configuration that looks complete and
+   refuses every request, with no symptom outside the browser console.
+3. Render auto-redeploys. Verify the handshake from the command line before
+   opening the UI, so a mistake reports itself instead of showing a blank page:
+   ```bash
+   # must return an access-control-allow-origin header
+   curl -s -o /dev/null -D - -X OPTIONS "$RENDER_API_URL/auth/login" \
+     -H "Origin: $VERCEL_APP_URL" -H "Access-Control-Request-Method: POST" \
+     | grep -i access-control-allow-origin
+
+   # must return NOTHING — proves the match is exact, not a prefix
+   curl -s -o /dev/null -D - -X OPTIONS "$RENDER_API_URL/auth/login" \
+     -H "Origin: $VERCEL_APP_URL/" -H "Access-Control-Request-Method: POST" \
+     | grep -i access-control-allow-origin
+   ```
 4. Visit the Vercel URL. Sign up an owner. Verify:
    - Login works.
    - You can create a site, room, bed.
