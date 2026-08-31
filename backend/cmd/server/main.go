@@ -75,6 +75,14 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
+	// Behind Render's proxy the client address is only in X-Forwarded-For.
+	// Echo's fallback reads the FIRST entry of that header, which the client
+	// writes and can therefore forge — enough to walk straight past the upload
+	// rate limiter by rotating a header value. ExtractIPFromXFFHeader walks the
+	// chain right-to-left instead, skipping loopback/link-local/private hops,
+	// so it lands on the last address the proxy itself observed.
+	e.IPExtractor = echo.ExtractIPFromXFFHeader()
+
 	// CORS. FRONTEND_URL accepts a comma-separated list of allowed origins.
 	// When it is unset (local dev) we additionally accept loopback and
 	// private-range LAN origins on any port, so the app can be opened from a
@@ -109,7 +117,7 @@ func main() {
 	// Public tenant self-registration + auth + upload
 	e.GET("/public/owners/:ownerId", tenantHandler.PublicOwner)
 	e.POST("/public/register/:ownerId", tenantHandler.PublicRegister)
-	e.POST("/public/upload", uploadHandler.PublicUpload)
+	e.POST("/public/upload", uploadHandler.PublicUpload, appMiddleware.PublicUploadRateLimiter())
 	e.POST("/tenant-auth/login", tenantAuthHandler.Login)
 
 	// Tenant portal (tenant JWT required)
