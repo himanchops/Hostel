@@ -165,10 +165,30 @@ You now have the 5 values you need:
    Render reads `render.yaml` and proposes the service.
 4. Render will prompt for the env vars marked `sync: false`. Fill in:
    - `DATABASE_URL` → the Neon connection string from step 1.
-   - `FRONTEND_URL` → leave empty for now; you'll fill it in after step 4.
-     (Or paste a placeholder like `https://example.com` — we'll update it.)
+   - `FRONTEND_URL` → `https://placeholder.invalid` for now; replaced in step 5.
+     Prefer a placeholder over leaving it empty: empty selects the *dev* CORS
+     path, which allows loopback and LAN origins and logs "FRONTEND_URL unset —
+     dev mode". Not a hole — an attacker origin is a public domain and is
+     rejected either way — but a misleading line to leave in a production log.
+     `.invalid` is RFC 2606 reserved, so it cannot resolve to anything real.
    - `BASE_URL` → can stay empty when using S3.
-   - `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PUBLIC_URL` → from step 2.
+   - `S3_ENDPOINT` → **host only**, no bucket path. The R2 dashboard displays it
+     as `https://<account-id>.r2.cloudflarestorage.com/<bucket>`; the bucket is a
+     separate variable and the SDK uses path-style addressing, so leaving the
+     suffix on produces `.../<bucket>/<bucket>/key` and 404s.
+   - `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PUBLIC_URL` → from step 2.
+     The R2 token screen shows a prominent **"Token value"** — that is for
+     Cloudflare's own API, not S3. You want the *Access Key ID* and *Secret
+     Access Key* below it; the token value fails with a signature error that
+     reads like a typo.
+
+   Set for you by `render.yaml`, no action needed: `JWT_SECRET` (generated),
+   `STORAGE_BACKEND=s3`, `S3_REGION=auto`, and `GO_VERSION`. That last one
+   exists because `backend/go.mod` requires a Go version newer than Render's
+   default and carries no `toolchain` directive — without it the build fails
+   with "go.mod requires go >= …", which reads like a dependency problem.
+   **Bump it in `render.yaml` whenever the `go` directive in `backend/go.mod`
+   moves.**
 5. Click "Apply". Render builds and deploys. First build takes ~5 min.
 6. Once deployed, Render shows the service URL, e.g. `https://hostel-backend.onrender.com`.
    Hit `/health` in a browser — should return `{"status":"ok"}`.
