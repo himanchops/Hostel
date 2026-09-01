@@ -136,6 +136,76 @@ Small change on both sides — worth doing when the QR code goes somewhere publi
 
 ---
 
+## Found by Sentry (Sep 2026, first hour)
+
+Both of these were live in production and invisible before error tracking.
+Neither was found by a test or by reading code — they arrived as issues from
+one signup.
+
+### `/api/collections` intermittently 500s — prepared statements crossing connections — M, and it is live
+`HOSTEL-BACKEND-1/2/3`. Three issues, almost certainly **one bug**:
+
+```
+pq: unnamed prepared statement does not exist (26000)
+pq: bind message has 4 result formats but query has 17 columns
+pq: bind message has 17 result formats but query has 4 columns
+```
+
+The third is the second one backwards, and that symmetry is the whole
+diagnosis: **two different queries had their protocol state swapped on the same
+server connection.** One statement was bound with another statement's
+parameters, in both directions, at the same moment. That is not something
+application code can do to itself.
+
+Evidence it is not ours: `grep` finds no `go func`, `WaitGroup` or `errgroup`
+anywhere in `internal/handlers`, and `GetCollections` runs exactly one
+`db.Select`. The queries were concurrent because the home page fires several
+fetches in parallel after login — not because a handler forked.
+
+**Hypothesis to confirm first:** `DATABASE_URL` points at Neon's *pooled*
+endpoint (hostname containing `-pooler`), which is PgBouncer in transaction
+mode. `lib/pq` uses the extended query protocol with unnamed prepared
+statements, and those are per-session; transaction pooling can hand the Bind to
+a different server connection than the Parse. `26000` is the canonical symptom.
+
+**Check before fixing** — look at the Neon dashboard or Render's env tab for
+whether the host contains `-pooler`. Do not paste the connection string
+anywhere; the hostname alone answers it.
+
+Two fixes if confirmed, in order of cost:
+1. Point `DATABASE_URL` at Neon's **direct** endpoint (no `-pooler`). One
+   env-var change. `SetMaxOpenConns(25)` from a single Render instance is well
+   inside what the direct endpoint allows, so the pooler is not buying us
+   anything at this scale.
+2. Switch the driver to `pgx/v5` with `default_query_exec_mode=simple_protocol`,
+   which is pooler-safe. Bigger change — `lib/pq` is imported in
+   `internal/database` and the `pq.Error` type is not referenced elsewhere, so
+   it is contained, but it is still a driver swap on a live app.
+
+Start with 1. If it holds, 2 is not needed.
+
+**Why this matters beyond collections:** nothing about the failure is specific
+to that query. Any two concurrent requests can hit it, which means the dashboard
+and grid are exposed to the same thing and simply have not been caught yet.
+
+### Passwords over 72 bytes return 500 instead of 400 — S
+`HOSTEL-BACKEND-4`, `bcrypt: password length exceeds 72 bytes`. Found while
+looking for a way to trigger a real error safely, which it turned out to be.
+
+`Signup` checks `len(req.Password) < 8` but has no upper bound, and
+`bcrypt.GenerateFromPassword` returns `ErrPasswordTooLong` above 72 bytes. The
+error reaches `serverError`, so the user gets an opaque "failed to process
+password" 500 for what is really a validation failure — and now it pages us too.
+
+`PublicRegister` in `tenants.go` has the same shape (`len(req.Password) < 6`, no
+maximum) and is worse: it is on the public QR path, hit by a stranger with no
+account and no way to tell you it broke.
+
+Anyone pasting a generated passphrase from a password manager hits this. The fix
+is an upper-bound check returning 400 in both handlers, with a test — bcrypt
+counts **bytes, not characters**, so the check must be `len()` on the byte slice
+and the test needs a multi-byte case.
+
 ## Correctness / consistency
 
 ### Collections and the dashboard disagree about bed-less stays — S
