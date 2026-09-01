@@ -10,6 +10,20 @@ import (
 
 var ErrInvalidToken = errors.New("invalid token")
 
+// ErrPasswordTooLong is returned by HashPassword when bcrypt refuses the input.
+//
+// Re-exported from bcrypt so callers can classify this without importing the
+// crypto package, and so the handlers do not have to know which hashing
+// algorithm is behind the service.
+var ErrPasswordTooLong = errors.New("password is too long to hash")
+
+// MaxPasswordBytes is bcrypt's hard input limit.
+//
+// It is 72 *bytes*, not characters — a password of 72 emoji is roughly 288
+// bytes and is rejected. Validation therefore has to measure len() on the
+// string, never utf8.RuneCountInString.
+const MaxPasswordBytes = 72
+
 // Claims for owner tokens
 type Claims struct {
 	OwnerID int64  `json:"owner_id"`
@@ -38,6 +52,15 @@ func NewService(secretKey string, tokenTTL time.Duration) *Service {
 
 func (s *Service) HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if errors.Is(err, bcrypt.ErrPasswordTooLong) {
+		// Mapped rather than passed through so that a call site which forgets
+		// to validate gets a classifiable error instead of an opaque 500. That
+		// is exactly how this reached production: Signup checked a minimum
+		// length and no maximum, so a long passphrase from a password manager
+		// became "failed to process password" with no way for the user to
+		// guess what was wrong.
+		return "", ErrPasswordTooLong
+	}
 	return string(bytes), err
 }
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -38,6 +39,28 @@ type authResponse struct {
 	Owner models.Owner `json:"owner"`
 }
 
+// validatePassword returns the message to show the user, or "" if the password
+// is acceptable.
+//
+// Shared by owner signup and public tenant registration because they had
+// drifted: both enforced a minimum and neither enforced a maximum, so bcrypt's
+// 72-byte ceiling surfaced as a 500 on two different paths. The minimum differs
+// between them (8 and 6) and is therefore a parameter; the maximum is bcrypt's
+// and is not negotiable.
+//
+// len() is deliberate: bcrypt counts bytes, so a passphrase of accented or
+// Devanagari characters hits the ceiling at far fewer than 72 visible
+// characters. Measuring runes here would let exactly the 500 this fixes back in.
+func validatePassword(password string, minLength int) string {
+	if len(password) < minLength {
+		return fmt.Sprintf("password must be at least %d characters", minLength)
+	}
+	if len(password) > auth.MaxPasswordBytes {
+		return fmt.Sprintf("password must be %d characters or fewer", auth.MaxPasswordBytes)
+	}
+	return ""
+}
+
 func (h *AuthHandler) Signup(c echo.Context) error {
 	var req signupRequest
 	if err := c.Bind(&req); err != nil {
@@ -50,8 +73,8 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 	if req.Email == "" || req.Password == "" || req.Name == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("name, email, and password are required"))
 	}
-	if len(req.Password) < 8 {
-		return c.JSON(http.StatusBadRequest, errorResponse("password must be at least 8 characters"))
+	if msg := validatePassword(req.Password, 8); msg != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
 
 	// Check duplicate email

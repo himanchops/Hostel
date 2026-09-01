@@ -807,10 +807,90 @@ was checked rather than discarded. Now `sql.ErrNoRows` alone is a 404 and
 everything else is a reported 500. `PublicRegister` had the same shape in
 `err != nil || !exists`, which conflated an outage with a missing owner; split.
 
-**Still needs you:** create the Sentry org (EU region — it cannot be changed
-later), two projects, paste one DSN into Render and one into Vercel, and set the
-four alert rules. Steps in `docs/DEPLOYMENT.md` → "Setup — the part that needs
-you". Nothing breaks while the DSNs are unset; the boot log says so explicitly.
+**Live and confirmed, same day.** Sentry org created in the EU region, two
+projects (`hostel-backend` Go / `hostel-frontend` Browser JS, both set up as
+"Vanilla" — the Echo integration needs echo/v5 and `@sentry/nextjs` pulls
+`@sentry/cli`, so neither framework SDK applies here). DSNs are in Render and
+Vercel. Both ends verified end-to-end against the real deployments: the backend
+boot log reads `error tracking: enabled (environment=production …)`, a real 500
+arrived and grouped, and the browser console smoke test reached the frontend
+project. Releases tag correctly — issues show `in release c36f9f602dc9`, the
+merge commit.
+
+**It found two live bugs in the first hour**, neither of which any test or code
+review had caught. Both filed in `docs/BACKLOG.md` → "Found by Sentry": three
+issues that are really one prepared-statement-crossing-connections bug on
+`/api/collections` (hypothesis: Neon's pooled endpoint plus `lib/pq`), and a
+missing upper bound on password length that turns a long passphrase into a 500
+on both signup and the public registration path.
+
+Worth recording plainly, because it is the argument for the whole change: the
+app had been live for two weeks, and the first time anyone looked, it was
+broken in a way nobody had noticed.
+
+---
+
+## Phase 9.8 — Fixing what Sentry found ✅ (Sep 2026)
+
+Two bugs, both live, both invisible until error tracking existed. Full detail in
+`docs/BACKLOG.md` → "Found by Sentry".
+
+### Prepared statements crossing connections
+
+Three Sentry issues, one bug. The tell was that two of the errors were each
+other backwards — `bind message has 4 result formats but query has 17 columns`
+and its exact mirror — meaning two queries had swapped protocol state on one
+server connection, in both directions, simultaneously. Confirmed by the `route`
+tags being **different endpoints** (`/api/collections`, `/api/tenants`), which
+is what ruled out a collections bug and pointed below the application.
+
+Cause: `DATABASE_URL` used Neon's *pooled* endpoint — PgBouncer in transaction
+mode — while `lib/pq` uses the extended query protocol with unnamed prepared
+statements. Those are per-session, so the pooler could route a Bind to a
+different backend than the Parse that set it up.
+
+The fix is one env var (the direct endpoint), and it is not ours to make: the
+connection string is a secret in Render. What *is* ours is making sure this can
+never be silent again:
+
+- `backend/internal/database/database.go` — `IsPooledEndpoint(dsn)` plus a loud
+  boot warning naming the symptom and the fix. Not fatal, because a future
+  driver (pgx with `simple_protocol`) makes the combination safe and refusing to
+  boot would be the wrong call on a live service.
+- `backend/internal/database/database_test.go` — 10 cases. Half of them are
+  cry-wolf tests: a database *named* `pooler`, a host called `pooler-test`, a
+  username of `pooler`. A warning that fires on a correct configuration gets
+  ignored, and then the real one gets ignored too.
+
+The predicate never returns or logs the DSN itself — the string carries the
+database password and the caller's whole job is to write to stdout.
+
+Verified against the real binary, not just the unit test: a pooled host prints
+the warning before the connection attempt, a direct host starts silently.
+
+### Passwords over 72 bytes returned 500
+
+`bcrypt.GenerateFromPassword` refuses input above 72 bytes. `Signup` checked a
+minimum of 8 and no maximum, so a generated passphrase from a password manager
+became "failed to process password" with a 500. `PublicRegister` had the same
+shape with a minimum of 6 — worse, being on the public QR path.
+
+- `backend/internal/handlers/auth.go` — `validatePassword(password, min)`, now
+  shared by both. They had drifted, which is exactly how one bug came to live on
+  two paths and be noticed on one.
+- `backend/internal/auth/auth.go` — `HashPassword` maps bcrypt's error to
+  `auth.ErrPasswordTooLong`, so a call site that forgets to validate still
+  yields something classifiable instead of an opaque 500.
+- Tests in both packages, including the trap: the limit is **bytes**, not
+  characters. 25 Devanagari characters is 75 bytes — under the limit by any rune
+  count, over it by the only measure bcrypt uses. Anything counting runes would
+  let the original 500 straight back in.
+
+### Note
+
+This phase is the argument for Phase 9.7 in one line: the app had been live for
+two weeks, and the first hour of looking found two real bugs, one of which was
+intermittently breaking multiple endpoints for anyone using the app.
 
 ---
 
