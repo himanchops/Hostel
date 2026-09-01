@@ -807,10 +807,26 @@ was checked rather than discarded. Now `sql.ErrNoRows` alone is a 404 and
 everything else is a reported 500. `PublicRegister` had the same shape in
 `err != nil || !exists`, which conflated an outage with a missing owner; split.
 
-**Still needs you:** create the Sentry org (EU region — it cannot be changed
-later), two projects, paste one DSN into Render and one into Vercel, and set the
-four alert rules. Steps in `docs/DEPLOYMENT.md` → "Setup — the part that needs
-you". Nothing breaks while the DSNs are unset; the boot log says so explicitly.
+**Live and confirmed, same day.** Sentry org created in the EU region, two
+projects (`hostel-backend` Go / `hostel-frontend` Browser JS, both set up as
+"Vanilla" — the Echo integration needs echo/v5 and `@sentry/nextjs` pulls
+`@sentry/cli`, so neither framework SDK applies here). DSNs are in Render and
+Vercel. Both ends verified end-to-end against the real deployments: the backend
+boot log reads `error tracking: enabled (environment=production …)`, a real 500
+arrived and grouped, and the browser console smoke test reached the frontend
+project. Releases tag correctly — issues show `in release c36f9f602dc9`, the
+merge commit.
+
+**It found two live bugs in the first hour**, neither of which any test or code
+review had caught. Both filed in `docs/BACKLOG.md` → "Found by Sentry": three
+issues that are really one prepared-statement-crossing-connections bug on
+`/api/collections` (hypothesis: Neon's pooled endpoint plus `lib/pq`), and a
+missing upper bound on password length that turns a long passphrase into a 500
+on both signup and the public registration path.
+
+Worth recording plainly, because it is the argument for the whole change: the
+app had been live for two weeks, and the first time anyone looked, it was
+broken in a way nobody had noticed.
 
 ---
 
