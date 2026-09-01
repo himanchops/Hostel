@@ -190,8 +190,8 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	if req.Name == "" || req.Phone == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
 	}
-	if len(req.Password) < 6 {
-		return c.JSON(http.StatusBadRequest, errorResponse("password must be at least 6 characters"))
+	if msg := validatePassword(req.Password, 6); msg != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
 
 	hash, err := h.authService.HashPassword(req.Password)
