@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -148,6 +150,15 @@ func (h *TenantHandler) PublicOwner(c echo.Context) error {
 
 	var name string
 	if err := h.db.Get(&name, `SELECT name FROM owners WHERE id = $1`, ownerID); err != nil {
+		// Only a genuinely absent row is a bad link. Mapping every error here
+		// to 404 told a tenant standing in a corridor that the sticker they
+		// just scanned was invalid whenever Neon was asleep or unreachable —
+		// and logged nothing, so the complaint was unreproducible. This is the
+		// same family as the errors PR #17 fixed: the error was checked, just
+		// not classified.
+		if !errors.Is(err, sql.ErrNoRows) {
+			return serverError(c, err, "failed to load registration link")
+		}
 		return c.JSON(http.StatusNotFound, errorResponse("registration link not found"))
 	}
 	return c.JSON(http.StatusOK, map[string]string{"name": name})
@@ -160,8 +171,13 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	}
 
 	var exists bool
-	err = h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM owners WHERE id = $1)", ownerID).Scan(&exists)
-	if err != nil || !exists {
+	// SELECT EXISTS always returns exactly one row, so err here is a real
+	// database failure rather than a missing owner — `err != nil || !exists`
+	// conflated the two and turned an outage into "your link is invalid".
+	if err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM owners WHERE id = $1)", ownerID).Scan(&exists); err != nil {
+		return serverError(c, err, "failed to verify registration link")
+	}
+	if !exists {
 		return c.JSON(http.StatusNotFound, errorResponse("registration link not found"))
 	}
 

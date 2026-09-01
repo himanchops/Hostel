@@ -732,6 +732,88 @@ a guess.
 
 ---
 
+## Phase 9.7 — Observability: error tracking ✅ (Sep 2026)
+
+Step 3 of the observability plan, deferred at the deploy and picked up now that
+strangers can reach the app. **Sentry, EU region**, wired into the chokepoints
+that Phases 1–2 of that plan had already built. Full write-up — vendor
+reasoning, verification method, alert rules, limitations — in
+`docs/DEPLOYMENT.md` → "Where the logs go".
+
+**Backend**
+- `backend/internal/observability/sentry.go` — the whole SDK surface, so nothing
+  else in the codebase imports Sentry directly. `Init` / `Flush` /
+  `CaptureError` / `CapturePanic` / `Fatalf`, all inert without `SENTRY_DSN`.
+- `backend/internal/handlers/errors.go` — `serverError` reports as well as logs.
+  One line, because step 1 had already funnelled every 500 through here.
+- `backend/cmd/server/main.go` — `Init` + deferred `Flush`; `middleware.Recover`
+  becomes `RecoverWithConfig` with a `LogErrorFunc` so panics reach the tracker
+  (they never pass through `serverError`); `log.Fatalf` at the two boot-failure
+  sites becomes `observability.Fatalf`.
+- `render.yaml` — `SENTRY_DSN` (`sync:false`) and `SENTRY_ENVIRONMENT`.
+
+**Frontend**
+- `frontend/src/instrumentation-client.ts` — SDK init. This is a *Next* file
+  convention (verified against `node_modules/next/dist/docs`, per `AGENTS.md`),
+  which is why no build plugin and no `next.config.ts` wrapping is needed.
+  Also exports `onRouterTransitionStart` for navigation breadcrumbs.
+- `frontend/src/lib/scrubPII.ts` + `frontend/src/lib/reportError.ts`.
+- `frontend/next.config.ts` — maps Vercel's `VERCEL_GIT_COMMIT_SHA` into
+  `NEXT_PUBLIC_COMMIT_SHA` so releases tag themselves.
+
+**`@sentry/browser`, not `@sentry/nextjs`.** The Next SDK pulls `@sentry/cli`,
+whose postinstall downloads a binary — and this repo gates install scripts
+through `allowScripts` in `package.json`, so that is a supply-chain decision,
+not a detail. What it buys is source-map upload, and the app is entirely
+client-rendered, so the server-side half of that SDK has nothing to instrument.
+The cost is minified production stack traces. If a crash ever proves unreadable,
+the two ways out are `productionBrowserSourceMaps: true` (public source maps, no
+secret) or adding the upload step with a `SENTRY_AUTH_TOKEN` (private, one more
+secret). Neither is needed until it is.
+
+**Two corrections to what this doc previously said.** The Aug 2026 note claimed
+any SDK would send the `Authorization` header and registration bodies by
+default. `sentry-go` v0.49 does neither with `SendDefaultPII: false` — bodies
+are not collected at all and the header deny-list already matches `auth`. The
+scrubber is therefore the second layer, not the first; the *configuration* is
+what carries the weight, and it is set explicitly rather than inherited from
+what the SDK calls a backwards-compatibility path. Second, `sentry-go/echo`
+requires **echo/v5** and this project is on v4, so the official middleware was
+not usable — no loss, since `serverError` was always the better chokepoint.
+
+**Verified rather than asserted.** `SENTRY_DSN` was pointed at a local server
+capturing envelopes verbatim; the real binary then served a real 500 carrying a
+planted `Authorization` header, cookie, API key and full registration body. The
+captured payload had no body, no cookies, three benign headers, `token=[Filtered]`
+in the query string, and the Postgres cause intact. A panic route (added, used,
+reverted) produced a fatal event with an 8-frame stack. The frontend was crashed
+inside its real error boundary: phone, Aadhaar and email `[redacted]` everywhere
+including console breadcrumbs. Also covered by unit tests both sides —
+`internal/observability/sentry_test.go` (39 assertions incl. one driving the
+SDK's own request builder, so an upstream default change fails the build) and
+`frontend/tests/unit/scrub-pii.test.ts`.
+
+**Known limitation, tested so it stays known:** names are not scrubbed. No
+pattern distinguishes "Priya Sharma" from "Postgres Error". Structured data is
+safe because bodies are never collected; the rule for strings we build
+ourselves is now in CLAUDE.md.
+
+**Also fixed here** (raised in the deploy session, never filed):
+`backend/internal/handlers/tenants.go` mapped *any* `db.Get` error on the public
+QR path to 404 "registration link not found", so a Neon outage told a stranger
+in a corridor that the sticker they had just scanned was invalid — and logged
+nothing. Same family as the errors PR #17 fixed, milder only because the error
+was checked rather than discarded. Now `sql.ErrNoRows` alone is a 404 and
+everything else is a reported 500. `PublicRegister` had the same shape in
+`err != nil || !exists`, which conflated an outage with a missing owner; split.
+
+**Still needs you:** create the Sentry org (EU region — it cannot be changed
+later), two projects, paste one DSN into Render and one into Vercel, and set the
+four alert rules. Steps in `docs/DEPLOYMENT.md` → "Setup — the part that needs
+you". Nothing breaks while the DSNs are unset; the boot log says so explicitly.
+
+---
+
 ## Phase 14 — Flow & UX review 🔎
 
 A deliberate pass over the whole product as a *user* rather than as its author,

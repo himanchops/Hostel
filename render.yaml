@@ -62,3 +62,19 @@ services:
         sync: false
       - key: S3_REGION
         value: auto
+
+      # ── Error tracking ────────────────────────────────────────────────
+      # The Sentry (or GlitchTip — same protocol) DSN. sync:false because
+      # Render prompts for it rather than storing it in this file.
+      #
+      # Leaving it unset is a supported state, not a broken one: the server
+      # logs "error tracking: DISABLED" at boot and 500s go to stdout only.
+      # What must never happen is a DSN that is set but silently failing, so
+      # the boot log always says which of the three states it is in.
+      - key: SENTRY_DSN
+        sync: false
+
+      # Keeps deployed errors out of the same bucket as anything you run
+      # locally against the same project.
+      - key: SENTRY_ENVIRONMENT
+        value: production

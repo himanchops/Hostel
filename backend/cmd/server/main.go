@@ -15,11 +15,19 @@ import (
 	"github.com/winnow/hostel/internal/database"
 	"github.com/winnow/hostel/internal/handlers"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
+	"github.com/winnow/hostel/internal/observability"
 	"github.com/winnow/hostel/internal/storage"
 )
 
 func main() {
 	godotenv.Load()
+
+	// Error tracking first, so that a failure during the startup sequence below
+	// is itself reportable. Init is a no-op without SENTRY_DSN and says so on
+	// stdout either way — "configured but silently dead" and "healthy" must not
+	// look the same.
+	observability.Init()
+	defer observability.Flush()
 
 	// In production, hosted Postgres providers (Neon, Render, Supabase, Fly)
 	// hand out a single DATABASE_URL. Locally we keep the per-field DB_* vars.
@@ -41,7 +49,7 @@ func main() {
 		})
 	}
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		observability.Fatalf(err, "Failed to connect to database")
 	}
 	defer db.Close()
 
@@ -51,7 +59,7 @@ func main() {
 	// Storage backend selected by STORAGE_BACKEND env var (s3 or local).
 	storageSvc, err := storage.NewFromEnv(context.Background())
 	if err != nil {
-		log.Fatalf("Failed to initialize storage backend: %v", err)
+		observability.Fatalf(err, "Failed to initialize storage backend")
 	}
 
 	// Handlers
@@ -73,7 +81,19 @@ func main() {
 	e.HideBanner = true
 
 	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
+
+	// Panics do not pass through handlers.serverError — Recover turns them into
+	// a 500 before any handler code runs — so without this hook the one class of
+	// failure that most needs a stack trace would be the one class that never
+	// reaches the tracker. LogErrorFunc returning err preserves Echo's default
+	// behaviour of handing the error to the centralized HTTPErrorHandler.
+	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
+		LogErrorFunc: func(c echo.Context, err error, stack []byte) error {
+			c.Logger().Errorf("PANIC %s %s: %v\n%s", c.Request().Method, c.Path(), err, stack)
+			observability.CapturePanic(err, c.Request(), c.Request().Method, c.Path())
+			return err
+		},
+	}))
 
 	// Behind Render's proxy the client address is only in X-Forwarded-For.
 	// Echo's fallback reads the FIRST entry of that header, which the client
@@ -194,7 +214,11 @@ func main() {
 
 	port := getEnv("PORT", "8080")
 	log.Printf("Starting server on :%s", port)
-	e.Logger.Fatal(e.Start(":" + port))
+	// Not e.Logger.Fatal: that calls os.Exit, which skips every deferred Flush
+	// and would drop the report explaining why the process died.
+	if err := e.Start(":" + port); err != nil {
+		observability.Fatalf(err, "Server stopped")
+	}
 }
 
 func getEnv(key, defaultValue string) string {

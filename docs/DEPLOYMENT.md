@@ -38,29 +38,17 @@ of the guide is mostly copying values between dashboards.
 | 2 | [Cloudflare](https://dash.cloudflare.com) (R2) | Tenant photos and ID documents | Account ID, access key + secret, bucket name, public bucket URL |
 | 3 | [Render](https://render.com) | The Go backend | — (reads `render.yaml`; you paste the secrets in) |
 | 4 | [Vercel](https://vercel.com) | The Next.js frontend | — (you set `NEXT_PUBLIC_API_URL`) |
-| ~~5~~ | ~~Sentry / GlitchTip~~ — **deferred, Aug 2026** | Seeing errors after they happen | nothing; skipped for this deploy |
+| 5 | [Sentry](https://sentry.io) (**EU region**) | Seeing errors after they happen | two DSNs — one backend, one frontend |
 
 ### Decisions taken (Aug 2026)
 
 Both of these were open questions in earlier drafts of this doc. They are
 settled; the reasoning is here so it does not get re-litigated next session.
 
-**Error tracking: skipped for this deploy.** No account #5, no DSN. The two
-chokepoints stay exactly as they are — `serverError` in
-`backend/internal/handlers/errors.go` and `reportError` in
-`frontend/src/lib/reportError.ts` — so adding it later is still a change in two
-files rather than seventy. The consequence to be clear-eyed about is in "Where
-the logs go" below: until it is wired, nothing stores or announces an error, and
-a frontend crash leaves no trace anywhere reachable.
-
-For the record on the privacy question that made this worth asking: the ID
-photographs never enter the error path. The upload handler streams the file
-straight to storage and logs only the object key on failure. What *any* tracker
-would collect by default is the request URL, the `Authorization` header, and
-registration request bodies (name, phone, email) — real PII, and identical for
-Sentry and GlitchTip. It is fixed with a `BeforeSend` scrubber, not by choice of
-vendor. GlitchTip also speaks the Sentry protocol, so the SDK and the scrubber
-are the same code either way; the decision stays reversible.
+**Error tracking: skipped for this deploy.** ✅ **Superseded — done Sep 2026.**
+It was the right call for a deploy day and the wrong one the moment strangers
+could reach the app. See "Where the logs go" below for what was built; the
+reasoning that settled Sentry-over-GlitchTip is in "Choosing a tracker".
 
 **R2 bucket: public.** Object keys are `public/<32 hex chars>.ext` generated
 from `crypto/rand` (`backend/internal/handlers/upload.go`) and the r2.dev
@@ -299,25 +287,218 @@ process. If real tenants hit it, the numbers are in
 
 ## Where the logs go (read this before you need it)
 
-**Short version: errors now have a cause attached, but nothing stores or
-announces them.** Worth knowing the shape of it before something breaks at
-11pm rather than after.
+**Short version: a 500 now reaches an inbox, not just a terminal nobody is
+watching.** Worth knowing the shape of it before something breaks at 11pm
+rather than after.
 
 | Source | Where it lands | Retention | Anyone told? |
 |---|---|---|---|
-| Backend request lines + panics | Render's log tab (stdout) | short, and rolls off | no |
-| Backend 500s | Render's log tab — every one now logs method, route and cause | short, and rolls off | no |
-| Frontend crashes in the browser | the user's browser console only | none | no |
+| Backend request lines | Render's log tab (stdout) | short, and rolls off | no |
+| Backend 500s | Render's log tab **and Sentry** | 90 days in Sentry | **yes — email on a new issue** |
+| Backend panics | Render's log tab **and Sentry**, with a stack trace | 90 days | **yes** |
+| Backend boot failures (no DB, no storage) | stdout **and Sentry**, flushed before exit | 90 days | **yes** |
+| Frontend crashes in the browser | **Sentry**, with breadcrumbs and the route | 90 days | **yes** |
 | Postgres | Neon's own console | per Neon's plan | no |
 
-Render captures stdout, so `middleware.Logger()` output and any
-`c.Logger().Errorf` line is visible in the dashboard. That is a *tail*, not a
-search: no grouping, no history worth relying on, and nothing raises a hand
-when a 500 happens. If you are not looking at the moment it breaks, it is gone.
+Render still captures stdout, and that is still the fastest way to watch a
+deploy in real time. What it never was is a record: no grouping, no history, and
+nothing raises a hand. Sentry is the record; Render is the tail. Keep both.
 
-The frontend is worse — it is a client-rendered app on Vercel, so a React crash
-or a failed fetch happens in someone's browser and leaves no trace anywhere you
-can reach.
+### Choosing a tracker (Sep 2026)
+
+**Sentry, EU region.** Re-examined from scratch now the app is live rather than
+inherited from the pre-deploy note, and one leg of the earlier argument turned
+out to be wrong.
+
+*What was wrong.* The Aug 2026 note said any tracker "would collect by default
+the request URL, the `Authorization` header, and registration request bodies".
+That is no longer true of the Go SDK. As of `sentry-go` v0.49 the default with
+`SendDefaultPII: false` collects **no** request bodies at all, drops cookies,
+and runs headers through a deny-list that matches `auth` — so `Authorization`
+was already redacted before we wrote a line of scrubber. The conclusion held;
+the mechanism behind it did not. This matters because the old note implied the
+scrubber was load-bearing. It is not: the *configuration* is load-bearing, and
+the scrubber is the second layer that catches what configuration cannot reach.
+
+*What is actually the risk.* Free text. A value interpolated into an error
+string — by us, by `lib/pq`, by a validation message — is invisible to every
+header and body setting there is. That is the one thing `BeforeSend` is for
+here, and it is why the scrubbing is pattern-based on Aadhaar, Indian mobile
+numbers and email addresses rather than field-name-based.
+
+*Why not GlitchTip.* The case for it was never the protocol — GlitchTip speaks
+the same one, which is exactly why the choice stays reversible for the price of
+an env var. The case against it is that self-hosting means a VM, a Postgres and
+a Redis to run, patch and watch, for an app whose whole backend is one free
+Render service. An unwatched monitoring stack is worse than no monitoring
+stack: it fails silently and you find out by not being told about an outage.
+The privacy argument that would justify that cost does not survive contact with
+what actually leaves the process — see "Verified, not assumed" below.
+
+*Why the EU region.* The honest answer is that on substance it is close: Sentry
+is a US company either way, so a US legal process reaches both regions, and the
+transport is async so latency from Singapore is irrelevant. Two things break
+the tie. First, **the region cannot be changed** — Sentry's own docs are
+explicit that switching means creating a new organization and abandoning the
+event history, making this the only irreversible decision in the whole change.
+Second, the data subjects are Indian tenants and the app holds Aadhaar numbers;
+India's DPDP Act is modelled closely on GDPR, so if a data-processing story is
+ever needed, "EU region, under Sentry's GDPR DPA" is a shorter one to tell than
+its US equivalent. When one option is irreversible and the substance is a
+coin-flip, take the one you cannot regret.
+
+### Verified, not assumed
+
+"Configured a scrubber" and "confirmed nothing sensitive left the process" are
+different claims. What follows is the second one. The method: point `SENTRY_DSN`
+at a local HTTP server that captures envelopes verbatim, run the real binary,
+trigger real errors, and read the bytes.
+
+Sent deliberately, on a real request to `POST /public/register/:ownerId`:
+an `Authorization: Bearer …` header, a `Cookie`, an `X-Api-Key`, an
+`X-Forwarded-For`, a `?token=` query parameter, and a full registration body
+(name, phone, email, Aadhaar, password, ID-proof URL).
+
+What reached the wire:
+
+```
+request.data:         None            ← body never collected
+request.cookies:      None
+request.headers:      {Content-Type, Host, User-Agent}   ← nothing else
+request.query_string: end_date=2026-09-01&token=[Filtered]
+exception value:      pq: relation "owners" does not exist at column 29 (42P01)
+fingerprint:          [POST, /public/register/:ownerId, failed to verify …]
+```
+
+A byte-level scan of the captured payload for each planted secret came back
+absent for all of them, while the Postgres cause — the part worth reading —
+survived intact. The frontend was checked the same way, by crashing a component
+inside the real error boundary: phone, Aadhaar and email were `[redacted]`
+everywhere including the console breadcrumbs, with a 12-frame stack trace and
+the route preserved.
+
+Both halves are also covered by unit tests, so this does not depend on anyone
+repeating the exercise: `backend/internal/observability/sentry_test.go` and
+`frontend/tests/unit/scrub-pii.test.ts`. The Go test drives the SDK's own
+request builder, so it fails if a future SDK version changes what it collects.
+
+### What the scrubber does not cover
+
+**Names.** `scrubPII("could not render tenant Priya Sharma")` returns that
+string unchanged, and there is a test asserting exactly that so it cannot
+change by accident. A name is not matchable by pattern — anything that caught
+"Priya Sharma" would also eat "Postgres Error" — so names stay out of the
+tracker by a convention rather than a filter:
+
+> Do not interpolate tenant fields into error messages. `serverError(c, err,
+> "failed to load tenant")` is right; `fmt.Errorf("failed to load %s", name)`
+> is not.
+
+Structured data is safe regardless, because request bodies are never collected.
+The convention only governs strings we build ourselves.
+
+**Aadhaar-shaped collateral.** A 12-digit run is redacted wherever it appears,
+so a genuinely 12-digit id in an error message would be lost. That is the
+intended trade and the tests pin both sides of it: ids like `42` and paise
+amounts like `250000` are explicitly asserted to survive.
+
+### Setup — the part that needs you
+
+Claude cannot create the account or hold the DSN. Everything below is yours.
+
+**1. Create the org in the EU region.** At signup, Sentry asks for a data
+storage location once and never again. Pick **EU (Frankfurt)**. A DSN that
+contains `.ingest.de.sentry.io` is EU; `.ingest.us.sentry.io` is US and means
+starting over.
+
+**2. Create two projects**, not one: platform **Go** (`hostel-backend`) and
+platform **Browser JavaScript** (`hostel-frontend`). Two projects means the
+alert rules below can differ, and a frontend crash loop cannot bury a backend
+outage in the same issue stream.
+
+**3. Paste the backend DSN into Render** → the `hostel-backend` service →
+Environment → `SENTRY_DSN`. `SENTRY_ENVIRONMENT` is already set to `production`
+by `render.yaml`. Save; Render redeploys.
+
+**4. Paste the frontend DSN into Vercel** → Settings → Environment Variables →
+Production:
+
+```
+NEXT_PUBLIC_SENTRY_DSN=<the frontend DSN>
+NEXT_PUBLIC_SENTRY_ENVIRONMENT=production
+```
+
+Then redeploy — `NEXT_PUBLIC_` variables are inlined at build time, so an
+existing build will not pick this up. `NEXT_PUBLIC_COMMIT_SHA` is derived from
+Vercel's own `VERCEL_GIT_COMMIT_SHA` in `next.config.ts`; do not set it by hand.
+
+The frontend DSN is inlined into the browser bundle and is readable by anyone.
+That is how browser error tracking works — a DSN grants permission to *send*,
+not to read. The only real exposure is quota abuse; if it happens, rotate the
+key in the project's client-keys settings.
+
+**5. Confirm both actually arrive.** This is the step worth not skipping,
+because a DSN that is set but silently failing looks exactly like a quiet week.
+
+Backend — check the boot log in Render first. It says one of three things, and
+they are deliberately distinguishable:
+
+```
+error tracking: enabled (environment=production release="…")
+error tracking: DISABLED (SENTRY_DSN unset) — 500s will only reach stdout
+error tracking: FAILED to initialise (…) — 500s will only reach stdout
+```
+
+Then make it produce a real 500 rather than trusting the log line. The simplest
+honest way is to break something briefly: in Render, set `DATABASE_URL` to a
+deliberately wrong value, save, and load the public registration page. The boot
+failure itself is reported (`Fatalf` flushes before exiting) and the issue
+should appear within a minute. Put the real value back afterwards.
+
+Frontend — open the deployed app, and in the browser console run
+`setTimeout(() => { throw new Error("sentry smoke test") })`. It should appear
+in the `hostel-frontend` project within a minute.
+
+If nothing arrives, set `SENTRY_DEBUG=1` on Render and redeploy. The SDK then
+prints transport failures to stdout — a blocked or wrong DSN shows up as a
+plain `HTTP request failed: … connection refused` line rather than as silence.
+Turn it back off once diagnosed; it is noisy.
+
+### Alerting — what should email you, and what should not
+
+Tracking without a notification is still "only if you look". Noisy alerting is
+worse: it trains you to ignore the one that mattered. The rule applied here is
+that an alert must correspond to something you would actually do tonight.
+
+**Email me:**
+
+| Rule | Project | Why |
+|---|---|---|
+| A **new** issue is seen (`is:unresolved` + first seen) | both | The whole point. A failure mode that has never happened before is the one worth reading about. |
+| An issue's event count exceeds **10 in 1 hour** | backend | Distinguishes "one tenant hit a bad row" from "the app is down". |
+| Any issue tagged `route:/public/*` | backend | The QR registration path is the one strangers reach with no account and no way to report a problem to you. |
+| A **regression** (a resolved issue reopens) | both | Means a fix did not hold, which is a different and more urgent fact than a new bug. |
+
+**Do not email me:**
+
+- *Every* event on an existing issue. Once an issue is known, the tenth
+  occurrence carries no new information and forty emails guarantee the next
+  genuinely new issue is skimmed past.
+- Anything from `environment:development`. Local crashes are not incidents.
+  This is why `SENTRY_ENVIRONMENT` is set explicitly on both services rather
+  than left to default.
+- Neon cold-start connection errors. The free tier suspends compute after ~5
+  minutes idle and the first request afterwards can fail. If these turn up as
+  an issue, resolve it as "ignore until it happens 10 times in an hour" rather
+  than deleting the rule — the pattern only matters at volume.
+- Spikes and performance alerts. Tracing is off (`tracesSampleRate: 0`), there
+  is no baseline to compare against, and a hobby-tier app with a handful of
+  users would produce nothing but false positives.
+
+Set these under **Alerts → Create Alert Rule** in each project, with email to
+your own address as the only action. Sentry's default "alert on every new
+issue" rule is close to the first row already — check it exists before adding a
+duplicate.
 
 ### The plan, in the order it is worth doing
 
@@ -327,19 +508,16 @@ can reach.
    now check it. This was the step that made everything after it useful.
 2. ~~**Add an error boundary.**~~ ✅ Done. `error.tsx` and `global-error.tsx`
    catch client-side crashes, reporting through `lib/reportError.ts`.
-3. **Error tracking** — ⏸ **deferred at the Aug 2026 deploy** (see "Decisions
-   taken" at the top). When picked up: wire the DSN into the single
-   `serverError` chokepoint on the backend and `reportError` on the frontend —
-   both already exist, so it is a change in two files rather than seventy.
-   Gives stack traces, grouping, and an email when something new breaks. Add a
-   `BeforeSend` scrubber in the same change; the default SDK payload carries the
-   `Authorization` header and registration request bodies.
+3. ~~**Error tracking.**~~ ✅ Done, Sep 2026. It stayed a small change because
+   steps 1 and 2 had already built the chokepoints: `serverError` and
+   `reportError` are still the only places that report. The backend additions
+   beyond that were the two things those chokepoints cannot see — panics, via
+   `RecoverWithConfig`, and boot failures, via `observability.Fatalf`, which
+   exists because `log.Fatal` calls `os.Exit` and skips every deferred flush.
 4. **Log drain** (optional, later). Render can forward stdout to Better Stack
-   or Papertrail for searchable retention. Only worth it once there is enough
-   traffic that "tail the dashboard" stops working.
-
-Steps 1 and 2 are ours and cost a session. Step 3 needs an account and a DSN,
-so it needs you.
+   or Papertrail for searchable retention. Less pressing now that the errors
+   worth keeping are kept elsewhere; still the answer if you ever need to search
+   *request* logs rather than error logs.
 
 **Rule going forward:** a 500 that reaches a user and leaves no trace is a bug
 in its own right, separate from whatever caused it. See CLAUDE.md.
