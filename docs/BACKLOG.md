@@ -64,12 +64,12 @@ answered "not found" and a database problem looked like a missing record.
 ### ~~The frontend has no `global-error.tsx`~~ ✅ done
 `error.tsx` and `global-error.tsx`, both reporting through `lib/reportError.ts`.
 
-### No error tracking or alerting — M, needs an account
-The remaining gap, and the one that matters once this is live: errors reach
-stdout on Render, which is a tail with short retention and no alerting, and
-client-side errors reach only the user's own browser console. Sentry or
-self-hosted GlitchTip — it is account #5 in the deployment guide's setup table.
-Small change now that both chokepoints exist.
+### ~~No error tracking or alerting~~ ✅ done (Sep 2026)
+Sentry, EU region, wired into the two existing chokepoints plus panics and boot
+failures. Scrubbing is verified against a captured wire payload, not assumed —
+see `docs/DEPLOYMENT.md` → "Verified, not assumed". Alert rules and the one
+thing the scrubber deliberately does not cover (names) are documented there too.
+Still needs a human to create the account and paste the two DSNs.
 
 ## Security / privacy
 

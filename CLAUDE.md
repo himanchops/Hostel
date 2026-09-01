@@ -41,7 +41,7 @@ hostel/
 
 **See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session. `docs/BACKLOG.md` holds the loose ends that are too small to be a phase.
 
-Current state (Aug 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Everything on the roadmap before deployment is done: next up is **deploy, Phase 9.2–9.6** (Neon → R2 → Render → Vercel, `docs/DEPLOYMENT.md`).
+Current state (Sep 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Deployment is done and the app is live (Phase 9.2–9.6), and **Phase 9.7 wired up error tracking** (Sentry, EU region — `docs/DEPLOYMENT.md` → "Where the logs go"). The DSNs still need a human to paste them into Render and Vercel; until then the backend boot log says `error tracking: DISABLED` and nothing else changes.
 
 UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 
@@ -57,6 +57,14 @@ Key conventions to carry forward:
   commit and nobody could see why, because the only trace was a generic
   "failed to submit payment". Same rule on the frontend: every catch either
   shows the user something or reports it.
+- **Never put a tenant's own data into an error message.** Errors now leave the
+  process — `serverError` and `reportError` forward to Sentry — and the scrubber
+  there catches Aadhaar numbers, Indian mobile numbers and email addresses by
+  pattern, but it cannot catch a *name*: nothing distinguishes "Priya Sharma"
+  from "Postgres Error". So `serverError(c, err, "failed to load tenant")`, never
+  `fmt.Errorf("failed to load %s", name)`. Structured data is safe regardless —
+  request bodies are never collected — so this rule is only about strings we
+  build ourselves. See `docs/DEPLOYMENT.md` → "What the scrubber does not cover".
 - **Demo/seed data uses `demo@seed.invalid`.** `.invalid` is reserved by
   RFC 2606 and cannot collide with a real account. A seed script must never
   fall back to logging in when signup fails — that once appended ten fake
