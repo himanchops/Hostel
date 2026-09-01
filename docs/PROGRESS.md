@@ -339,7 +339,53 @@ Gotchas worth keeping, both of which cost real time to spot:
   Key further down; using the token value gives a signature error that reads
   like a typo.
 
-### Phase 9.4–9.6 — Deploy walkthrough 🔜
+### Phase 9.4–9.6 — Render, Vercel, wiring ✅ (Aug 2026) — **the app is live**
+
+- Backend: `https://hostel-backend-k7ar.onrender.com` (Render, free, singapore)
+- Frontend: `https://hostel-ten-kappa.vercel.app` (Vercel, hobby)
+
+**Render** came up via Blueprint off `render.yaml`, so the twelve service
+settings and non-secret env vars were read from the file and only the eight
+`sync: false` secrets were typed. `GO_VERSION` was pinned in `render.yaml` first
+(PR #22) because `backend/go.mod` needs 1.25.7, Render's default lags, and the
+resulting failure reads like a dependency problem.
+
+**Vercel** auto-detected the monorepo and proposed deploying the Go backend as
+`/api/backend` alongside the frontend, asking for a `vercel.json` to formalise
+it. Declined: Echo is a long-lived server, not a request-scoped function, and a
+half-working unconfigured second copy of an app that handles government ID is
+worse than one that plainly fails. Setting **Root Directory = `frontend`**
+collapses the detection to a single Next.js service.
+
+`NEXT_PUBLIC_API_URL` is set for Production **and** Preview, so branch previews
+point at the production backend and get CORS-refused. That is the safer of two
+broken options — do **not** add a preview origin to `FRONTEND_URL` to "fix" it,
+because that lets a branch deploy write to production Neon.
+
+**Verified end to end against the deployed stack, not the dashboards:**
+
+| Path | Check |
+|---|---|
+| Browser → Vercel | 200; `hostel-backend-k7ar.onrender.com` found in the shipped JS chunks and `localhost:8080` absent — proves the build-time inline took |
+| Browser → Render | preflight from the real origin returns ACAO; `placeholder.invalid` and the trailing-slash variant both refused |
+| Render → Neon (read) | login as unknown user → 401, not 500 |
+| Render → Neon (write) | signup → 201, read-back login → 200 |
+| Render → R2 | upload returned a `pub-*.r2.dev` URL |
+| Browser → R2 | 200, `image/png`, exact byte count |
+
+The CORS trailing-slash check is worth keeping in the routine: `FRONTEND_URL`
+with a trailing slash produces a configuration that looks complete and refuses
+every request, and the only symptom is a browser-console error.
+
+**Left behind by verification:** two objects in R2 (`smoke-test/` and
+`public/`, ~137 bytes each) and one `demo@seed.invalid` owner row, deleted
+after the fact with
+`psql "$NEON_URL" -c "DELETE FROM owners WHERE email = 'demo@seed.invalid';"`.
+
+**Phase 9 is complete.** Remaining loose ends are in `docs/BACKLOG.md`, not here:
+no error tracking (deferred by decision), no e2e coverage on file upload,
+`/auth/login` and `/public/register` still unthrottled, presigned URLs, a custom
+domain on the bucket, and the Aadhaar questions.
 
 Steps live in `docs/DEPLOYMENT.md`:
 - 9.2 Database (Neon) — create project, run migrations against the `DATABASE_URL`
