@@ -480,6 +480,60 @@ export const collectionsApi = {
   list: (token: string) => request<CollectionRow[]>("/api/collections", {}, token),
 };
 
+// ─── Insights ────────────────────────────────────────────────────────────────
+
+/**
+ * The historical view. Every other endpoint answers "what is true now"; this
+ * one answers "what has been happening".
+ *
+ * `expected_paise` is derived from billing cycles the same way the dashboard's
+ * card is, so the last point here equals the dashboard's "expected this month".
+ * `collected_paise` is keyed by the month the money actually arrived, so
+ * arrears cleared in one go show up as a single tall bar.
+ */
+export interface RevenuePoint {
+  month: string;   // "2026-09"
+  label: string;   // "Sep 26"
+  expected_paise: number;
+  collected_paise: number;
+}
+
+/** Occupancy measured in bed-nights, so a mid-month move-in counts as a fraction. */
+export interface OccupancyPoint {
+  month: string;
+  label: string;
+  occupied_nights: number;
+  available_nights: number;
+  percentage: number;
+}
+
+export interface RoomInsight {
+  room_id: number;
+  room_name: string;
+  site_id: number;
+  site_name: string;
+  total_beds: number;
+  occupied_nights: number;
+  available_nights: number;
+  vacant_nights: number;
+  percentage: number;
+  collected_paise: number;
+}
+
+export interface InsightsData {
+  months: number;
+  from_date: string;
+  to_date: string;
+  revenue: RevenuePoint[];
+  occupancy: OccupancyPoint[];
+  rooms: RoomInsight[];
+}
+
+export const insightsApi = {
+  get: (token: string, months = 12) =>
+    request<InsightsData>(`/api/insights?months=${months}`, {}, token),
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Format paise as ₹ with comma separators */

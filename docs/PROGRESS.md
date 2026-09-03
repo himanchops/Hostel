@@ -1205,6 +1205,64 @@ ended". It asserts the badge exactly.
 
 ---
 
+## Phase 15 — Insights ✅ (Sep 2026)
+
+The first historical view in the app. Everything else answers "what is true
+now"; `/insights` answers "what has been happening".
+
+**`GET /api/insights?months=N`** (1–24, default 12) returns all three views in
+one payload — one endpoint rather than three because they share a window, and
+fetching them separately invites a 12-month revenue chart above a 6-month room
+table on the same screen.
+
+Three decisions worth not re-litigating:
+
+- **Expected is differenced from billing cycles**, exactly the way the
+  dashboard's single figure is, so the last point of the series equals the
+  dashboard's "expected this month" card. A unit test pins the two together —
+  two screens disagreeing about the same month is a bug report waiting to
+  happen.
+- **Collected is keyed by the month the money arrived**, not the month it was
+  owed for. Three months of arrears cleared in one payment is one tall bar. The
+  gap against expected is the point of drawing them together.
+- **Occupancy is bed-nights, not a month-end headcount.** A snapshot scores a
+  bed that turned over on the 2nd the same as one empty until the 30th. The
+  denominator is *today's* bed count applied to every month — deliberately not
+  `beds.created_at`, because this app is built for backfilled data, so a bed row
+  entered this morning may describe a bed that has existed for years. The cost:
+  adding a room today makes past months look emptier than they were.
+
+The current month is measured to today rather than to month-end, so a full
+house reads 100% on the 11th instead of 35%.
+
+**Charts are hand-rolled SVG** (`components/ui/Chart.tsx`). The frontend has
+three runtime dependencies and Recharts alone is bigger than all of them; what
+these draw is a hundred lines of SVG, and rolling it keeps the stone/indigo
+tokens identical to every other surface. `ChartScroll` gives a wide series a
+minimum width and scrolls it inside its own container, so the page never scrolls
+sideways at 375px.
+
+**The tab bar is six items now, not five.** Insights earned a slot because it is
+the only answer to "how are we doing" and burying it behind a menu is how a
+feature goes unused. Six is the ceiling — labels still fit untruncated at 375px.
+
+`SegmentedControl` was extracted to `components/ui` for the range picker rather
+than hand-rolled on the page, because its selected state is the same
+`ring-stone-200` recipe Card owns.
+
+Tests: 9 Go unit tests on the pure functions (`insights_test.go`) — including
+that an ended stay stops billing, a bed-less stay bills but occupies nothing,
+and an `end_date` counts as the tenant's last night — plus 3 Playwright tests
+covering an empty room appearing at ₹0, the range picker refetching, and 375px
+with no horizontal page overflow.
+
+**Next: Phase 15b — widen `seed-demo`.** The seeder covers every *state* but is
+thin for *trends*: 9 stays over ~7 months makes a flat chart. Demoing insights
+wants ~20 beds and 12+ months with move-ins and move-outs spread across it so
+the lines actually move.
+
+---
+
 ## Deferred
 
 Things we decided are worth doing, but not now. Nothing here is half-built —

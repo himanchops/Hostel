@@ -73,6 +73,7 @@ func main() {
 	paymentHandler := handlers.NewPaymentHandler(db)
 	gridHandler := handlers.NewGridHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
+	insightsHandler := handlers.NewInsightsHandler(db)
 	collectionsHandler := handlers.NewCollectionsHandler(db)
 	settlementHandler := handlers.NewSettlementHandler(db)
 	uploadHandler := handlers.NewUploadHandler(storageSvc)
@@ -177,6 +178,10 @@ func main() {
 
 	// Dashboard
 	api.GET("/dashboard", dashboardHandler.GetDashboard)
+
+	// Insights — the historical view. Everything else in this API answers
+	// "what is true now"; this one answers "what has been happening".
+	api.GET("/insights", insightsHandler.GetInsights)
 
 	// Collections
 	api.GET("/collections", collectionsHandler.GetCollections)
