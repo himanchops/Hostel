@@ -1302,6 +1302,63 @@ Feedback on first use: *"I cannot really tell what is the exact value"* and
 - The page was missing the `p-4 sm:p-6 lg:p-8` wrapper every other dashboard
   page has, so it rendered flush to the edge.
 
+### Phase 15d — the dashboard's two lists ✅
+
+Three pieces of feedback after using the dashboard against the widened demo
+data, plus one bug found while checking them.
+
+**Rows are links now.** Both lists showed a tenant's name with no way to reach
+them — `BACKLOG.md` had recorded this, correctly noting it was not a `<Link>`
+around existing data: neither query selected `t.id`. Both now carry `tenant_id`,
+and the vacating list carries `stay_id` as its React key, because `stays.go`
+only blocks a second active stay on the same *bed* — one tenant can hold two.
+
+The trap worth naming: `RecentPayment.ID` is the **payment's** id and now sits
+directly beside `tenant_id`. Linking to the wrong one lands the owner on a
+stranger — in the demo data, payment 957 versus tenant 881. Both are commented,
+and an e2e asserts the href is not `/tenants/<payment id>`.
+
+**The lists peek at five.** They were never going to grow unboundedly — both
+queries were already `LIMIT 10` — so the actual complaint was that they truncate
+*silently*, and that `lg:grid-cols-2` stretched the shorter card to leave dead
+whitespace. Now: five rows and a `Show all N` button, `lg:items-start` so a card
+ends where its content ends, and the queries ask for `LIMIT 11` so the response
+can carry `vacating_truncated` / `recent_payments_truncated`. Without that flag
+the UI would cheerfully offer to "show all 10" of a forty-row list.
+
+Rejected: a max-height scroll box. There is not one vertical nested scroller in
+this app (`ChartScroll` is horizontal on purpose), and it would have hidden the
+truncation exactly as silently as before — reaching the bottom of a scroll box
+tells you nothing about whether the server sent ten or ten-of-forty.
+
+**Six tabs stay six.** The suspicion was that Dashboard, Collections and
+Insights overlap. Collections is a worklist that empties as you work it, not an
+overview. Dashboard and Insights overlap in exactly one number — "Collected This
+Month" is the last bar of the collected-vs-billed chart, and `insights_test.go`
+pins them equal — so that card is now a link to `/insights`. A shared number
+between a summary and its series is how they are supposed to relate; the fix is
+a doorway, not a merge.
+
+**The bug:** the vacating query read `WHERE ... AND s.end_date IS NULL AND
+(s.notice_date IS NOT NULL OR s.end_date <= CURRENT_DATE + INTERVAL '30 days')`.
+The second branch is unreachable under `end_date IS NULL`, so the 30-day window
+never fired and the empty state — "No tenants vacating in the next 30 days" —
+described behaviour that did not exist. Predicate collapsed to `notice_date IS
+NOT NULL`, copy is now "No one has given notice", and `ORDER BY` gained an
+`s.id` tie-break so a `LIMIT` cannot return rows in non-deterministic order.
+
+Deliberately **no** date window added: `notice_date >= CURRENT_DATE - INTERVAL
+'30 days'` would hide the tenant who gave notice 45 days ago and is overstaying,
+which is the one most worth seeing.
+
+**Tests.** The dashboard had no e2e file at all — by this repo's own rule, a
+surface nobody had tested. `tests/e2e/owner/dashboard.test.ts` now covers the
+notice click-through, the payment row linking to the tenant rather than the
+payment, the empty-state copy (the only automated guard on the predicate, since
+every Go handler test is a pure-function test and none reach this SQL), the
+expander, and the card-stretch regression. That last one was checked by removing
+`lg:items-start` and confirming it fails.
+
 **Next:** nothing queued. Insights is worth living with for a while before
 adding average-days-late or revenue-per-bed-position on top of it.
 

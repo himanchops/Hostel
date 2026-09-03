@@ -422,6 +422,9 @@ export interface AlertsSummary {
 }
 
 export interface VacatingTenant {
+  /** The stay's id, not the tenant's — one tenant can hold two active stays. */
+  stay_id: number;
+  tenant_id: number;
   tenant_name: string;
   tenant_phone: string;
   bed_name: string;
@@ -432,7 +435,9 @@ export interface VacatingTenant {
 }
 
 export interface RecentPayment {
+  /** The PAYMENT's id. Link with tenant_id, never this. */
   id: number;
+  tenant_id: number;
   amount: number;
   payment_type: "cash" | "online";
   payment_date: string;
@@ -448,6 +453,9 @@ export interface DashboardData {
   alerts: AlertsSummary;
   vacating_soon: VacatingTenant[];
   recent_payments: RecentPayment[];
+  /** True when the server capped the list — there are more than are shown. */
+  vacating_truncated: boolean;
+  recent_payments_truncated: boolean;
 }
 
 export const dashboardApi = {

@@ -47,6 +47,12 @@ type AlertsSummary struct {
 }
 
 type VacatingTenant struct {
+	// StayID, not TenantID, is the stable key for this row: it IS a stay, and
+	// stays.go only blocks a second active stay on the same BED, so one tenant
+	// can legitimately appear twice. TenantID is the right link target and the
+	// wrong React key.
+	StayID      int64   `json:"stay_id"      db:"stay_id"`
+	TenantID    int64   `json:"tenant_id"    db:"tenant_id"`
 	TenantName  string  `json:"tenant_name"  db:"tenant_name"`
 	TenantPhone string  `json:"tenant_phone" db:"tenant_phone"`
 	BedName     string  `json:"bed_name"     db:"bed_name"`
@@ -57,7 +63,11 @@ type VacatingTenant struct {
 }
 
 type RecentPayment struct {
+	// ID is the PAYMENT's id, not the tenant's. Sitting next to TenantID it is
+	// an easy thing to link to by mistake, which lands the owner on whichever
+	// tenant happens to share that number.
 	ID          int64  `json:"id"           db:"id"`
+	TenantID    int64  `json:"tenant_id"    db:"tenant_id"`
 	Amount      int64  `json:"amount"       db:"amount"`
 	PaymentType string `json:"payment_type" db:"payment_type"`
 	PaymentDate string `json:"payment_date" db:"payment_date"`
@@ -73,7 +83,17 @@ type DashboardResponse struct {
 	Alerts         AlertsSummary    `json:"alerts"`
 	VacatingSoon   []VacatingTenant `json:"vacating_soon"`
 	RecentPayments []RecentPayment  `json:"recent_payments"`
+	// Both lists are capped server-side. Without these the UI cannot tell the
+	// difference between "that is all of them" and "that is the first ten of
+	// forty", and would cheerfully offer to "show all 10" of a much longer list.
+	VacatingTruncated       bool `json:"vacating_truncated"`
+	RecentPaymentsTruncated bool `json:"recent_payments_truncated"`
 }
+
+// dashboardListLimit is how many rows the two lists show. Both queries ask the
+// database for one more than this so the handler can report whether it hit the
+// cap — see the mapping loops.
+const dashboardListLimit = 10
 
 // ── Revenue rollup ───────────────────────────────────────────────────────────
 
@@ -230,6 +250,8 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 
 	// 5. Vacating soon
 	type vacatingRow struct {
+		StayID      int64          `db:"stay_id"`
+		TenantID    int64          `db:"tenant_id"`
 		TenantName  string         `db:"tenant_name"`
 		TenantPhone string         `db:"tenant_phone"`
 		BedName     string         `db:"bed_name"`
@@ -241,6 +263,8 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	var vacRows []vacatingRow
 	err = h.db.Select(&vacRows, `
 		SELECT
+			s.id          AS stay_id,
+			t.id          AS tenant_id,
 			t.name        AS tenant_name,
 			t.phone       AS tenant_phone,
 			b.name        AS bed_name,
@@ -256,20 +280,26 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		WHERE t.owner_id = $1
 		  AND s.end_date IS NULL
 		  AND s.bed_id IS NOT NULL
-		  AND (
-		      s.notice_date IS NOT NULL
-		      OR s.end_date <= CURRENT_DATE + INTERVAL '30 days'
-		  )
-		ORDER BY s.notice_date ASC NULLS LAST
-		LIMIT 10
+		  AND s.notice_date IS NOT NULL
+		ORDER BY s.notice_date ASC, s.id ASC
+		LIMIT 11
 	`, ownerID)
 	if err != nil {
 		return serverError(c, err, "failed to fetch vacating tenants")
 	}
 
+	// Both lists ask for one more row than they show, so "is there more" costs
+	// an extra row scanned rather than a second COUNT(*) query.
+	vacatingTruncated := len(vacRows) > dashboardListLimit
+	if vacatingTruncated {
+		vacRows = vacRows[:dashboardListLimit]
+	}
+
 	vacating := make([]VacatingTenant, 0, len(vacRows))
 	for _, r := range vacRows {
 		v := VacatingTenant{
+			StayID:      r.StayID,
+			TenantID:    r.TenantID,
 			TenantName:  r.TenantName,
 			TenantPhone: r.TenantPhone,
 			BedName:     r.BedName,
@@ -288,6 +318,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	// 6. Recent payments
 	type recentRow struct {
 		ID          int64  `db:"id"`
+		TenantID    int64  `db:"tenant_id"`
 		Amount      int64  `db:"amount"`
 		PaymentType string `db:"payment_type"`
 		PaymentDate string `db:"payment_date"`
@@ -300,6 +331,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	err = h.db.Select(&recentRows, `
 		SELECT
 			p.id,
+			t.id                       AS tenant_id,
 			p.amount,
 			p.payment_type::text AS payment_type,
 			TO_CHAR(p.payment_date, 'YYYY-MM-DD') AS payment_date,
@@ -316,16 +348,22 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		WHERE t.owner_id = $1
 		  AND p.is_approved = true
 		ORDER BY p.payment_date DESC, p.created_at DESC
-		LIMIT 10
+		LIMIT 11
 	`, ownerID)
 	if err != nil {
 		return serverError(c, err, "failed to fetch recent payments")
+	}
+
+	recentTruncated := len(recentRows) > dashboardListLimit
+	if recentTruncated {
+		recentRows = recentRows[:dashboardListLimit]
 	}
 
 	recent := make([]RecentPayment, 0, len(recentRows))
 	for _, r := range recentRows {
 		recent = append(recent, RecentPayment{
 			ID:          r.ID,
+			TenantID:    r.TenantID,
 			Amount:      r.Amount,
 			PaymentType: r.PaymentType,
 			PaymentDate: r.PaymentDate,
@@ -343,7 +381,9 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			PendingTenants:  pendingTenants,
 			PendingPayments: pendingPayments,
 		},
-		VacatingSoon:   vacating,
-		RecentPayments: recent,
+		VacatingSoon:            vacating,
+		RecentPayments:          recent,
+		VacatingTruncated:       vacatingTruncated,
+		RecentPaymentsTruncated: recentTruncated,
 	})
 }
