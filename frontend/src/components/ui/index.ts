@@ -25,3 +25,7 @@ export type { Crumb } from "./PageHeader";
 export { Skeleton, SkeletonText, SkeletonCard } from "./Skeleton";
 export * from "./icons";
 export { ToastProvider, useToast } from "./Toast";
+export { ChartScroll, GroupedBarChart, PercentLineChart, Meter } from "./Chart";
+export type { BarPair, LinePoint } from "./Chart";
+export { SegmentedControl } from "./SegmentedControl";
+export { Collapsible } from "./Collapsible";

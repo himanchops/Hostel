@@ -101,6 +101,10 @@ export default function DashboardPage() {
             value={formatCurrency(rev?.collected_this_month ?? 0)}
             icon={<RupeeIcon className="h-4 w-4" />}
             tone="emerald"
+            /* This figure is the last bar of the Insights chart — a unit test
+               pins them equal. Linking makes that a doorway rather than a
+               duplicate. */
+            href="/insights"
             note={
               rev && rev.expected_this_month > 0
                 ? `of ${formatCurrency(rev.expected_this_month)} expected`
@@ -141,32 +145,47 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Main two-column section */}
+      {/* Main two-column section.
+
+          lg:items-start so a short card stops stretching to match a tall one.
+          A card that ends where its content ends reads as "that's all there
+          is"; a stretched one reads as "something failed to load". Scoped to
+          lg: because below 1024px this is a single column anyway. */}
       {(!loading && occ && occ.total_beds > 0) && (
-        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
           <Card title="Vacating Soon">
             {data!.vacating_soon.length === 0 ? (
-              <EmptyState compact message="No tenants vacating in the next 30 days." />
+              <EmptyState compact message="No one has given notice." />
             ) : (
-              <ul className="divide-y divide-stone-100">
-                {data!.vacating_soon.map((v, i) => (
-                  <li key={i} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div>
-                      <p className="text-sm font-medium text-stone-900">{v.tenant_name}</p>
-                      <p className="text-xs text-stone-500">
-                        {v.site_name} · {v.room_name} · {v.bed_name}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      {v.notice_date ? (
-                        <Badge tone="warning">Notice: {v.notice_date}</Badge>
-                      ) : v.end_date ? (
-                        <Badge tone="warning">Ends: {v.end_date}</Badge>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <PeekList
+                count={data!.vacating_soon.length}
+                truncated={data!.vacating_truncated}
+                noun="notices"
+              >
+                {(limit) =>
+                  data!.vacating_soon.slice(0, limit).map((v) => (
+                    <Link
+                      key={v.stay_id}
+                      href={`/tenants/${v.tenant_id}`}
+                      className={ROW}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-stone-900">{v.tenant_name}</p>
+                        <p className="truncate text-xs text-stone-500">
+                          {v.site_name} · {v.room_name} · {v.bed_name}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {v.notice_date ? (
+                          <Badge tone="warning">Notice: {v.notice_date}</Badge>
+                        ) : v.end_date ? (
+                          <Badge tone="warning">Ends: {v.end_date}</Badge>
+                        ) : null}
+                      </div>
+                    </Link>
+                  ))
+                }
+              </PeekList>
             )}
           </Card>
 
@@ -174,27 +193,38 @@ export default function DashboardPage() {
             {data!.recent_payments.length === 0 ? (
               <EmptyState compact message="No payments recorded yet." />
             ) : (
-              <ul className="divide-y divide-stone-100">
-                {data!.recent_payments.map((p) => (
-                  <li key={p.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div>
-                      <p className="text-sm font-medium text-stone-900">{p.tenant_name}</p>
-                      <p className="text-xs text-stone-500">
-                        {p.site_name} · {p.room_name} · {p.bed_name}
-                      </p>
-                    </div>
-                    <div className="shrink-0 space-y-1 text-right">
-                      <p className="text-sm font-semibold tabular-nums text-stone-900">
-                        {formatCurrency(p.amount)}
-                      </p>
-                      <p className="text-xs tabular-nums text-stone-400">{p.payment_date}</p>
-                      <Badge tone={p.payment_type === "cash" ? "neutral" : "success"}>
-                        {p.payment_type}
-                      </Badge>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <PeekList
+                count={data!.recent_payments.length}
+                truncated={data!.recent_payments_truncated}
+                noun="payments"
+              >
+                {(limit) =>
+                  data!.recent_payments.slice(0, limit).map((p) => (
+                    <Link
+                      key={p.id}
+                      /* p.tenant_id, never p.id — that one is the payment. */
+                      href={`/tenants/${p.tenant_id}`}
+                      className={ROW}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-stone-900">{p.tenant_name}</p>
+                        <p className="truncate text-xs text-stone-500">
+                          {p.site_name} · {p.room_name} · {p.bed_name}
+                        </p>
+                      </div>
+                      <div className="shrink-0 space-y-1 text-right">
+                        <p className="text-sm font-semibold tabular-nums text-stone-900">
+                          {formatCurrency(p.amount)}
+                        </p>
+                        <p className="text-xs tabular-nums text-stone-400">{p.payment_date}</p>
+                        <Badge tone={p.payment_type === "cash" ? "neutral" : "success"}>
+                          {p.payment_type}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))
+                }
+              </PeekList>
             )}
           </Card>
         </div>
@@ -281,6 +311,63 @@ const STAT_TONES = {
  * and the only one that becomes a link, because seeing it always leads to the
  * same next step.
  */
+/**
+ * The row recipe shared by both dashboard lists and the Sites list: a link that
+ * fills the row, so the whole strip is the hit target rather than just the name.
+ */
+const ROW =
+  "flex items-start justify-between gap-3 py-3 transition duration-150 ease-out first:pt-0 last:pb-0 hover:opacity-75";
+
+const PEEK = 5;
+
+/**
+ * Shows the first few rows and offers the rest, rather than rendering all ten.
+ *
+ * Chosen over a max-height scroll box for two reasons: there is not one vertical
+ * nested scroller in this app (ChartScroll is horizontal on purpose), and a
+ * scroll box hides the truncation exactly as silently as rendering ten did —
+ * reaching the bottom of it tells you nothing about whether the server sent ten
+ * or ten-of-forty. The button says the number out loud instead.
+ */
+function PeekList({
+  count,
+  truncated,
+  noun,
+  children,
+}: {
+  count: number;
+  /** The server capped the list, so `count` is a floor and not a total. */
+  truncated: boolean;
+  noun: string;
+  children: (limit: number) => React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const limit = expanded ? count : PEEK;
+
+  return (
+    <>
+      <div className="divide-y divide-stone-100">{children(limit)}</div>
+
+      {count > PEEK && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="mt-1 w-full border-t border-stone-100 pt-3 text-left text-[13px] font-medium text-indigo-600 transition duration-150 ease-out hover:text-indigo-700"
+        >
+          {expanded ? "Show fewer" : `Show all ${count}`}
+        </button>
+      )}
+
+      {truncated && expanded && (
+        <p className="mt-2 text-xs text-stone-400">
+          Only the {count} most recent {noun} are shown.
+        </p>
+      )}
+    </>
+  );
+}
+
 function StatCard({
   label,
   value,

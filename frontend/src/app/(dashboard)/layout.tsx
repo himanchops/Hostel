@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { collectionsApi, tenantsApi } from "@/lib/api";
 import {
-  BuildingIcon, Button, Card, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
+  BuildingIcon, Button, Card, ChartIcon, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
   RupeeIcon, ToastProvider, UsersIcon,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
@@ -14,8 +14,13 @@ import type { BadgeTone } from "@/components/ui";
 /**
  * The shell is two layouts sharing one nav definition: a sidebar from 1024px
  * up, a bottom tab bar below it. Tabs rather than a hamburger drawer because
- * the owner uses this one-handed in a corridor — the five things they do all
- * day should be one thumb-reach away, not behind a menu.
+ * the owner uses this one-handed in a corridor — what they do all day should be
+ * one thumb-reach away, not behind a menu.
+ *
+ * Six tabs, not the original five: Insights earned a slot because it is the
+ * only answer to "how are we doing", and burying it behind a menu is how a
+ * feature goes unused. Six is the ceiling — the labels still fit untruncated at
+ * 375px, and a seventh would start eliding them.
  */
 type NavItem = {
   label: string;
@@ -64,6 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Collections sits second: it is the daily loop — rent day, who hasn't
     // paid, chase them.
     { label: "Collections", href: "/collections", icon: RupeeIcon, count: collectionsCount, tone: "danger" },
+    { label: "Insights", href: "/insights", icon: ChartIcon },
     { label: "Sites", href: "/sites", icon: BuildingIcon },
     { label: "Tenants", href: "/tenants", icon: UsersIcon },
     { label: "Pending", href: "/pending", icon: ClockIcon, count: pendingCount, tone: "warning" },

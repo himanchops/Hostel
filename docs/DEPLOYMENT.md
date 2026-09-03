@@ -522,6 +522,65 @@ duplicate.
 **Rule going forward:** a 500 that reaches a user and leaves no trace is a bug
 in its own right, separate from whatever caused it. See CLAUDE.md.
 
+## The live owner account (Sep 2026)
+
+Production is not just demo data any more. **Chopra Boys Hostel** is on it:
+owner #4 (`lnchopra66@yahoo.co.in`), site #1, 7 rooms, 45 beds. The structure
+was seeded; tenants, stays and payments are entered by hand.
+
+### Two seed scripts, and only one may point at production
+
+| | `scripts/seed-demo.py` | `scripts/seed-chopra.py` |
+|---|---|---|
+| Owner | `demo@seed.invalid` (RFC 2606, cannot be real) | a real account |
+| Writes | tenants, stays, payments, settlements | **sites, rooms and beds only** |
+| Target | localhost | `HOSTEL_API`, defaulting to the Render backend |
+| Re-run | `make seed-demo-reset` deletes and reseeds | idempotent — creates only what is missing |
+
+`seed-chopra.py` is narrow on purpose. It never creates a tenant, stay or
+payment, and never deletes or updates anything, so the worst case against live
+data is an empty room the owner can delete in the UI. It also **logs in before
+trying signup** — the inverse of the fallback that once wrote fake tenants into
+a real owner's data (see "Incident" in `PROGRESS.md`). A 401 answers "does this
+account exist" without guessing.
+
+```bash
+make seed-hostel-dry                              # print the plan, write nothing
+make seed-hostel HOSTEL_API=http://localhost:8080 # rehearse against local first
+make seed-hostel                                  # against production
+```
+
+Rehearsing locally first is not optional politeness — it is how the idempotency
+and the wrong-password refusal were verified before the script ever touched the
+live database.
+
+### Credentials
+
+`.hostel-credentials.env` at the repo root holds `HOSTEL_EMAIL` and
+`HOSTEL_PASSWORD`. It is **gitignored, and must stay that way** — the GitHub
+repo is public. The environment overrides the file if both are set.
+
+The app has no change-password feature, so rotating that password today means a
+direct `UPDATE` against the Neon database with a fresh bcrypt hash. Worth
+knowing before you decide the password needs rotating.
+
+### Bed naming
+
+Bunks are named, not typed: `1L`/`1U` are the lower and upper of bunk frame 1,
+and a standalone bed is just its position number. There is no `bed_type` column
+and there should not be one — `beds` has a single label field, rent lives on the
+**stay** rather than the bed (so an upper bunk can already be cheaper), and
+nothing in the app would branch on a type. The grid orders beds by name as text,
+which sorts lower before upper for free.
+
+The one caveat that buys: keep positions under 10 per room, or `10L` sorts
+between `1L` and `1U`. A bed needing a real label gets a short one — Room 5's
+balcony bed is `Balcony`, because the grid tile is 96px wide and swaps its
+tooltip for the tenant's name once occupied, so a truncated label is one nobody
+can read.
+
+---
+
 ## Things deliberately not automated yet
 
 - **Migrations** are still run manually from your laptop against the Neon URL.

@@ -1205,6 +1205,205 @@ ended". It asserts the badge exactly.
 
 ---
 
+## Real-hostel setup — Chopra Boys Hostel is on production ✅ (Sep 2026)
+
+The app now holds a real account alongside the demo one: owner #4, site #1,
+7 rooms, 45 beds, all vacant. Tenant details go in by hand afterwards.
+
+`scripts/seed-chopra.py` (`make seed-hostel`) exists because `seed-demo.py`
+cannot be pointed at a real account — it invents an owner and fills it with
+fiction. The new script is narrowed to match its target: **sites, rooms and beds
+only**, never a tenant, stay or payment; never a delete or an update; idempotent
+on re-run, so the `LAYOUT` table at the top of the file stays the source of truth
+rather than the UI. Worst case against live data is an empty room.
+
+It **logs in before trying signup**, which is the inverse of the fallback that
+caused the incident recorded above. A 401 answers "does this account exist"
+without guessing, and a 409 on the signup that follows means the password is
+wrong — at which point it stops, having written nothing.
+
+Rehearsed against a local backend under a throwaway `.invalid` owner before it
+touched production: fresh signup, idempotent re-run, and a wrong-password
+attempt that refused. Then verified on production by reading the grid back from
+the API rather than trusting the script's own output.
+
+**Bunk beds are named, not typed** — `1L`/`1U`. A `bed_type` column would need a
+migration plus API and UI changes and nothing would branch on it: rent lives on
+the stay, not the bed, so an upper bunk can already be cheaper without the schema
+knowing why. Full reasoning and the caveats (positions under 10; short custom
+labels) are in `DEPLOYMENT.md` → "The live owner account".
+
+Credentials live in `.hostel-credentials.env`, gitignored — **this repo is
+public**. Note the app has no change-password feature, so rotating means a direct
+database update.
+
+Shipped alongside: the Collections icon had no stem, so two bars plus a
+free-floating lobe scanned as a struck-through "3" rather than ₹. The bowl now
+closes onto a stem with the leg descending from it, checked side by side against
+a real ₹ glyph.
+
+---
+
+## Phase 15 — Insights ✅ (Sep 2026)
+
+The first historical view in the app. Everything else answers "what is true
+now"; `/insights` answers "what has been happening".
+
+**`GET /api/insights?months=N`** (1–24, default 12) returns all three views in
+one payload — one endpoint rather than three because they share a window, and
+fetching them separately invites a 12-month revenue chart above a 6-month room
+table on the same screen.
+
+Three decisions worth not re-litigating:
+
+- **Expected is differenced from billing cycles**, exactly the way the
+  dashboard's single figure is, so the last point of the series equals the
+  dashboard's "expected this month" card. A unit test pins the two together —
+  two screens disagreeing about the same month is a bug report waiting to
+  happen.
+- **Collected is keyed by the month the money arrived**, not the month it was
+  owed for. Three months of arrears cleared in one payment is one tall bar. The
+  gap against expected is the point of drawing them together.
+- **Occupancy is bed-nights, not a month-end headcount.** A snapshot scores a
+  bed that turned over on the 2nd the same as one empty until the 30th. The
+  denominator is *today's* bed count applied to every month — deliberately not
+  `beds.created_at`, because this app is built for backfilled data, so a bed row
+  entered this morning may describe a bed that has existed for years. The cost:
+  adding a room today makes past months look emptier than they were.
+
+The current month is measured to today rather than to month-end, so a full
+house reads 100% on the 11th instead of 35%.
+
+**Charts are hand-rolled SVG** (`components/ui/Chart.tsx`). The frontend has
+four runtime dependencies (react, react-dom, next, @sentry/browser) and a
+charting library plus its d3 transitive deps would be a conspicuous addition;
+what these draw is a hundred lines of SVG, and rolling it keeps the stone/indigo
+tokens identical to every other surface. `ChartScroll` gives a wide series a
+minimum width and scrolls it inside its own container, so the page never scrolls
+sideways at 375px.
+
+**The tab bar is six items now, not five.** Insights earned a slot because it is
+the only answer to "how are we doing" and burying it behind a menu is how a
+feature goes unused. Six is the ceiling — labels still fit untruncated at 375px.
+
+`SegmentedControl` was extracted to `components/ui` for the range picker rather
+than hand-rolled on the page, because its selected state is the same
+`ring-stone-200` recipe Card owns.
+
+Tests: 9 Go unit tests on the pure functions (`insights_test.go`) — including
+that an ended stay stops billing, a bed-less stay bills but occupies nothing,
+and an `end_date` counts as the tenant's last night — plus 3 Playwright tests
+covering an empty room appearing at ₹0, the range picker refetching, and 375px
+with no horizontal page overflow.
+
+### Phase 15b — a demo dataset with a shape ✅
+
+`seed-demo` covered every *state* in 9 stays over 7 months, which drew a flat,
+monotonically rising chart — technically correct and useless for judging whether
+the charts work. It is now **20 beds across 2 sites, 15 months, 19 stays**.
+
+The layout is deliberately uneven, because a demo where every room performs
+identically cannot show that the per-room table works: Room 101 is never empty,
+Room 102/1L turns over three times on one bed, HSR Room 3 is never let at all
+and reads 0%. Beds are re-let after a gap — the API only refuses a second
+*active* stay, so rows for a reused bed are ordered oldest-first and each is
+ended before the next begins.
+
+Two tenants (`Manish Tiwari`, `Gaurav Rane`) exist purely to make the occupancy
+line *fall* — they leave within a month of each other around month 8 and nobody
+replaces them. Without a dip the chart is indistinguishable from a ramp, and a
+ramp does not prove the chart is reading the data.
+
+Payment patterns are declarative (`ontime`, `late`, `arrears:N`, `partial`,
+`upfront:N`), which is what opens the collected-vs-billed gap from June onward
+and puts a spread of "last payment" dates on the collections screen. Meera's
+payment stays unapproved on purpose, so HSR Room 1 reads ₹0 collected while
+occupied — correct, and worth having in front of you.
+
+### Phase 15c — the charts answer "how much", not just "roughly" ✅
+
+Feedback on first use: *"I cannot really tell what is the exact value"* and
+*"By room and Occupancy might've been better as foldable panels"*. Both fair.
+
+- **Hover readout** on both charts — full-height hit columns, so it triggers
+  anywhere in the month rather than on a 14px bar. The tooltip shows the exact
+  rupee figure (`formatExact`), not the compact axis form: the whole reason to
+  hover is to stop estimating, so `₹1.2L` there answers the wrong question.
+  Occupancy adds the bed-nights behind the percentage.
+- **`Collapsible`** (`components/ui`) for Occupancy (open) and By room (shut).
+  The summary is the point — "8 rooms · 1 never let" often answers the question
+  without opening the panel. Content unmounts rather than hides, so a folded
+  chart is not measuring a zero-width container and caching a broken layout.
+- **Charts now measure their container** instead of declaring a fixed viewBox.
+  The first version hardcoded `viewBox="0 0 280 200"` and let the SVG scale,
+  which preserves aspect ratio — so a 3-month range drew its bars in a 280px
+  island floating in the middle of a 1000px card. Width is also capped at
+  `n × 96px` so three months do not stretch into three lonely bars.
+- The page was missing the `p-4 sm:p-6 lg:p-8` wrapper every other dashboard
+  page has, so it rendered flush to the edge.
+
+### Phase 15d — the dashboard's two lists ✅
+
+Three pieces of feedback after using the dashboard against the widened demo
+data, plus one bug found while checking them.
+
+**Rows are links now.** Both lists showed a tenant's name with no way to reach
+them — `BACKLOG.md` had recorded this, correctly noting it was not a `<Link>`
+around existing data: neither query selected `t.id`. Both now carry `tenant_id`,
+and the vacating list carries `stay_id` as its React key, because `stays.go`
+only blocks a second active stay on the same *bed* — one tenant can hold two.
+
+The trap worth naming: `RecentPayment.ID` is the **payment's** id and now sits
+directly beside `tenant_id`. Linking to the wrong one lands the owner on a
+stranger — in the demo data, payment 957 versus tenant 881. Both are commented,
+and an e2e asserts the href is not `/tenants/<payment id>`.
+
+**The lists peek at five.** They were never going to grow unboundedly — both
+queries were already `LIMIT 10` — so the actual complaint was that they truncate
+*silently*, and that `lg:grid-cols-2` stretched the shorter card to leave dead
+whitespace. Now: five rows and a `Show all N` button, `lg:items-start` so a card
+ends where its content ends, and the queries ask for `LIMIT 11` so the response
+can carry `vacating_truncated` / `recent_payments_truncated`. Without that flag
+the UI would cheerfully offer to "show all 10" of a forty-row list.
+
+Rejected: a max-height scroll box. There is not one vertical nested scroller in
+this app (`ChartScroll` is horizontal on purpose), and it would have hidden the
+truncation exactly as silently as before — reaching the bottom of a scroll box
+tells you nothing about whether the server sent ten or ten-of-forty.
+
+**Six tabs stay six.** The suspicion was that Dashboard, Collections and
+Insights overlap. Collections is a worklist that empties as you work it, not an
+overview. Dashboard and Insights overlap in exactly one number — "Collected This
+Month" is the last bar of the collected-vs-billed chart, and `insights_test.go`
+pins them equal — so that card is now a link to `/insights`. A shared number
+between a summary and its series is how they are supposed to relate; the fix is
+a doorway, not a merge.
+
+**The bug:** the vacating query read `WHERE ... AND s.end_date IS NULL AND
+(s.notice_date IS NOT NULL OR s.end_date <= CURRENT_DATE + INTERVAL '30 days')`.
+The second branch is unreachable under `end_date IS NULL`, so the 30-day window
+never fired and the empty state — "No tenants vacating in the next 30 days" —
+described behaviour that did not exist. Predicate collapsed to `notice_date IS
+NOT NULL`, copy is now "No one has given notice", and `ORDER BY` gained an
+`s.id` tie-break so a `LIMIT` cannot return rows in non-deterministic order.
+
+Deliberately **no** date window added: `notice_date >= CURRENT_DATE - INTERVAL
+'30 days'` would hide the tenant who gave notice 45 days ago and is overstaying,
+which is the one most worth seeing.
+
+**Tests.** The dashboard had no e2e file at all — by this repo's own rule, a
+surface nobody had tested. `tests/e2e/owner/dashboard.test.ts` now covers the
+notice click-through, the payment row linking to the tenant rather than the
+payment, the empty-state copy (the only automated guard on the predicate, since
+every Go handler test is a pure-function test and none reach this SQL), the
+expander, and the card-stretch regression. That last one was checked by removing
+`lg:items-start` and confirming it fails.
+
+**Next:** nothing queued. Insights is worth living with for a while before
+adding average-days-late or revenue-per-bed-position on top of it.
+
+---
+
 ## Deferred
 
 Things we decided are worth doing, but not now. Nothing here is half-built —

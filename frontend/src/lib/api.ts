@@ -422,6 +422,9 @@ export interface AlertsSummary {
 }
 
 export interface VacatingTenant {
+  /** The stay's id, not the tenant's — one tenant can hold two active stays. */
+  stay_id: number;
+  tenant_id: number;
   tenant_name: string;
   tenant_phone: string;
   bed_name: string;
@@ -432,7 +435,9 @@ export interface VacatingTenant {
 }
 
 export interface RecentPayment {
+  /** The PAYMENT's id. Link with tenant_id, never this. */
   id: number;
+  tenant_id: number;
   amount: number;
   payment_type: "cash" | "online";
   payment_date: string;
@@ -448,6 +453,9 @@ export interface DashboardData {
   alerts: AlertsSummary;
   vacating_soon: VacatingTenant[];
   recent_payments: RecentPayment[];
+  /** True when the server capped the list — there are more than are shown. */
+  vacating_truncated: boolean;
+  recent_payments_truncated: boolean;
 }
 
 export const dashboardApi = {
@@ -478,6 +486,60 @@ export interface CollectionRow {
 
 export const collectionsApi = {
   list: (token: string) => request<CollectionRow[]>("/api/collections", {}, token),
+};
+
+// ─── Insights ────────────────────────────────────────────────────────────────
+
+/**
+ * The historical view. Every other endpoint answers "what is true now"; this
+ * one answers "what has been happening".
+ *
+ * `expected_paise` is derived from billing cycles the same way the dashboard's
+ * card is, so the last point here equals the dashboard's "expected this month".
+ * `collected_paise` is keyed by the month the money actually arrived, so
+ * arrears cleared in one go show up as a single tall bar.
+ */
+export interface RevenuePoint {
+  month: string;   // "2026-09"
+  label: string;   // "Sep 26"
+  expected_paise: number;
+  collected_paise: number;
+}
+
+/** Occupancy measured in bed-nights, so a mid-month move-in counts as a fraction. */
+export interface OccupancyPoint {
+  month: string;
+  label: string;
+  occupied_nights: number;
+  available_nights: number;
+  percentage: number;
+}
+
+export interface RoomInsight {
+  room_id: number;
+  room_name: string;
+  site_id: number;
+  site_name: string;
+  total_beds: number;
+  occupied_nights: number;
+  available_nights: number;
+  vacant_nights: number;
+  percentage: number;
+  collected_paise: number;
+}
+
+export interface InsightsData {
+  months: number;
+  from_date: string;
+  to_date: string;
+  revenue: RevenuePoint[];
+  occupancy: OccupancyPoint[];
+  rooms: RoomInsight[];
+}
+
+export const insightsApi = {
+  get: (token: string, months = 12) =>
+    request<InsightsData>(`/api/insights?months=${months}`, {}, token),
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

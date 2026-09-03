@@ -32,20 +32,21 @@ same rule as everything else in `components/ui/`. Needs an accessible toggle
 (`aria-label`, `aria-pressed`) and must not break the `Field` label-wrapping
 pattern.
 
-### "Vacating soon" on the dashboard is not clickable — S, but backend first
-Seeing that someone is moving out and not being able to click through to them is
-the wrong answer to the obvious next question. Same for the recent-payments list
-next to it.
+### ~~"Vacating soon" on the dashboard is not clickable~~ ✅ fixed in Phase 15d
+Both lists now carry `tenant_id` (and the vacating list a `stay_id` to key on)
+and every row is a link. The catch recorded here was right: it needed the SQL,
+both row structs, both public structs and the TS interfaces, not a `<Link>`
+around existing data.
 
-**The catch:** `VacatingTenant` and `RecentPayment` in `dashboard.go` return
-`tenant_name` and no `tenant_id` — the queries join `tenants` but never select
-the id. So this is an API change plus a frontend one, not a `<Link>` around
-existing data.
+### ~~Collections rows only link to a tenant when the phone is broken~~ ✅ already fixed
+`collections/page.tsx:118` links every tenant name; the "Fix phone" link is now
+only the fallback it was meant to be. Closed on discovery during Phase 15d.
 
-### Collections rows only link to a tenant when the phone is broken — S
-The row already renders a "Fix phone" link to `/tenants/:id` when the number is
-unusable, so the id is right there. The tenant's name should be a link in every
-row — chasing a payment and wanting the full ledger is one thought.
+### A payments list page — M
+Neither dashboard list has a "view all" destination: there is no `GET
+/api/payments` endpoint at all, and `/tenants` has no notice filter. The lists
+are capped at 10 and now say so, which is honest but not a way to see the 11th.
+Wants an owner-scoped, paginated payments endpoint and a page to match.
 
 ---
 

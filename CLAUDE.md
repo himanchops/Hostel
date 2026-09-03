@@ -43,7 +43,9 @@ hostel/
 
 Current state (Sep 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Deployment is done and the app is live (Phase 9.2–9.6), and **Phase 9.7 wired up error tracking** (Sentry, EU region — `docs/DEPLOYMENT.md` → "Where the logs go"). The DSNs still need a human to paste them into Render and Vercel; until then the backend boot log says `error tracking: DISABLED` and nothing else changes.
 
-UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
+**Phase 15 (Insights)** added the app's first historical view — `GET /api/insights?months=N` and `/insights`, with collected-vs-billed by month, occupancy in bed-nights, and a per-room breakdown. No migration: every figure was already derivable from `payments.payment_date` and `stays.start_date`/`end_date`. 15b widened `seed-demo` to 20 beds over 15 months so the charts have a shape; 15c added hover readouts and folding panels; 15d made the dashboard's two lists linkable and bounded. **A real account is on production**: Chopra Boys Hostel, owner #4, site #1, 45 beds — see `docs/DEPLOYMENT.md` → "The live owner account".
+
+UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. **Charts are hand-rolled SVG in `components/ui/Chart.tsx` — do not add a charting library.** The frontend has four runtime dependencies (react, react-dom, next, @sentry/browser) and a charting library would be a conspicuous addition; the charts it needs are bars and a line. One rule learned the hard way: a chart must measure its container rather than scale a fixed `viewBox`, which preserves aspect ratio and letterboxes a short series into an island of bars. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 
 Test dirs are `tests/e2e/{owner,tenant,public}/` — a whole surface with no directory is a surface nobody has tested. E2E tests log in with `loginAs(page, token)` from `tests/e2e/helpers/api.ts` — never `goto("/")` then `localStorage.setItem`, which races with the root redirect.
 
@@ -65,10 +67,18 @@ Key conventions to carry forward:
   `fmt.Errorf("failed to load %s", name)`. Structured data is safe regardless —
   request bodies are never collected — so this rule is only about strings we
   build ourselves. See `docs/DEPLOYMENT.md` → "What the scrubber does not cover".
-- **Demo/seed data uses `demo@seed.invalid`.** `.invalid` is reserved by
-  RFC 2606 and cannot collide with a real account. A seed script must never
-  fall back to logging in when signup fails — that once appended ten fake
-  tenants to a live owner's data. `make seed-demo` / `make seed-demo-reset`.
+- **Two seed scripts, and only one may point at production.**
+  `scripts/seed-demo.py` (`make seed-demo` / `make seed-demo-reset`) invents an
+  owner at `demo@seed.invalid` — `.invalid` is reserved by RFC 2606 and cannot
+  collide with a real account — and fills it with fiction. It is localhost-only.
+  `scripts/seed-chopra.py` (`make seed-hostel`) writes to the **real** account,
+  so it is narrowed to match: sites, rooms and beds only, never a tenant, stay or
+  payment; never a delete or an update; idempotent on re-run. Rehearse it against
+  a local backend (`HOSTEL_API=http://localhost:8080`) before production.
+  A seed script must never fall back to logging in when signup fails — that once
+  appended ten fake tenants to a live owner's data. Credentials live in
+  `.hostel-credentials.env`, gitignored, because **this repo is public**.
+  Details: `docs/DEPLOYMENT.md` → "The live owner account".
 - Every new feature ships with a Playwright e2e test in `frontend/tests/e2e/`
 - Money math ships with a unit test too — `backend/internal/handlers/*_test.go` or `frontend/tests/unit/`. Exact values, non-degenerate fixtures (see Phase 12a in `docs/PROGRESS.md`)
 - Amounts stored in **paise** (₹1 = 100 paise), displayed via `formatCurrency()`

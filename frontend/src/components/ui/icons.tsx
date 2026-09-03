@@ -26,6 +26,7 @@ export const UsersIcon = (p: IconProps) => <Line {...p} d="M17 20h5v-2a3 3 0 00-
 // stem out entirely, so the two bars plus a free-floating lobe scanned as a
 // struck-through numeral in the sidebar.
 export const RupeeIcon = (p: IconProps) => <Line {...p} d="M6 3h12M6 8h12M9 13c6.5 0 6.5-10 0-10M9 13H6l8.5 8" />;
+export const ChartIcon = (p: IconProps) => <Line {...p} d="M3 3v16a2 2 0 002 2h16M7 15v2M12 10v7M17 6v11" />;
 export const ClockIcon = (p: IconProps) => <Line {...p} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />;
 export const BedIcon = (p: IconProps) => <Line {...p} d="M3 18v-6a2 2 0 012-2h14a2 2 0 012 2v6M3 18v2M21 18v2M3 12V7m4 3V9a1 1 0 011-1h3a1 1 0 011 1v1" />;
 export const AlertIcon = (p: IconProps) => <Line {...p} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />;
