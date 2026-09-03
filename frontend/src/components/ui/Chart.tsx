@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from "react";
 /**
  * The app's charts, hand-rolled in SVG.
  *
- * Deliberately not a charting library: the frontend has three runtime
- * dependencies, and Recharts alone is larger than all of them together. What
- * these draw — grouped bars and one line — is a couple of hundred lines of
- * SVG, and rolling it keeps the design tokens (stone, indigo, emerald)
- * identical to every other surface instead of theming somebody else's
- * defaults.
+ * Deliberately not a charting library: the frontend has four runtime
+ * dependencies (react, react-dom, next, @sentry/browser) and a charting
+ * library plus its d3 transitive deps would be a conspicuous addition to that
+ * list. What these draw — grouped bars and one line — is a couple of hundred
+ * lines of SVG, and rolling it keeps the design tokens (stone, indigo,
+ * emerald) identical to every other surface instead of theming somebody
+ * else's defaults.
  *
  * Charts measure their container rather than declaring a fixed viewBox.
  * The first version hardcoded `viewBox="0 0 280 200"` and let the SVG scale,

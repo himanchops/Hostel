@@ -1205,6 +1205,45 @@ ended". It asserts the badge exactly.
 
 ---
 
+## Real-hostel setup — Chopra Boys Hostel is on production ✅ (Sep 2026)
+
+The app now holds a real account alongside the demo one: owner #4, site #1,
+7 rooms, 45 beds, all vacant. Tenant details go in by hand afterwards.
+
+`scripts/seed-chopra.py` (`make seed-hostel`) exists because `seed-demo.py`
+cannot be pointed at a real account — it invents an owner and fills it with
+fiction. The new script is narrowed to match its target: **sites, rooms and beds
+only**, never a tenant, stay or payment; never a delete or an update; idempotent
+on re-run, so the `LAYOUT` table at the top of the file stays the source of truth
+rather than the UI. Worst case against live data is an empty room.
+
+It **logs in before trying signup**, which is the inverse of the fallback that
+caused the incident recorded above. A 401 answers "does this account exist"
+without guessing, and a 409 on the signup that follows means the password is
+wrong — at which point it stops, having written nothing.
+
+Rehearsed against a local backend under a throwaway `.invalid` owner before it
+touched production: fresh signup, idempotent re-run, and a wrong-password
+attempt that refused. Then verified on production by reading the grid back from
+the API rather than trusting the script's own output.
+
+**Bunk beds are named, not typed** — `1L`/`1U`. A `bed_type` column would need a
+migration plus API and UI changes and nothing would branch on it: rent lives on
+the stay, not the bed, so an upper bunk can already be cheaper without the schema
+knowing why. Full reasoning and the caveats (positions under 10; short custom
+labels) are in `DEPLOYMENT.md` → "The live owner account".
+
+Credentials live in `.hostel-credentials.env`, gitignored — **this repo is
+public**. Note the app has no change-password feature, so rotating means a direct
+database update.
+
+Shipped alongside: the Collections icon had no stem, so two bars plus a
+free-floating lobe scanned as a struck-through "3" rather than ₹. The bowl now
+closes onto a stem with the leg descending from it, checked side by side against
+a real ₹ glyph.
+
+---
+
 ## Phase 15 — Insights ✅ (Sep 2026)
 
 The first historical view in the app. Everything else answers "what is true
@@ -1236,8 +1275,9 @@ The current month is measured to today rather than to month-end, so a full
 house reads 100% on the 11th instead of 35%.
 
 **Charts are hand-rolled SVG** (`components/ui/Chart.tsx`). The frontend has
-three runtime dependencies and Recharts alone is bigger than all of them; what
-these draw is a hundred lines of SVG, and rolling it keeps the stone/indigo
+four runtime dependencies (react, react-dom, next, @sentry/browser) and a
+charting library plus its d3 transitive deps would be a conspicuous addition;
+what these draw is a hundred lines of SVG, and rolling it keeps the stone/indigo
 tokens identical to every other surface. `ChartScroll` gives a wide series a
 minimum width and scrolls it inside its own container, so the page never scrolls
 sideways at 375px.
