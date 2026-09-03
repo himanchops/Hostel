@@ -78,6 +78,21 @@ test.describe("Insights", () => {
     await expect(page.getByRole("img", { name: /Collected against Billed by month/i })).toBeVisible();
     await expect(page.getByRole("img", { name: /Occupancy by month/i })).toBeVisible();
 
+    // Hovering a bar must give the EXACT figure, not the compact axis form —
+    // the entire reason to hover is to stop estimating from bar heights.
+    await page.getByRole("img", { name: /Collected against Billed by month/i })
+      .locator("rect[fill='transparent']").last().hover();
+    await expect(page.getByText("₹8,000", { exact: true }).first()).toBeVisible();
+
+    // "By room" is shut by default, and its summary has to be worth reading
+    // shut — it names the room earning nothing without being opened.
+    const byRoom = page.getByRole("button", { name: /By room/ });
+    await expect(byRoom).toHaveAttribute("aria-expanded", "false");
+    await expect(byRoom).toContainText("never let");
+
+    await byRoom.click();
+    await expect(byRoom).toHaveAttribute("aria-expanded", "true");
+
     // The occupied room and the empty one both appear — an empty room must not
     // be silently dropped, because "earning nothing" is the finding.
     const occupied = page.getByRole("row", { name: /Room 1\b/ });
@@ -89,6 +104,25 @@ test.describe("Insights", () => {
     await expect(occupied).toContainText("₹8,000");
     await expect(empty).toContainText("₹0");
     await expect(empty).toContainText("0%");
+  });
+
+  test("occupancy folds away and unmounts its chart", async ({ page, request }) => {
+    const { token } = await createOwner(request, `${RUN_ID}-fold`);
+    await loginAs(page, token);
+    await page.goto("/insights");
+
+    const occupancy = page.getByRole("button", { name: /Occupancy/ });
+    await expect(occupancy).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("img", { name: /Occupancy by month/i })).toBeVisible();
+
+    // Folded content is unmounted, not just hidden — a chart left measuring a
+    // zero-width container caches a broken layout.
+    await occupancy.click();
+    await expect(occupancy).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("img", { name: /Occupancy by month/i })).toHaveCount(0);
+
+    await occupancy.click();
+    await expect(page.getByRole("img", { name: /Occupancy by month/i })).toBeVisible();
   });
 
   test("range picker refetches and narrows the window", async ({ page, request }) => {

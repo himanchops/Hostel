@@ -1256,10 +1256,54 @@ and an `end_date` counts as the tenant's last night — plus 3 Playwright tests
 covering an empty room appearing at ₹0, the range picker refetching, and 375px
 with no horizontal page overflow.
 
-**Next: Phase 15b — widen `seed-demo`.** The seeder covers every *state* but is
-thin for *trends*: 9 stays over ~7 months makes a flat chart. Demoing insights
-wants ~20 beds and 12+ months with move-ins and move-outs spread across it so
-the lines actually move.
+### Phase 15b — a demo dataset with a shape ✅
+
+`seed-demo` covered every *state* in 9 stays over 7 months, which drew a flat,
+monotonically rising chart — technically correct and useless for judging whether
+the charts work. It is now **20 beds across 2 sites, 15 months, 19 stays**.
+
+The layout is deliberately uneven, because a demo where every room performs
+identically cannot show that the per-room table works: Room 101 is never empty,
+Room 102/1L turns over three times on one bed, HSR Room 3 is never let at all
+and reads 0%. Beds are re-let after a gap — the API only refuses a second
+*active* stay, so rows for a reused bed are ordered oldest-first and each is
+ended before the next begins.
+
+Two tenants (`Manish Tiwari`, `Gaurav Rane`) exist purely to make the occupancy
+line *fall* — they leave within a month of each other around month 8 and nobody
+replaces them. Without a dip the chart is indistinguishable from a ramp, and a
+ramp does not prove the chart is reading the data.
+
+Payment patterns are declarative (`ontime`, `late`, `arrears:N`, `partial`,
+`upfront:N`), which is what opens the collected-vs-billed gap from June onward
+and puts a spread of "last payment" dates on the collections screen. Meera's
+payment stays unapproved on purpose, so HSR Room 1 reads ₹0 collected while
+occupied — correct, and worth having in front of you.
+
+### Phase 15c — the charts answer "how much", not just "roughly" ✅
+
+Feedback on first use: *"I cannot really tell what is the exact value"* and
+*"By room and Occupancy might've been better as foldable panels"*. Both fair.
+
+- **Hover readout** on both charts — full-height hit columns, so it triggers
+  anywhere in the month rather than on a 14px bar. The tooltip shows the exact
+  rupee figure (`formatExact`), not the compact axis form: the whole reason to
+  hover is to stop estimating, so `₹1.2L` there answers the wrong question.
+  Occupancy adds the bed-nights behind the percentage.
+- **`Collapsible`** (`components/ui`) for Occupancy (open) and By room (shut).
+  The summary is the point — "8 rooms · 1 never let" often answers the question
+  without opening the panel. Content unmounts rather than hides, so a folded
+  chart is not measuring a zero-width container and caching a broken layout.
+- **Charts now measure their container** instead of declaring a fixed viewBox.
+  The first version hardcoded `viewBox="0 0 280 200"` and let the SVG scale,
+  which preserves aspect ratio — so a 3-month range drew its bars in a 280px
+  island floating in the middle of a 1000px card. Width is also capped at
+  `n × 96px` so three months do not stretch into three lonely bars.
+- The page was missing the `p-4 sm:p-6 lg:p-8` wrapper every other dashboard
+  page has, so it rendered flush to the edge.
+
+**Next:** nothing queued. Insights is worth living with for a while before
+adding average-days-late or revenue-per-bed-position on top of it.
 
 ---
 
