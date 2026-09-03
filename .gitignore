@@ -41,3 +41,6 @@ scripts/node_modules/
 
 # Uploaded files (local dev only)
 backend/uploads/
+
+# Real-account credentials for scripts/seed-chopra.py (never commit)
+.hostel-credentials.env

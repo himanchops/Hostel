@@ -14,7 +14,7 @@ LOCAL_DB := postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable
 # See docs/DEPLOYMENT.md, "Future migrations".
 DATABASE_URL ?= $(LOCAL_DB)
 
-.PHONY: dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
+.PHONY: dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset seed-hostel seed-hostel-dry verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -140,6 +140,26 @@ seed-demo-reset:
 	psql "$(LOCAL_DB)" \
 	  -c "DELETE FROM owners WHERE email = 'demo@seed.invalid';"
 	python3 scripts/seed-demo.py
+
+# Create the REAL hostel's structure — owner, site, rooms, beds — on the
+# deployed backend. Reads the layout from the top of scripts/seed-chopra.py.
+#
+# Unlike seed-demo, this writes to a live account, so it only ever creates
+# sites/rooms/beds — never a tenant, stay or payment — and never deletes or
+# updates. Re-running creates only what is missing.
+#
+# The password comes from the environment, never from a committed file:
+#   export HOSTEL_PASSWORD='...'
+#
+#   make seed-hostel-dry     # print the plan, write nothing
+#   make seed-hostel         # create it
+#   make seed-hostel HOSTEL_API=http://localhost:8080   # rehearse locally first
+seed-hostel-dry:
+	python3 scripts/seed-chopra.py --dry-run
+
+seed-hostel:
+	@test -n "$$HOSTEL_PASSWORD" || (echo "Error: export HOSTEL_PASSWORD=... first" && exit 1)
+	python3 scripts/seed-chopra.py
 
 # ── E2E ────────────────────────────────────────────────────────────────────────
 
