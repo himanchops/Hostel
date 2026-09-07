@@ -128,6 +128,18 @@ test:
 seed-demo:
 	python3 scripts/seed-demo.py
 
+# Seeding a DEPLOYED backend is deliberately not a make target. The script
+# needs both HOSTEL_API and an explicit --remote, and hiding that behind
+# `make seed-demo-remote` would put the whole point back:
+#
+#   HOSTEL_API=https://hostel-backend-k7ar.onrender.com \
+#     python3 scripts/seed-demo.py --remote
+#
+# Safe against production in a way seed-chopra.py never is: demo@seed.invalid
+# cannot collide with a real address, and every query in this app is
+# owner-scoped, so it adds an owner beside the real one. To remove it again,
+# see the DELETE under seed-demo-reset.
+
 # Scoped to the reserved seed address, so it cannot reach a real account.
 #
 # Deliberately pinned to $(LOCAL_DB) and NOT overridable by DATABASE_URL. Seeding

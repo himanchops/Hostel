@@ -528,6 +528,44 @@ Production is not just demo data any more. **Chopra Boys Hostel** is on it:
 owner #4 (`lnchopra66@yahoo.co.in`), site #1, 7 rooms, 45 beds. The structure
 was seeded; tenants, stays and payments are entered by hand.
 
+### Putting demo data on the deployed site
+
+Sometimes you want something to show. `seed-demo.py` can target a deployed
+backend, and unlike `seed-chopra.py` it is safe there by construction:
+`demo@seed.invalid` cannot collide with a real address, and every query in this
+app is owner-scoped, so it adds an owner *beside* the real one rather than
+touching it.
+
+```bash
+HOSTEL_API=https://hostel-backend-k7ar.onrender.com \
+  python3 scripts/seed-demo.py --remote
+```
+
+Both halves are required. `HOSTEL_API` alone refuses: an env var survives a
+whole shell session, so `export HOSTEL_API=...` followed an hour later by an
+absent-minded `make seed-demo` is a plausible way to fill production with
+fiction. The flag has to be typed on the command that does it.
+
+Expect a minute or two — roughly 195 sequential API calls, more if Render has
+to cold-start first. The script prints progress so a slow run does not read as
+a hang.
+
+**The demo owner becomes a real login on a public site.** The default password
+is `demo1234`, which is a reasonable choice when the point is to hand the
+credentials to someone, and a poor one otherwise. Override with
+`HOSTEL_DEMO_PASSWORD` (and `HOSTEL_DEMO_TENANT_PASSWORD` for the tenant
+portal). The script warns when you leave the defaults on a remote target.
+
+To remove it again — deliberately a manual step, not a make target, because
+`seed-demo-reset` is pinned to the local database:
+
+```bash
+psql "$NEON_URL" -c "DELETE FROM owners WHERE email = 'demo@seed.invalid';"
+```
+
+That cascades to its sites, rooms, beds, tenants, stays and payments, and
+touches no other owner.
+
 ### Two seed scripts, and only one may point at production
 
 | | `scripts/seed-demo.py` | `scripts/seed-chopra.py` |

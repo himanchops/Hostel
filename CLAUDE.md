@@ -83,6 +83,10 @@ Key conventions to carry forward:
   so it is narrowed to match: sites, rooms and beds only, never a tenant, stay or
   payment; never a delete or an update; idempotent on re-run. Rehearse it against
   a local backend (`HOSTEL_API=http://localhost:8080`) before production.
+  `seed-demo.py` *can* target a deployed backend — it needs `HOSTEL_API` **and**
+  an explicit `--remote`, because an env var outlives the shell command that set
+  it. Safe there by construction: the reserved address cannot collide and every
+  query is owner-scoped, so it adds an owner beside the real one.
   A seed script must never fall back to logging in when signup fails — that once
   appended ten fake tenants to a live owner's data. Credentials live in
   `.hostel-credentials.env`, gitignored, because **this repo is public**.
