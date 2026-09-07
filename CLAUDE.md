@@ -59,6 +59,14 @@ Key conventions to carry forward:
   commit and nobody could see why, because the only trace was a generic
   "failed to submit payment". Same rule on the frontend: every catch either
   shows the user something or reports it.
+- **No capability may be tenant-portal-exclusive.** Anything a tenant can do
+  from `/my`, an owner must be able to do from the owner side. This is not
+  symmetry for its own sake: a tenant the owner creates by hand never gets a
+  `password_hash`, and portal login requires one — so an owner-created tenant
+  can never log in, and a portal-exclusive action is unreachable for them
+  forever, not merely inconvenient. Recording a vacating notice is the case
+  that proved it. See `docs/BACKLOG.md` → "Feedback from running the real
+  hostel".
 - **Never put a tenant's own data into an error message.** Errors now leave the
   process — `serverError` and `reportError` forward to Sentry — and the scrubber
   there catches Aadhaar numbers, Indian mobile numbers and email addresses by

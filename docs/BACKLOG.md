@@ -19,6 +19,129 @@ issue list become a second backlog — this file is the one that gets worked fro
 
 ---
 
+## Feedback from running the real hostel (Sep 2026) — work this section first
+
+Found by the owner using the live app against real tenants, not by building it.
+These come **before** the sections below: they are small, and each one is
+something that blocked or misled a real person on a real evening.
+
+**A standing rule that came out of this round:** *anything a tenant can do in
+the portal, an owner must be able to do from the owner side.* No capability is
+allowed to be portal-exclusive. The reason is not symmetry for its own sake —
+an owner-created tenant has **no portal account at all** (see below), so a
+portal-exclusive capability is not merely inconvenient for them, it is
+unreachable forever.
+
+### An owner cannot record a vacating notice — S
+The first thing the owner tried to do and could not. `stays.notice_date` is
+*read* in three owner-side places — the "Notice …" badge on the tenant page
+(`tenants/[id]/page.tsx:532`), the dashboard Vacating list, and orange
+"vacating soon" in the grid — and *written* in exactly one place in the whole
+app: `PUT /api/portal/stays/:stayId/notice`, the tenant portal
+(`tenant_portal.go:140`). So the dashboard's Vacating list
+(`dashboard.go:283`, `AND s.notice_date IS NOT NULL`) can only ever be filled
+by a tenant logging in — and an owner-created tenant cannot log in.
+
+Nearly free: `PUT /api/stays/:id` already accepts and validates `notice_date`
+(`stays.go:245`), and `staysApi.update` already types it (`api.ts:360`). What
+is missing is a form. Wants a "Record notice" action next to "Settle & vacate"
+on the tenant page, and probably on the grid's occupied-bed drawer.
+
+The portal's version also hardcodes `notice_date = time.Now()` — the tenant can
+say *that* they are leaving but not *when*. The owner-side form should take a
+date, and the portal should probably learn to as well.
+
+### Deleting a room or bed silently destroys stays and payments — S, and it is live
+No occupancy guard anywhere. `DeleteBed` is a bare `DELETE FROM beds`
+(`rooms.go:282`); `DeleteRoom` the same one level up (`rooms.go:139`). The FK
+chain is `beds → stays → payments`, every link `ON DELETE CASCADE`
+(`001_init.up.sql:72`, `:93`). So deleting a bed someone currently occupies
+destroys their stay **and their entire payment ledger**, unrecoverably, behind
+a confirm that says only "Delete this bed?" and then toasts "Bed removed".
+Deleting a room does it to every bed in the room at once.
+
+On a live account with real rent history that is one misclick. Fix is a guard
+in the handler (409 if any stay references the bed, ended or not — a *former*
+tenant's ledger is exactly the record you get sued over), plus a confirm that
+names what will be lost. Do not solve it by loosening the cascade.
+
+### There is no way to rename a room or a bed — S
+Backend `PUT /api/sites/:siteId/rooms/:id` and
+`PUT /api/sites/:siteId/rooms/:roomId/beds/:id` both exist and work.
+`roomsApi.update` and `bedsApi.update` both exist in `lib/api.ts`. Neither has
+a single call site in the app or the tests. Built, wired, never surfaced — this
+is a form and nothing else. Add/delete are already on the site page; rename
+sits beside them.
+
+### A stay can only be created from the grid — M
+`/tenants/new` creates a *person*: name, phone, Aadhaar, photos, and nothing
+about where they will sleep. The only call to `staysApi.create` in the entire
+frontend is `sites/[id]/grid/page.tsx:390`. So adding a tenant means: fill the
+tenant form, then navigate to Sites → the site → the room → the bed → assign.
+The "Assign bed" button on the tenant page only rescues a stay that already
+exists without a bed, which only happens via pending-registration approval.
+
+Wants an optional "place them now" step on the tenant form — bed, rent,
+deposit, cycle, start date — reusing the grid's assign form rather than growing
+a second one that can drift from it (the same drift that
+`EndStayDialog` was created to end).
+
+### The known end date has nowhere to go — M, and there is dead code proving it
+The owner knew the tenant's departure date at the moment of adding them, and
+there was no field for it anywhere: not on the tenant form, not on the grid's
+assign form (rent / deposit / cycle / start date only), and `EndStayDialog`
+caps its date picker at `max={today()}`.
+
+That cap is not arbitrary. In this codebase `end_date` means *"this stay is
+over"*, not *"they leave on this date"* — `active = !stay.end_date` everywhere,
+and the grid joins `s.end_date IS NULL` (`grid.go:118`). Setting a future
+`end_date` would free the bed while the person is still in it.
+
+The fossil of the intended design is still in the tree:
+`computeBedStatus` has an `endDate` within-30-days → `StatusVacatingSoon`
+branch (`grid.go:226`) that **can never fire in production**, because the grid
+only ever loads stays where `end_date IS NULL`, so `endDate` is always nil by
+the time it arrives. It has a passing unit test and is unreachable.
+
+So the answer is not "allow a future end_date". It is: `notice_date` is the
+field for a known departure, give the owner a way to set it, and then either
+resurrect that branch against a real expected-departure date or delete it.
+Decide which — leaving tested dead code is how the next person loses an hour.
+
+### Tenants added by the owner have no portal account — S/M
+`TenantAuthHandler.Login` requires `password_hash IS NOT NULL`
+(`tenant_auth.go:46`). The password is collected only by the public
+registration form; owner-side `TenantHandler.Create` never inserts one
+(`tenants.go:87`). So every tenant the owner adds by hand is permanently locked
+out of `/my` — which is how the vacating-notice gap became total rather than
+merely annoying.
+
+Two ways out, and they are not exclusive: let the owner set or reset a portal
+password from the tenant page, and/or send the registration link to a tenant
+who was added manually. Worth deciding before more owner-created tenants
+accumulate on the live account.
+
+### The registration form has no photo upload — S
+`/register/[ownerId]` uploads ID front and ID back, and the payload carries no
+`photo_url` at all (`register/[ownerId]/page.tsx:147`) — even though `tenants`
+has the column and the owner-side form has the field. The tenant is standing
+there with a phone; that is the cheapest moment in the whole system to get a
+face on the record. `uploadApi.publicUpload` already handles it, so this is one
+more `UploadField` and one more line in the payload.
+
+(Recorded alongside: the file-picker flow itself was called out as working
+beautifully on a phone. Do not regress it while adding the field.)
+
+### Resolved on inspection — no action
+- **"What email does the tenant log in with, if email is optional?"** They do
+  not. Portal login is **phone + password** (`tenant_auth.go:46`); email never
+  participates in auth and is stored for contact only. Nothing to fix in the
+  code — but the registration form's Email field says nothing about this, and
+  the owner reasonably assumed otherwise. Worth a hint on the field, and worth
+  saying plainly on `/my/login`.
+
+---
+
 ## UX polish
 
 ### Password fields have no visibility toggle — S
