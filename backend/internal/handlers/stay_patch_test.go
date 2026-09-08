@@ -104,10 +104,10 @@ func TestStayPatch_RejectsBadInput(t *testing.T) {
 func TestSummary_CorrectingStartDateChangesExpected(t *testing.T) {
 	today := date(2026, time.August, 11)
 
-	wrong := summarize([]staySummaryInput{
+	wrong := summarize([]staySummaryRow{
 		{RentAmount: 700000, RentCycle: "monthly", StartDate: date(2026, time.July, 1), TotalPaid: 0},
 	}, today)
-	corrected := summarize([]staySummaryInput{
+	corrected := summarize([]staySummaryRow{
 		{RentAmount: 700000, RentCycle: "monthly", StartDate: date(2026, time.April, 1), TotalPaid: 0},
 	}, today)
 

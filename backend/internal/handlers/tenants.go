@@ -443,6 +443,69 @@ func dateOnly(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
+// staySummaryRow is one stay's contribution to a tenant's summary.
+// SettlementRefund is nil when the stay was never settled.
+type staySummaryRow struct {
+	RentAmount       int64      `db:"rent_amount"`
+	RentCycle        string     `db:"rent_cycle"`
+	StartDate        time.Time  `db:"start_date"`
+	EndDate          *time.Time `db:"end_date"`
+	TotalPaid        int64      `db:"total_paid"`
+	SettlementRefund *int64     `db:"settlement_refund"`
+}
+
+// computeTenantSummary rolls a tenant's stays into the figures on their page.
+//
+// TotalPaid and TotalExpected are history and always accumulate. Balance is a
+// question about the present — "what does this person still owe me" — and a
+// SETTLED stay has already answered it.
+//
+// That distinction is the bug this function was extracted to fix. Balance used
+// to be TotalExpected − TotalPaid across every stay, which meant a tenant who
+// settled up — deposit applied, remainder written off, refund zero — still read
+// as owing the amount the settlement had just resolved. Collections got it
+// right by accident, because it only ever looks at active stays.
+//
+// The settled case is deliberately asymmetric:
+//
+//   - refund < 0 — the tenant owed money at the counter, so it counts.
+//   - refund > 0 — the OWNER owed the tenant, and recording a settlement is
+//     recording that handover. It is not a tenant credit, so it counts as zero
+//     rather than making them look "ahead" forever.
+//
+// Billing cycles use cyclesElapsed so this agrees with the grid and the
+// dashboard. Computing it separately in SQL previously made the tenant page
+// disagree with the grid about what the same tenant owed.
+func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary {
+	var summary TenantSummary
+	today = dateOnly(today)
+
+	for _, s := range stays {
+		start := dateOnly(s.StartDate)
+		until := today
+		if s.EndDate != nil {
+			until = dateOnly(*s.EndDate)
+		}
+
+		expected := s.RentAmount * int64(cyclesElapsed(start, until, s.RentCycle))
+		summary.TotalPaid += s.TotalPaid
+		summary.TotalExpected += expected
+		if days := int64(until.Sub(start).Hours() / 24); days > 0 {
+			summary.DurationDays += days
+		}
+
+		if s.SettlementRefund != nil {
+			if owed := -*s.SettlementRefund; owed > 0 {
+				summary.Balance += owed
+			}
+			continue
+		}
+		summary.Balance += expected - s.TotalPaid
+	}
+
+	return summary
+}
+
 func (h *TenantHandler) Summary(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 	tenantID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -463,13 +526,9 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 	// than a JOIN: joining stays to payments yields one row per payment, and
 	// summing per-stay values (expected rent, duration) across those rows
 	// multiplied them by the payment count.
-	type staySummaryRow struct {
-		RentAmount int64      `db:"rent_amount"`
-		RentCycle  string     `db:"rent_cycle"`
-		StartDate  time.Time  `db:"start_date"`
-		EndDate    *time.Time `db:"end_date"`
-		TotalPaid  int64      `db:"total_paid"`
-	}
+	//
+	// settlements is a plain LEFT JOIN — stay_id is UNIQUE there, so it cannot
+	// fan out the way payments would.
 	var stays []staySummaryRow
 	err = h.db.Select(&stays, `
 		SELECT
@@ -477,11 +536,13 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 			s.rent_cycle,
 			s.start_date,
 			s.end_date,
+			st.refund_paise AS settlement_refund,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true
 			), 0) AS total_paid
 		FROM stays s
+		LEFT JOIN settlements st ON st.stay_id = s.id
 		WHERE s.tenant_id = $1`,
 		tenantID,
 	)
@@ -489,25 +550,6 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 		return serverError(c, err, "failed to compute summary")
 	}
 
-	// Billing cycles use cyclesElapsed so this agrees with the grid and the
-	// dashboard. Computing it separately in SQL previously made the tenant page
-	// disagree with the grid about what the same tenant owed.
-	var summary TenantSummary
-	today := dateOnly(time.Now())
-	for _, s := range stays {
-		start := dateOnly(s.StartDate)
-		until := today
-		if s.EndDate != nil {
-			until = dateOnly(*s.EndDate)
-		}
-
-		summary.TotalPaid += s.TotalPaid
-		summary.TotalExpected += s.RentAmount * int64(cyclesElapsed(start, until, s.RentCycle))
-		if days := int64(until.Sub(start).Hours() / 24); days > 0 {
-			summary.DurationDays += days
-		}
-	}
-
-	summary.Balance = summary.TotalExpected - summary.TotalPaid
+	summary := computeTenantSummary(stays, dateOnly(time.Now()))
 	return c.JSON(http.StatusOK, summary)
 }
