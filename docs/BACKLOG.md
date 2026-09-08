@@ -51,7 +51,7 @@ The portal's version also hardcodes `notice_date = time.Now()` — the tenant ca
 say *that* they are leaving but not *when*. The owner-side form should take a
 date, and the portal should probably learn to as well.
 
-### Deleting a room or bed silently destroys stays and payments — S, and it is live
+### ~~Deleting a room or bed silently destroys stays and payments~~ ✅ fixed
 No occupancy guard anywhere. `DeleteBed` is a bare `DELETE FROM beds`
 (`rooms.go:282`); `DeleteRoom` the same one level up (`rooms.go:139`). The FK
 chain is `beds → stays → payments`, every link `ON DELETE CASCADE`
@@ -60,10 +60,17 @@ destroys their stay **and their entire payment ledger**, unrecoverably, behind
 a confirm that says only "Delete this bed?" and then toasts "Bed removed".
 Deleting a room does it to every bed in the room at once.
 
-On a live account with real rent history that is one misclick. Fix is a guard
-in the handler (409 if any stay references the bed, ended or not — a *former*
-tenant's ledger is exactly the record you get sued over), plus a confirm that
-names what will be lost. Do not solve it by loosening the cascade.
+On a live account with real rent history that is one misclick.
+
+**Fixed as specified:** `ledgerFootprint` counts what the cascade would take
+and both handlers return 409 when any stay references the bed — ended or not.
+The cascade itself is untouched. The refusal names counts only, never a tenant,
+and the frontend surfaces the server's own words instead of the generic
+"Failed to delete" it used to swallow them into.
+
+Found while testing it: the bed's remove button had `title="Remove bed"` but
+text content `×`, and text wins the accessible name — so it announced itself as
+"times". Now carries an `aria-label` naming the bed.
 
 ### There is no way to rename a room or a bed — S
 Backend `PUT /api/sites/:siteId/rooms/:id` and

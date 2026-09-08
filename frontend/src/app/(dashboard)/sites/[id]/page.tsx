@@ -73,14 +73,23 @@ export default function SiteDetailPage() {
 
   async function handleDeleteRoom(roomId: number) {
     if (!token) return;
-    const ok = await confirm({ title: "Delete this room?", confirmLabel: "Delete", tone: "danger" });
+    const room = rooms.find((r) => r.id === roomId);
+    const ok = await confirm({
+      title: `Delete ${room?.name ?? "this room"}?`,
+      message: "Its beds go with it. A room with any stay history cannot be deleted.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
     if (!ok) return;
     try {
       await roomsApi.delete(token, siteId, roomId);
       setRooms((prev) => prev.filter((r) => r.id !== roomId));
-      toast.success("Room deleted");
-    } catch {
-      toast.error("Failed to delete room");
+      toast.success(`${room?.name ?? "Room"} deleted`);
+    } catch (e) {
+      // The server refuses a room that has a ledger behind it and says why.
+      // Swallowing that for a generic "failed" is how the owner would be left
+      // clicking Delete again, wondering what is broken.
+      toast.error(e instanceof ApiError ? e.message : "Failed to delete room");
     }
   }
 
@@ -110,14 +119,20 @@ export default function SiteDetailPage() {
 
   async function handleDeleteBed(roomId: number, bedId: number) {
     if (!token) return;
-    const ok = await confirm({ title: "Delete this bed?", confirmLabel: "Delete", tone: "danger" });
+    const bed = beds[roomId]?.find((b) => b.id === bedId);
+    const ok = await confirm({
+      title: `Delete bed ${bed?.name ?? ""}?`.replace(" ?", "?"),
+      message: "A bed that anyone has ever stayed in cannot be deleted.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
     if (!ok) return;
     try {
       await bedsApi.delete(token, siteId, roomId, bedId);
       setBeds((prev) => ({ ...prev, [roomId]: prev[roomId].filter((b) => b.id !== bedId) }));
-      toast.success("Bed removed");
-    } catch {
-      toast.error("Failed to remove the bed");
+      toast.success(`Bed ${bed?.name ?? ""} removed`.replace("  ", " "));
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to remove the bed");
     }
   }
 
@@ -277,13 +292,18 @@ function RoomCard({
               {beds.map((bed) => (
                 <div
                   key={bed.id}
+                  data-testid="bed-chip"
                   className="group flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-700"
                 >
                   {bed.name}
                   <button
                     onClick={() => onDeleteBed(bed.id)}
                     className="ml-1 hidden text-stone-400 transition duration-150 ease-out hover:text-red-500 group-hover:inline"
-                    title="Remove bed"
+                    /* aria-label, not title: the "×" text content wins the
+                       accessible name over a title attribute, so this button
+                       announced itself as "times" to a screen reader. */
+                    aria-label={`Remove bed ${bed.name}`}
+                    title={`Remove bed ${bed.name}`}
                   >
                     ×
                   </button>
