@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -136,6 +137,47 @@ func (h *RoomHandler) UpdateRoom(c echo.Context) error {
 	return c.JSON(http.StatusOK, room)
 }
 
+// ledgerFootprint counts what a cascading delete would destroy.
+//
+// The FK chain is beds → stays → payments and every link is ON DELETE CASCADE
+// (001_init.up.sql), so `DELETE FROM beds` takes a tenant's whole rent history
+// with it, silently and unrecoverably. These counts turn that into a refusal
+// the owner can read.
+//
+// `where` is the predicate against `stays s`, with the id as $1 — the bed and
+// room cases differ only in how they reach the stay.
+func (h *RoomHandler) ledgerFootprint(where string, id int64) (stays, payments int, err error) {
+	var row struct {
+		Stays    int `db:"stays"`
+		Payments int `db:"payments"`
+	}
+	err = h.db.Get(&row, `
+		SELECT COUNT(DISTINCT s.id) AS stays,
+		       COUNT(p.id)          AS payments
+		FROM stays s
+		LEFT JOIN beds b     ON b.id = s.bed_id
+		LEFT JOIN payments p ON p.stay_id = s.id
+		WHERE `+where, id)
+	return row.Stays, row.Payments, err
+}
+
+// occupancyRefusal is the 409 body. It never names a tenant — counts are
+// structural and safe to put in a string, a name is not.
+func occupancyRefusal(kind string, stays, payments int) map[string]string {
+	return errorResponse(fmt.Sprintf(
+		"this %s has %s and %s on record — deleting it would destroy that ledger permanently. "+
+			"End the stay from the grid instead; a former tenant's payment history is worth keeping.",
+		kind, plural(stays, "stay", "stays"), plural(payments, "payment", "payments"),
+	))
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, one)
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
 func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 	siteID, err := h.siteOwnerCheck(c)
 	if err != nil {
@@ -145,6 +187,17 @@ func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 	roomID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid room id"))
+	}
+
+	// Refuse if ANY bed in the room has stay history, ended or not. A former
+	// tenant's ledger is exactly the record you get sued over, so "they moved
+	// out" is not a reason to let it be destroyed.
+	stays, payments, err := h.ledgerFootprint("b.room_id = $1", roomID)
+	if err != nil {
+		return serverError(c, err, "failed to check room occupancy")
+	}
+	if stays > 0 {
+		return c.JSON(http.StatusConflict, occupancyRefusal("room", stays, payments))
 	}
 
 	result, err := h.db.Exec(
@@ -292,6 +345,14 @@ func (h *RoomHandler) DeleteBed(c echo.Context) error {
 	bedID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid bed id"))
+	}
+
+	stays, payments, err := h.ledgerFootprint("s.bed_id = $1", bedID)
+	if err != nil {
+		return serverError(c, err, "failed to check bed occupancy")
+	}
+	if stays > 0 {
+		return c.JSON(http.StatusConflict, occupancyRefusal("bed", stays, payments))
 	}
 
 	result, err := h.db.Exec(
