@@ -135,13 +135,21 @@ test.describe("Settlement", () => {
     expect(list[0].stay_id).toBe(stay.id);
     expect(list[0].refund_paise).toBe(730000);
 
-    // The summary still owes the same ₹8,500: a settlement records what
-    // changed hands, it does not write off the rent ledger.
+    // This assertion used to expect a balance of ₹8,500, on the reasoning that
+    // "a settlement records what changed hands, it does not write off the rent
+    // ledger". That conflated two things. The LEDGER — total_expected and
+    // total_paid — is history and is still untouched below. The BALANCE is a
+    // question about the present: what does this person still owe me?
+    //
+    // Here the owner held ₹17,000, took the ₹8,500 of dues out of it, deducted
+    // ₹1,200 for electricity and handed back ₹7,300. The tenant walked away
+    // square. Reading "₹8,500 owed" afterwards is how this was reported as a
+    // bug from the live account.
     const summaryRes = await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth });
     const summary = await summaryRes.json();
-    expect(summary.total_expected).toBe(3400000);
-    expect(summary.total_paid).toBe(2550000);
-    expect(summary.balance).toBe(850000);
+    expect(summary.total_expected).toBe(3400000); // ledger intact
+    expect(summary.total_paid).toBe(2550000);     // ledger intact
+    expect(summary.balance).toBe(0);              // and the dues are settled
 
     // ── Settling twice is refused ──
     const again = await request.post(`${BASE}/api/stays/${stay.id}/settlement`, {

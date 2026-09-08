@@ -133,7 +133,7 @@ func TestSummary_BackfilledEndDateStopsBilling(t *testing.T) {
 	start := date(2026, time.February, 20)
 	vacatedSixDaysAgo := date(2026, time.August, 5)
 
-	backfilled := summarize([]staySummaryInput{
+	backfilled := summarize([]staySummaryRow{
 		{RentAmount: 600000, RentCycle: "monthly", StartDate: start,
 			EndDate: &vacatedSixDaysAgo, TotalPaid: 0},
 	}, today)
@@ -147,7 +147,7 @@ func TestSummary_BackfilledEndDateStopsBilling(t *testing.T) {
 		t.Errorf("DurationDays = %d, want 166", backfilled.DurationDays)
 	}
 
-	stillActive := summarize([]staySummaryInput{
+	stillActive := summarize([]staySummaryRow{
 		{RentAmount: 600000, RentCycle: "monthly", StartDate: start, TotalPaid: 0},
 	}, today)
 	if stillActive.DurationDays <= backfilled.DurationDays {

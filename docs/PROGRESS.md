@@ -1404,6 +1404,144 @@ adding average-days-late or revenue-per-bed-position on top of it.
 
 ---
 
+## Phase 16 — Feedback from running the real hostel ✅ (Sep 2026)
+
+The first round of items found by the owner *using* the app against real
+tenants rather than by building it. The full list is in `docs/BACKLOG.md`;
+three landed here, and the rest are named at the bottom.
+
+### 16a — Deleting a bed or room could destroy a rent ledger ✅ (#30)
+
+Deleting a bed someone had ever occupied destroyed their stay **and their
+entire payment history**, unrecoverably, behind a confirm that said only
+"Delete this bed?" and then toasted "Bed removed". A room did it to every bed
+at once. `beds → stays → payments` is `ON DELETE CASCADE` at every link and
+neither handler had a guard. This was live on an account with real rent history.
+
+`ledgerFootprint` counts what the cascade would take, and both handlers now
+return **409 when any stay references the bed — ended or not**. "They moved
+out" is not a reason to lose the ledger. The cascade is untouched on purpose:
+loosening it would leave orphaned stays pointing at beds that no longer exist.
+
+The refusal names **counts only** — "2 stays and 14 payments" — never a tenant.
+Counts are structural and safe to build into a string; a name is the thing the
+Sentry scrubber cannot catch.
+
+The frontend was swallowing it regardless: `catch { toast.error("Failed to
+delete room") }` threw the server's message away, so a careful refusal would
+have surfaced as a generic failure. Fixed, and the confirm names the room or
+bed instead of "this room".
+
+Found while testing: the bed's remove button had `title="Remove bed"` but text
+content `×`, and text content wins the accessible name — a screen reader
+announced it as "times". It carries an `aria-label` now.
+
+### 16b — A departure gets its own date ✅ (#31, migration 006)
+
+`notice_date` was **read** in three owner-side places and **written** in exactly
+one — the tenant portal — and an owner-created tenant has no portal login at
+all, so recording a notice was not awkward for them, it was impossible.
+
+The backlog guessed `notice_date` could double as the departure date. It
+cannot: the portal stamps it with `time.Now()`, so every tenant tapping "I'm
+leaving" would be saying "I leave today". And `end_date` cannot hold it either
+— `end_date IS NULL` is what *active* means everywhere, so a future one frees a
+bed while the person is still in it.
+
+Three facts, three columns: `notice_date` (they told you), `expected_end_date`
+(they say they're going), `end_date` (they went).
+
+**Nothing acts on the expected date.** People overstay and leave early, and only
+a human knows which, so the stay stays open and rent keeps accruing. What was
+missing was the *question* — left alone, a passed date sits inside the
+within-30-days window forever, so a bed would stay orange for months with
+nothing separating "leaving next week" from "was due to leave in June".
+
+Hence `departure_due`: a sixth bed status, purple, deliberately outside the
+money palette because it says nothing about money. It **outranks arrears** —
+someone three cycles behind who may have moved out a month ago needs "did they
+actually go?" answered before their balance means anything. Plus a row in the
+Needs-attention card, which already gates itself on there being something to
+attend to.
+
+The answer is two-sided: **"They're staying"** clears the date as an explicit
+button, not by emptying a date input. Without it, lying — recording a departure
+that never happened — would be the only way to stop a reminder.
+
+`computeBedStatus`'s `end_date`-within-30-days branch was **resurrected, not
+deleted**. It could never fire (the grid only loads `end_date IS NULL`, so the
+parameter was always nil) and had a passing test asserting unreachable
+behaviour, including a case named "backfilled vacate". It was the right idea
+without a field to read.
+
+The portal learned the date too. Its confirm used to promise "they will contact
+you about the move-out date" — a workaround wearing a sentence. It now takes an
+optional date and refuses a backdated one: claiming you already left is a
+statement about the past, and only the owner can see the bed.
+
+### 16c — A settled stay still read as owing ✅
+
+Reported with the owner's own numbers: ₹5,000 billed, ₹2,500 paid, ₹1,000
+deposit held, remaining ₹1,500 written off at the counter. The settlement netted
+to zero and Collections showed nothing pending — but the tenant page kept
+reading **"₹2,500 owed"**.
+
+`TenantHandler.Summary` computed `Balance = TotalExpected − TotalPaid` across
+every stay and never looked at the settlements table at all. Collections was
+right by accident: it only ever considers active stays.
+
+`Balance` is now a question about the present — *what does this person still owe
+me* — and a settled stay has already answered it. `TotalPaid` and
+`TotalExpected` are history and still accumulate. The settled case is
+deliberately asymmetric:
+
+- `refund < 0` — the tenant was short at the counter, so it still counts.
+- `refund > 0` — the **owner** owed them, and recording a settlement is
+  recording that handover. Not a tenant credit, so it counts as zero rather
+  than leaving them "ahead" forever.
+
+**Why it survived:** `summary_test.go` had a `summarize` helper that was a
+hand-written copy of the handler's loop, commented "kept in sync deliberately".
+The copy and the real thing agreed perfectly and both ignored settlements. A
+test that reimplements the thing it tests can only confirm its own arithmetic.
+`computeTenantSummary` is extracted now and the suite calls it — the seven
+existing cases exercise production code, plus four new ones.
+
+### Also: `make migrate` printed the production database password
+
+The recipe line had no `@` prefix, so make echoed the command before running it
+— full Neon connection string, password included, to the terminal and any CI
+log. `migrate-down` too. Found while running 006 against production, which is
+exactly the situation the leak was waiting for.
+
+### Operational note — migration 006 on production
+
+Applied 8 Sep 2026, verified by column and index rather than by version number:
+a half-applied migration reports its version but leaves the schema inconsistent.
+
+Local DNS refused to resolve the Neon pooler host (`REFUSED`, not `NXDOMAIN`;
+`dig @1.1.1.1` resolved it fine, and Render reached the database throughout) —
+an ISP resolver issue, worked around by changing the resolver. Worth knowing
+before assuming a migration failure means a dead endpoint.
+
+### Still open from the same feedback round
+
+In rough order of leverage:
+
+1. **Owner-created tenants have no portal account** — `TenantAuthHandler.Login`
+   requires `password_hash IS NOT NULL` and owner-side `Create` never sets one.
+   This compounds: every tenant added by hand today is one to fix later.
+2. **No way to rename a room or bed** — both `PUT` endpoints and both API client
+   methods exist with **zero call sites**. Built, wired, never surfaced.
+3. **A stay can only be created from the grid** — `/tenants/new` creates a
+   person and nothing about where they sleep.
+4. **The registration form has no photo upload**, though the column and the
+   owner-side field both exist.
+5. The registration Email field implies it is a login; portal login is phone +
+   password.
+
+---
+
 ## Deferred
 
 Things we decided are worth doing, but not now. Nothing here is half-built —

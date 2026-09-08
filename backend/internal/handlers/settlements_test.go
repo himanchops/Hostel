@@ -258,7 +258,7 @@ func TestRefund_StalePreviewNoLongerMatches(t *testing.T) {
 // is the bug this guards.
 func TestDuesFor_AgreesWithTenantSummary(t *testing.T) {
 	end := settleEnd
-	summary := summarize([]staySummaryInput{{
+	summary := summarize([]staySummaryRow{{
 		RentAmount: settleRent,
 		RentCycle:  "monthly",
 		StartDate:  settleStart,
