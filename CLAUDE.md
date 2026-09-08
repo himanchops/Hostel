@@ -59,6 +59,14 @@ Key conventions to carry forward:
   commit and nobody could see why, because the only trace was a generic
   "failed to submit payment". Same rule on the frontend: every catch either
   shows the user something or reports it.
+- **No capability may be tenant-portal-exclusive.** Anything a tenant can do
+  from `/my`, an owner must be able to do from the owner side. This is not
+  symmetry for its own sake: a tenant the owner creates by hand never gets a
+  `password_hash`, and portal login requires one — so an owner-created tenant
+  can never log in, and a portal-exclusive action is unreachable for them
+  forever, not merely inconvenient. Recording a vacating notice is the case
+  that proved it. See `docs/BACKLOG.md` → "Feedback from running the real
+  hostel".
 - **Never put a tenant's own data into an error message.** Errors now leave the
   process — `serverError` and `reportError` forward to Sentry — and the scrubber
   there catches Aadhaar numbers, Indian mobile numbers and email addresses by
@@ -75,6 +83,10 @@ Key conventions to carry forward:
   so it is narrowed to match: sites, rooms and beds only, never a tenant, stay or
   payment; never a delete or an update; idempotent on re-run. Rehearse it against
   a local backend (`HOSTEL_API=http://localhost:8080`) before production.
+  `seed-demo.py` *can* target a deployed backend — it needs `HOSTEL_API` **and**
+  an explicit `--remote`, because an env var outlives the shell command that set
+  it. Safe there by construction: the reserved address cannot collide and every
+  query is owner-scoped, so it adds an owner beside the real one.
   A seed script must never fall back to logging in when signup fails — that once
   appended ten fake tenants to a live owner's data. Credentials live in
   `.hostel-credentials.env`, gitignored, because **this repo is public**.

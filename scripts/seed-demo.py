@@ -26,26 +26,58 @@ a real user would hit — no direct SQL, no schema coupling.
 Amounts are paise (₹1 = 100 paise). Dates are anchored to today, so the states
 hold whenever this is run.
 
-    make seed-demo          # seed (fails if the demo owner already exists)
+    make seed-demo          # seed localhost (fails if the demo owner exists)
     make seed-demo-reset    # delete the demo owner and reseed from scratch
 
-Needs the backend running on :8080. Touches nothing but its own owner — all
-data in this app is owner-scoped, so the demo owner is invisible to every
-other account.
+Against a deployed backend, the target and an explicit --remote are both
+required — an env var alone is too easy to leave set in a shell:
+
+    HOSTEL_API=https://hostel-backend-k7ar.onrender.com \
+      python3 scripts/seed-demo.py --remote
+
+Touches nothing but its own owner. All data in this app is owner-scoped, and
+`demo@seed.invalid` cannot collide with a real address, so seeding a deployed
+database adds an owner beside the real one rather than touching it. That is
+what makes pointing this at production safe in a way that seed-chopra.py's
+target never is — see docs/DEPLOYMENT.md, "The live owner account".
+
+Roughly 195 sequential API calls, so expect a minute or two against a remote
+backend, more if Render has to cold-start first.
 """
 
+import argparse
 import json
+import os
+import sys
 import urllib.error
 import urllib.request
 from datetime import date, timedelta
+from urllib.parse import urlparse
 
-BASE = "http://localhost:8080"
+# Defaults to localhost on purpose: the safe target is the one you get by
+# forgetting to choose. --remote is what unlocks anything else.
+BASE = os.environ.get("HOSTEL_API", "http://localhost:8080").rstrip("/")
+
 # .invalid is reserved by RFC 2606 and can never be a real address, so this
 # cannot collide with an account someone actually uses. The first version of
 # this script guessed "demo@hostel.local", which turned out to be the owner's
 # own login, and then wrote a demo dataset into their real data.
 EMAIL = "demo@seed.invalid"
-PASSWORD = "demo1234"
+
+# Overridable because a deployed demo owner is a real login on the public
+# internet. "demo1234" is fine on a laptop and a decision worth making
+# deliberately anywhere else.
+PASSWORD = os.environ.get("HOSTEL_DEMO_PASSWORD", "demo1234")
+TENANT_PASSWORD = os.environ.get("HOSTEL_DEMO_TENANT_PASSWORD", "tenant1234")
+
+# Where to tell the user to go afterwards. Printing localhost links after
+# seeding a deployed backend is a small lie that wastes a minute every time.
+APP = os.environ.get("HOSTEL_APP") or (
+    "http://localhost:3000"
+    if "localhost" in os.environ.get("HOSTEL_API", "http://localhost:8080")
+    or "127.0.0.1" in os.environ.get("HOSTEL_API", "http://localhost:8080")
+    else "https://hostel-ten-kappa.vercel.app"
+)
 
 TODAY = date.today()
 
@@ -70,6 +102,53 @@ def days_ago(n: int) -> str:
     return (TODAY - timedelta(days=n)).isoformat()
 
 
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"}
+
+
+def is_local(url: str) -> bool:
+    return (urlparse(url).hostname or "") in LOCAL_HOSTS
+
+
+def require_intent(remote_flag: bool) -> None:
+    """Refuse to write to a deployed backend unless it was asked for twice.
+
+    HOSTEL_API alone is not enough. An env var persists for a whole shell
+    session, so `export HOSTEL_API=...` followed an hour later by an absent
+    minded `make seed-demo` is a plausible way to fill a production database
+    with fiction. The flag has to be typed on the command that does it.
+    """
+    if is_local(BASE):
+        if remote_flag:
+            print(f"note: --remote passed but {BASE} is local; nothing to unlock.\n")
+        return
+
+    if not remote_flag:
+        raise SystemExit(
+            f"\n✗ Refusing to seed a non-local backend without --remote.\n"
+            f"  Target: {BASE}\n\n"
+            f"  This writes ~195 rows of fiction. If that is what you want:\n"
+            f"    HOSTEL_API={BASE} python3 scripts/seed-demo.py --remote\n"
+        )
+
+    print(f"→ seeding REMOTE backend {BASE}")
+    if PASSWORD == "demo1234":
+        # Not fatal: a guessable demo login is a legitimate choice when the
+        # point is to hand the credentials out. It should be a choice, though.
+        print("  ! demo owner password is the default 'demo1234' — this will be a\n"
+              "    working login on a public site. Set HOSTEL_DEMO_PASSWORD to change it.")
+    print()
+
+
+_step = 0
+
+
+def progress(msg: str) -> None:
+    """Remote runs take a minute or two; silence for that long reads as a hang."""
+    global _step
+    _step += 1
+    print(f"  [{_step:>2}] {msg}", flush=True)
+
+
 def call(method, path, body=None, token=None):
     req = urllib.request.Request(
         BASE + path,
@@ -86,9 +165,19 @@ def call(method, path, body=None, token=None):
         detail = e.read().decode()
         hint = ""
         if path == "/auth/signup" and e.code == 409:
-            hint = ("\n  The seed owner already exists. This script never reuses an\n"
-                    "  account — ask for a reset, which deletes owner "
-                    f"'{EMAIL}' and reseeds.")
+            if is_local(BASE):
+                hint = ("\n  The seed owner already exists. This script never reuses an\n"
+                        "  account — `make seed-demo-reset` deletes owner "
+                        f"'{EMAIL}' and reseeds.")
+            else:
+                # seed-demo-reset is pinned to the local DB on purpose, so the
+                # remote teardown is a deliberate one-liner rather than a target.
+                hint = ("\n  The seed owner already exists on this backend. Clearing it is\n"
+                        "  a manual step by design — against the deployed database:\n\n"
+                        "    psql \"$NEON_URL\" -c \"DELETE FROM owners WHERE email "
+                        f"= '{EMAIL}';\"\n\n"
+                        "  That cascades to its sites, tenants, stays and payments, and\n"
+                        "  touches no other owner.")
         raise SystemExit(f"\n✗ {method} {path} → {e.code}\n  {detail}{hint}\n")
     except urllib.error.URLError as e:
         raise SystemExit(f"\n✗ Cannot reach {BASE} — is the backend running?\n  {e}\n")
@@ -176,6 +265,12 @@ STAYS = [
 
 
 def main():
+    ap = argparse.ArgumentParser(description="Seed demo data for the Hostel app.")
+    ap.add_argument("--remote", action="store_true",
+                    help="permit a non-localhost HOSTEL_API target")
+    args = ap.parse_args()
+    require_intent(args.remote)
+
     # ── Owner ────────────────────────────────────────────────────────────────
     # Deliberately no "if signup fails, log in instead" fallback. That made a
     # collision with a real account look identical to a re-run, and the script
@@ -187,7 +282,7 @@ def main():
     })
     tok = auth["token"]
     owner_id = auth["owner"]["id"]
-    print(f"Created owner #{owner_id} ({EMAIL})")
+    progress(f"owner #{owner_id} ({EMAIL})")
 
     def api(method, path, body=None):
         return call(method, path, body, tok)
@@ -205,7 +300,7 @@ def main():
                 bed = api("POST", f"/api/sites/{site['id']}/rooms/{room['id']}/beds",
                           {"name": bed_name})
                 beds[f"{short}/{room_name}/{bed_name}"] = bed["id"]
-    print(f"Created {len(LAYOUT)} sites, {len(beds)} beds")
+    progress(f"{len(LAYOUT)} sites, {len(beds)} beds")
 
     def tenant(name, phone, **extra):
         return api("POST", "/api/tenants", {"name": name, "phone": phone, **extra})
@@ -235,6 +330,7 @@ def main():
     made = []
 
     for i, (name, phone, bed_key, rent, deposit, start_n, end_n, pattern, anchor) in enumerate(STAYS):
+        progress(f"{name} — {bed_key.split('/', 1)[1]}, {pattern}")
         t = tenant(name, phone, workplace=workplaces[i % len(workplaces)])
         s = stay(t, bed_key, rent, deposit, months_ago(start_n, anchor))
 
@@ -266,11 +362,12 @@ def main():
             api("PUT", f"/api/stays/{s['id']}", {"end_date": months_ago(end_n, 28)})
 
         made.append((name, s))
-    print(f"Created {len(made)} stays across {HISTORY_MONTHS} months")
+    progress(f"{len(made)} stays across {HISTORY_MONTHS} months")
 
     by_name = dict(made)
 
     # ── The states that are not just a payment pattern ───────────────────────
+    progress("notice, weekly cycle, bed-less stay, settlement, pending queue")
 
     # VACATING SOON: notice given, still in the bed.
     api("PUT", f"/api/stays/{by_name['Arjun Nair']['id']}", {"notice_date": days_ago(9)})
@@ -305,7 +402,7 @@ def main():
     # PENDING REGISTRATION: waiting in the approval queue.
     call("POST", f"/public/register/{owner_id}", {
         "name": "Nikhil Joshi", "phone": "9845110017",
-        "email": "nikhil@example.com", "password": "tenant1234",
+        "email": "nikhil@example.com", "password": TENANT_PASSWORD,
         "workplace": "Amazon", "address": "Indore, MP",
         "emergency_contact_name": "Anita Joshi",
         "emergency_contact_phone": "9847110017",
@@ -318,7 +415,7 @@ def main():
     # having in the demo.
     call("POST", f"/public/register/{owner_id}", {
         "name": "Meera Pillai", "phone": "9845110018",
-        "password": "tenant1234", "workplace": "Cred",
+        "password": TENANT_PASSWORD, "workplace": "Cred",
     })
     pending = api("GET", "/api/tenants?pending=true")
     meera = next(x for x in pending if x["name"] == "Meera Pillai")
@@ -328,7 +425,7 @@ def main():
         "rent_cycle": "monthly", "start_date": months_ago(2, 1),
     })
     t_auth = call("POST", "/tenant-auth/login",
-                  {"phone": "9845110018", "password": "tenant1234"})
+                  {"phone": "9845110018", "password": TENANT_PASSWORD})
     t_stays = call("GET", "/tenant/stays", token=t_auth["token"])
     call("POST", f"/tenant/stays/{t_stays[0]['id']}/payments",
          {"amount": 700000, "notes": "Paid by UPI this morning — screenshot to follow"},
@@ -339,9 +436,13 @@ def main():
 Seeded. Nothing else in the database was touched — data is owner-scoped,
 so this owner sees only what was just created.
 
-  Owner    {EMAIL} / {PASSWORD}          → http://localhost:3000/login
-  Tenant   9845110018 / tenant1234        → http://localhost:3000/my/login
-  Public   http://localhost:3000/register/{owner_id}
+  Backend  {BASE}
+
+  Owner    {EMAIL} / {PASSWORD}
+           {APP}/login
+  Tenant   9845110018 / {TENANT_PASSWORD}
+           {APP}/my/login
+  Public   {APP}/register/{owner_id}
 
   {len(STAYS) + 3} stays across 2 sites and {total_beds} beds, {HISTORY_MONTHS} months of history.
 
