@@ -125,6 +125,46 @@ test.describe("Tenant portal", () => {
     expect(res.status()).toBe(404);
   });
 
+  test("a tenant gives notice WITH a date, and the owner sees the date", async ({ page, request }) => {
+    const { ownerToken, tenantToken, stayId, tenantId } = await seedPortalTenant(request, "6");
+
+    await page.addInitScript((t) => {
+      localStorage.setItem("hostel_tenant_token", t);
+    }, tenantToken);
+    await page.goto("/my");
+
+    const leaving = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+
+    await page.getByRole("button", { name: /Give notice to vacate/ }).click();
+    await page.getByLabel("When are you leaving?").fill(leaving);
+    await page.getByRole("button", { name: "Submit notice" }).click();
+
+    await expect(page.getByText(/Leaving on/)).toBeVisible();
+
+    // The owner gets the date, not just the fact — which is what the old
+    // confirm's "they will contact you about the move-out date" stood in for.
+    const stays = await request.get(`${BASE}/api/tenants/${tenantId}/stays`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    const stay = (await stays.json()).find((s: { id: number }) => s.id === stayId);
+    expect(stay.expected_end_date?.slice(0, 10)).toBe(leaving);
+    expect(stay.end_date).toBeFalsy(); // still not a move-out
+  });
+
+  test("a tenant cannot backdate their own departure", async ({ request }) => {
+    const { tenantToken, stayId } = await seedPortalTenant(request, "7");
+
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const res = await request.put(`${BASE}/tenant/stays/${stayId}/notice`, {
+      headers: { Authorization: `Bearer ${tenantToken}` },
+      data: { expected_end_date: yesterday },
+    });
+
+    // Claiming you already left is a statement about what happened, and only
+    // the owner — who can see the bed — gets to make that one.
+    expect(res.status()).toBe(400);
+  });
+
   test("the portal shows the stay and its ledger", async ({ page, request }) => {
     const { tenantToken, stayId } = await seedPortalTenant(request, "5");
     await request.post(`${BASE}/tenant/stays/${stayId}/payments`, {

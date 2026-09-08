@@ -44,6 +44,11 @@ type RevenueSummary struct {
 type AlertsSummary struct {
 	PendingTenants  int `json:"pending_tenants"`
 	PendingPayments int `json:"pending_payments"`
+	// DeparturesDue is stays whose expected departure has passed with nobody
+	// confirming it either way. Nothing ends a stay automatically — people
+	// overstay and leave early — so this is the queue of questions only the
+	// owner can answer.
+	DeparturesDue int `json:"departures_due"`
 }
 
 type VacatingTenant struct {
@@ -51,15 +56,20 @@ type VacatingTenant struct {
 	// stays.go only blocks a second active stay on the same BED, so one tenant
 	// can legitimately appear twice. TenantID is the right link target and the
 	// wrong React key.
-	StayID      int64   `json:"stay_id"      db:"stay_id"`
-	TenantID    int64   `json:"tenant_id"    db:"tenant_id"`
-	TenantName  string  `json:"tenant_name"  db:"tenant_name"`
-	TenantPhone string  `json:"tenant_phone" db:"tenant_phone"`
-	BedName     string  `json:"bed_name"     db:"bed_name"`
-	RoomName    string  `json:"room_name"    db:"room_name"`
-	SiteName    string  `json:"site_name"    db:"site_name"`
-	NoticeDate  *string `json:"notice_date"  db:"notice_date"`
-	EndDate     *string `json:"end_date"     db:"end_date"`
+	StayID          int64   `json:"stay_id"      db:"stay_id"`
+	TenantID        int64   `json:"tenant_id"    db:"tenant_id"`
+	TenantName      string  `json:"tenant_name"  db:"tenant_name"`
+	TenantPhone     string  `json:"tenant_phone" db:"tenant_phone"`
+	BedName         string  `json:"bed_name"     db:"bed_name"`
+	RoomName        string  `json:"room_name"    db:"room_name"`
+	SiteName        string  `json:"site_name"    db:"site_name"`
+	NoticeDate      *string `json:"notice_date"       db:"notice_date"`
+	ExpectedEndDate *string `json:"expected_end_date" db:"expected_end_date"`
+	EndDate         *string `json:"end_date"          db:"end_date"`
+	// DaysOverdue is positive once the expected departure has passed. Sent
+	// rather than derived client-side so "3 days ago" is measured against the
+	// server's today — the same one the grid's status used.
+	DaysOverdue int `json:"days_overdue" db:"days_overdue"`
 }
 
 type RecentPayment struct {
@@ -235,30 +245,40 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	revenue := computeRevenue(stayRows, collectedThisMonth, today)
 
 	// 4. Pending counts
-	var pendingTenants, pendingPayments int
+	var pendingTenants, pendingPayments, departuresDue int
 	err = h.db.QueryRowx(`
 		SELECT
 			(SELECT COUNT(*) FROM tenants WHERE owner_id = $1 AND is_approved = false) AS pending_tenants,
 			(SELECT COUNT(*) FROM payments p
 			 JOIN stays s  ON s.id = p.stay_id
 			 JOIN tenants t ON t.id = s.tenant_id
-			 WHERE t.owner_id = $1 AND p.is_approved = false) AS pending_payments
-	`, ownerID).Scan(&pendingTenants, &pendingPayments)
+			 WHERE t.owner_id = $1 AND p.is_approved = false) AS pending_payments,
+			-- Still open, and the day they said they were leaving has gone by.
+			-- Nobody has said whether they went.
+			(SELECT COUNT(*) FROM stays s
+			 JOIN tenants t ON t.id = s.tenant_id
+			 WHERE t.owner_id = $1
+			   AND s.end_date IS NULL
+			   AND s.expected_end_date IS NOT NULL
+			   AND s.expected_end_date < CURRENT_DATE) AS departures_due
+	`, ownerID).Scan(&pendingTenants, &pendingPayments, &departuresDue)
 	if err != nil {
 		return serverError(c, err, "failed to fetch alerts")
 	}
 
 	// 5. Vacating soon
 	type vacatingRow struct {
-		StayID      int64          `db:"stay_id"`
-		TenantID    int64          `db:"tenant_id"`
-		TenantName  string         `db:"tenant_name"`
-		TenantPhone string         `db:"tenant_phone"`
-		BedName     string         `db:"bed_name"`
-		RoomName    string         `db:"room_name"`
-		SiteName    string         `db:"site_name"`
-		NoticeDate  sql.NullString `db:"notice_date"`
-		EndDate     sql.NullString `db:"end_date"`
+		StayID          int64          `db:"stay_id"`
+		TenantID        int64          `db:"tenant_id"`
+		TenantName      string         `db:"tenant_name"`
+		TenantPhone     string         `db:"tenant_phone"`
+		BedName         string         `db:"bed_name"`
+		RoomName        string         `db:"room_name"`
+		SiteName        string         `db:"site_name"`
+		NoticeDate      sql.NullString `db:"notice_date"`
+		ExpectedEndDate sql.NullString `db:"expected_end_date"`
+		EndDate         sql.NullString `db:"end_date"`
+		DaysOverdue     int            `db:"days_overdue"`
 	}
 	var vacRows []vacatingRow
 	err = h.db.Select(&vacRows, `
@@ -270,8 +290,10 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			b.name        AS bed_name,
 			r.name        AS room_name,
 			hs.name       AS site_name,
-			TO_CHAR(s.notice_date, 'YYYY-MM-DD') AS notice_date,
-			TO_CHAR(s.end_date,   'YYYY-MM-DD') AS end_date
+			TO_CHAR(s.notice_date,       'YYYY-MM-DD') AS notice_date,
+			TO_CHAR(s.expected_end_date, 'YYYY-MM-DD') AS expected_end_date,
+			TO_CHAR(s.end_date,          'YYYY-MM-DD') AS end_date,
+			GREATEST(0, CURRENT_DATE - s.expected_end_date) AS days_overdue
 		FROM stays s
 		JOIN tenants t       ON t.id = s.tenant_id
 		LEFT JOIN beds b          ON b.id = s.bed_id
@@ -280,8 +302,11 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		WHERE t.owner_id = $1
 		  AND s.end_date IS NULL
 		  AND s.bed_id IS NOT NULL
-		  AND s.notice_date IS NOT NULL
-		ORDER BY s.notice_date ASC, s.id ASC
+		  AND (s.notice_date IS NOT NULL OR s.expected_end_date IS NOT NULL)
+		-- Soonest departure first, so an already-passed one sorts to the very
+		-- top: it is the row that needs an answer, not just a glance. Rows with
+		-- no expected date fall back to when notice was given.
+		ORDER BY s.expected_end_date ASC NULLS LAST, s.notice_date ASC, s.id ASC
 		LIMIT 11
 	`, ownerID)
 	if err != nil {
@@ -300,6 +325,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		v := VacatingTenant{
 			StayID:      r.StayID,
 			TenantID:    r.TenantID,
+			DaysOverdue: r.DaysOverdue,
 			TenantName:  r.TenantName,
 			TenantPhone: r.TenantPhone,
 			BedName:     r.BedName,
@@ -308,6 +334,9 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		}
 		if r.NoticeDate.Valid {
 			v.NoticeDate = &r.NoticeDate.String
+		}
+		if r.ExpectedEndDate.Valid {
+			v.ExpectedEndDate = &r.ExpectedEndDate.String
 		}
 		if r.EndDate.Valid {
 			v.EndDate = &r.EndDate.String
@@ -380,6 +409,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		Alerts: AlertsSummary{
 			PendingTenants:  pendingTenants,
 			PendingPayments: pendingPayments,
+			DeparturesDue:   departuresDue,
 		},
 		VacatingSoon:            vacating,
 		RecentPayments:          recent,

@@ -54,14 +54,18 @@ db-down:
 # Run database migrations (requires golang-migrate CLI).
 # Targets $(DATABASE_URL), which defaults to the local DB — see the top of this
 # file for the deploy override.
+# Every recipe line here is @-prefixed on purpose. Without it make echoes the
+# command it is about to run — and for a deploy that means printing the full
+# Neon connection string, password and all, to the terminal and into whatever
+# CI log is watching. The line below used to do exactly that.
 migrate:
 	@echo "→ migrating $(if $(filter $(DATABASE_URL),$(LOCAL_DB)),LOCAL,REMOTE) database"
-	migrate -path backend/migrations -database "$(DATABASE_URL)" up
+	@migrate -path backend/migrations -database "$(DATABASE_URL)" up
 	@migrate -path backend/migrations -database "$(DATABASE_URL)" version
 
 migrate-down:
 	@echo "→ rolling back $(if $(filter $(DATABASE_URL),$(LOCAL_DB)),LOCAL,REMOTE) database"
-	migrate -path backend/migrations -database "$(DATABASE_URL)" down
+	@migrate -path backend/migrations -database "$(DATABASE_URL)" down
 
 # Run backend
 backend:

@@ -3,7 +3,7 @@
 import { BedStatus } from "@/lib/api";
 
 /**
- * The five bed states, styled from the status tokens in globals.css. This
+ * The six bed states, styled from the status tokens in globals.css. This
  * record is the only place those tokens are read — grid tiles, the legend and
  * any status chip all come through here, so the colours cannot drift apart.
  *
@@ -33,6 +33,10 @@ export const STATUS_STYLES: Record<
   vacating_soon: {
     bg: "bg-vacating-100", border: "border-vacating-200", text: "text-vacating-800",
     dot: "bg-vacating-500", tint: "bg-vacating-50", stripe: "border-l-vacating-500", label: "Vacating",
+  },
+  departure_due: {
+    bg: "bg-departure-100", border: "border-departure-200", text: "text-departure-800",
+    dot: "bg-departure-500", tint: "bg-departure-50", stripe: "border-l-departure-500", label: "Confirm departure",
   },
 };
 

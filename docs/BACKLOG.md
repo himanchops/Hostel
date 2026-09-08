@@ -32,7 +32,7 @@ an owner-created tenant has **no portal account at all** (see below), so a
 portal-exclusive capability is not merely inconvenient for them, it is
 unreachable forever.
 
-### An owner cannot record a vacating notice — S
+### ~~An owner cannot record a vacating notice~~ ✅ fixed
 The first thing the owner tried to do and could not. `stays.notice_date` is
 *read* in three owner-side places — the "Notice …" badge on the tenant page
 (`tenants/[id]/page.tsx:532`), the dashboard Vacating list, and orange
@@ -42,14 +42,12 @@ app: `PUT /api/portal/stays/:stayId/notice`, the tenant portal
 (`dashboard.go:283`, `AND s.notice_date IS NOT NULL`) can only ever be filled
 by a tenant logging in — and an owner-created tenant cannot log in.
 
-Nearly free: `PUT /api/stays/:id` already accepts and validates `notice_date`
-(`stays.go:245`), and `staysApi.update` already types it (`api.ts:360`). What
-is missing is a form. Wants a "Record notice" action next to "Settle & vacate"
-on the tenant page, and probably on the grid's occupied-bed drawer.
+**Fixed.** `RecordNoticeDialog` sits next to "Settle & vacate" on the tenant
+page and in the grid's occupied-bed drawer — one component for both, the same
+way `EndStayDialog` is, because those two surfaces had already drifted once.
+The portal learned the date too, so a tenant can now say *when*.
 
-The portal's version also hardcodes `notice_date = time.Now()` — the tenant can
-say *that* they are leaving but not *when*. The owner-side form should take a
-date, and the portal should probably learn to as well.
+It needed a schema change after all, though — see the entry below.
 
 ### ~~Deleting a room or bed silently destroys stays and payments~~ ✅ fixed
 No occupancy guard anywhere. `DeleteBed` is a bare `DELETE FROM beds`
@@ -93,7 +91,7 @@ deposit, cycle, start date — reusing the grid's assign form rather than growin
 a second one that can drift from it (the same drift that
 `EndStayDialog` was created to end).
 
-### The known end date has nowhere to go — M, and there is dead code proving it
+### ~~The known end date has nowhere to go~~ ✅ fixed — migration 006
 The owner knew the tenant's departure date at the moment of adding them, and
 there was no field for it anywhere: not on the tenant form, not on the grid's
 assign form (rent / deposit / cycle / start date only), and `EndStayDialog`
@@ -110,10 +108,22 @@ branch (`grid.go:226`) that **can never fire in production**, because the grid
 only ever loads stays where `end_date IS NULL`, so `endDate` is always nil by
 the time it arrives. It has a passing unit test and is unreachable.
 
-So the answer is not "allow a future end_date". It is: `notice_date` is the
-field for a known departure, give the owner a way to set it, and then either
-resurrect that branch against a real expected-departure date or delete it.
-Decide which — leaving tested dead code is how the next person loses an hour.
+**Resolved differently from the guess here.** `notice_date` turned out to be the
+wrong field for a known departure: the portal stamps it with `time.Now()`, so
+reusing it would have made every tenant tapping "I'm leaving" say "I leave
+today". They are three separate facts and now have three columns —
+`notice_date` (they told you), `expected_end_date` (they say they're going),
+`end_date` (they went).
+
+The dead branch was **resurrected, not deleted**, pointing at
+`expected_end_date`. Its test used to assert that a past date read as
+`vacating_soon`; a past expected departure now means `departure_due`, a sixth
+bed status that outranks arrears — "did they actually go?" is worth asking
+before the balance is worth reading.
+
+Nothing acts on the date automatically. People overstay and leave early, so a
+passed date raises a question on the dashboard rather than ending a stay, and
+"They're staying" clears it without inventing a departure that never happened.
 
 ### Tenants added by the owner have no portal account — S/M
 `TenantAuthHandler.Login` requires `password_hash IS NOT NULL`

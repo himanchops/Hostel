@@ -59,6 +59,13 @@ Key conventions to carry forward:
   commit and nobody could see why, because the only trace was a generic
   "failed to submit payment". Same rule on the frontend: every catch either
   shows the user something or reports it.
+- **Three dates end a stay, and they are not the same date.** `notice_date` is
+  when they told you, `expected_end_date` is when they say they are going,
+  `end_date` is when they actually went. Only the last one ends a stay, and
+  only a human sets it — nothing acts on `expected_end_date` automatically,
+  because tenants overstay and leave early and no query knows which. A passed
+  expected date raises `departure_due` (a bed status that outranks arrears) and
+  a dashboard prompt; it never frees a bed. Migration 006.
 - **No capability may be tenant-portal-exclusive.** Anything a tenant can do
   from `/my`, an owner must be able to do from the owner side. This is not
   symmetry for its own sake: a tenant the owner creates by hand never gets a

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ── Design tokens ─────────────────────────────────────────────────────────
-   "Calm ledger" — warm neutral surfaces, one accent (indigo), and the five
+   "Calm ledger" — warm neutral surfaces, one accent (indigo), and the six
    bed-status colors as the loudest thing on any screen.
 
    Status colors are defined here as the SINGLE source of truth. The grid,
@@ -57,6 +57,20 @@
   --color-vacating-500: #f97316;
   --color-vacating-700: #c2410c;
   --color-vacating-800: #9a3412;
+
+  /* departure due — purple. Deliberately outside the money palette: green,
+     amber and red all say something about what a tenant owes, and this says
+     nothing about money. It is a question the owner has not answered — was
+     this person meant to be gone? A darker orange would have been the obvious
+     choice and the wrong one, because at a wall's distance it reads as the
+     same state as vacating-soon, which is exactly the confusion this exists
+     to remove. */
+  --color-departure-50: #faf5ff;
+  --color-departure-100: #f3e8ff;
+  --color-departure-200: #e9d5ff;
+  --color-departure-500: #a855f7;
+  --color-departure-700: #7e22ce;
+  --color-departure-800: #6b21a8;
 }
 
 :root {

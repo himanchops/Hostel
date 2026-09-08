@@ -27,6 +27,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { EndStayDialog } from "@/components/EndStayDialog";
+import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { SettleStayDrawer } from "@/components/SettleStayDrawer";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -311,6 +312,8 @@ export default function TenantDetailPage() {
 
   // Settle & vacate drawer
   const [settlingStay, setSettlingStay] = useState<number | null>(null);
+  // Recording (or amending) a notice — the plan to leave, not the leaving.
+  const [noticeStay, setNoticeStay] = useState<Stay | null>(null);
 
   // Assign bed modal
   const [assigningStay, setAssigningStay] = useState<number | null>(null);
@@ -529,7 +532,20 @@ export default function TenantDetailPage() {
                         {active ? "Active" : "Ended"}
                       </Badge>
                       {settlement && <Badge tone="info">Settled</Badge>}
-                      {active && stay.notice_date && (
+                      {active && stay.expected_end_date && (
+                        <Badge
+                          tone={
+                            stay.expected_end_date.slice(0, 10) < today()
+                              ? "danger"
+                              : "warning"
+                          }
+                        >
+                          {stay.expected_end_date.slice(0, 10) < today()
+                            ? `Was due to leave ${stay.expected_end_date.slice(0, 10)}`
+                            : `Leaving ${stay.expected_end_date.slice(0, 10)}`}
+                        </Badge>
+                      )}
+                      {active && stay.notice_date && !stay.expected_end_date && (
                         <Badge tone="warning">
                           Notice {stay.notice_date.slice(0, 10)}
                         </Badge>
@@ -577,6 +593,14 @@ export default function TenantDetailPage() {
                         )}
                         {!isEndingThis && (
                           <>
+                            <button
+                              onClick={() => setNoticeStay(stay)}
+                              className="text-xs font-medium text-indigo-600 hover:underline"
+                            >
+                              {stay.notice_date || stay.expected_end_date
+                                ? "Update notice"
+                                : "Record notice"}
+                            </button>
                             <button
                               onClick={() => setSettlingStay(stay.id)}
                               className="text-xs font-medium text-indigo-600 hover:underline"
@@ -799,6 +823,20 @@ export default function TenantDetailPage() {
             loadSummary();
           }}
           onClose={() => setEndingStay(null)}
+        />
+      )}
+
+      {token && (
+        <RecordNoticeDialog
+          open={noticeStay !== null}
+          stay={noticeStay}
+          token={token}
+          tenantName={tenant?.name}
+          onSaved={(updated) => {
+            setStays((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            setNoticeStay(null);
+          }}
+          onClose={() => setNoticeStay(null)}
         />
       )}
 

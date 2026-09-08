@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -20,19 +21,20 @@ func NewTenantPortalHandler(db *sqlx.DB) *TenantPortalHandler {
 }
 
 type tenantStay struct {
-	ID            int64            `db:"id" json:"id"`
-	BedID         *int64           `db:"bed_id" json:"bed_id,omitempty"`
-	BedName       string           `db:"bed_name" json:"bed_name"`
-	RoomName      string           `db:"room_name" json:"room_name"`
-	SiteName      string           `db:"site_name" json:"site_name"`
-	RentAmount    int64            `db:"rent_amount" json:"rent_amount"`
-	DepositAmount int64            `db:"deposit_amount" json:"deposit_amount"`
-	RentCycle     string           `db:"rent_cycle" json:"rent_cycle"`
-	StartDate     time.Time        `db:"start_date" json:"start_date"`
-	EndDate       *time.Time       `db:"end_date" json:"end_date,omitempty"`
-	NoticeDate    *time.Time       `db:"notice_date" json:"notice_date,omitempty"`
-	CreatedAt     time.Time        `db:"created_at" json:"created_at"`
-	Payments      []models.Payment `json:"payments"`
+	ID              int64            `db:"id" json:"id"`
+	BedID           *int64           `db:"bed_id" json:"bed_id,omitempty"`
+	BedName         string           `db:"bed_name" json:"bed_name"`
+	RoomName        string           `db:"room_name" json:"room_name"`
+	SiteName        string           `db:"site_name" json:"site_name"`
+	RentAmount      int64            `db:"rent_amount" json:"rent_amount"`
+	DepositAmount   int64            `db:"deposit_amount" json:"deposit_amount"`
+	RentCycle       string           `db:"rent_cycle" json:"rent_cycle"`
+	StartDate       time.Time        `db:"start_date" json:"start_date"`
+	EndDate         *time.Time       `db:"end_date" json:"end_date,omitempty"`
+	NoticeDate      *time.Time       `db:"notice_date" json:"notice_date,omitempty"`
+	ExpectedEndDate *time.Time       `db:"expected_end_date" json:"expected_end_date,omitempty"`
+	CreatedAt       time.Time        `db:"created_at" json:"created_at"`
+	Payments        []models.Payment `json:"payments"`
 }
 
 func (h *TenantPortalHandler) GetStays(c echo.Context) error {
@@ -45,7 +47,7 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 		        COALESCE(r.name, '') AS room_name,
 		        COALESCE(hs.name, '') AS site_name,
 		        s.rent_amount, s.deposit_amount, s.rent_cycle,
-		        s.start_date, s.end_date, s.notice_date, s.created_at
+		        s.start_date, s.end_date, s.notice_date, s.expected_end_date, s.created_at
 		 FROM stays s
 		 LEFT JOIN beds b        ON b.id = s.bed_id
 		 LEFT JOIN rooms r       ON r.id = b.room_id
@@ -158,12 +160,37 @@ func (h *TenantPortalHandler) SubmitNotice(c echo.Context) error {
 
 	noticeDate := time.Now().Truncate(24 * time.Hour)
 
+	// The date they intend to leave, if they know it. Optional: the portal used
+	// to record only THAT a tenant was going, never WHEN, so the owner had to
+	// chase them for it — the confirm dialog literally promised a phone call.
+	// A missing or empty value leaves the field alone rather than erroring, so
+	// an older client posting `{}` still works.
+	var req struct {
+		ExpectedEndDate string `json:"expected_end_date"`
+	}
+	_ = c.Bind(&req)
+
+	var expectedEnd *time.Time
+	if strings.TrimSpace(req.ExpectedEndDate) != "" {
+		t, parseErr := time.Parse("2006-01-02", strings.TrimSpace(req.ExpectedEndDate))
+		if parseErr != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse("expected_end_date must be YYYY-MM-DD"))
+		}
+		// A tenant gives notice about the future. Backdating a departure is a
+		// claim about what already happened, and only the owner — who can see
+		// the bed — gets to make that one.
+		if t.Before(noticeDate) {
+			return c.JSON(http.StatusBadRequest, errorResponse("the date you leave cannot be in the past"))
+		}
+		expectedEnd = &t
+	}
+
 	var stay models.Stay
 	err = h.db.QueryRowx(
-		`UPDATE stays SET notice_date = $1, updated_at = $2
+		`UPDATE stays SET notice_date = $1, expected_end_date = COALESCE($4, expected_end_date), updated_at = $2
 		 WHERE id = $3
-		 RETURNING id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, created_at, updated_at`,
-		noticeDate, time.Now(), stayID,
+		 RETURNING id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, expected_end_date, created_at, updated_at`,
+		noticeDate, time.Now(), stayID, expectedEnd,
 	).StructScan(&stay)
 	if err != nil {
 		return serverError(c, err, "failed to submit notice")

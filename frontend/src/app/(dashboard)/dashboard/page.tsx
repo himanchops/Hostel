@@ -50,7 +50,8 @@ export default function DashboardPage() {
 
       {/* One place for everything waiting on the owner, rather than a stack of
           competing banners. */}
-      {!loading && alerts && (alerts.pending_tenants > 0 || alerts.pending_payments > 0) && (
+      {!loading && alerts &&
+        (alerts.pending_tenants > 0 || alerts.pending_payments > 0 || alerts.departures_due > 0) && (
         <Card title="Needs attention" className="mb-6">
           <div className="divide-y divide-stone-100">
             {alerts.pending_tenants > 0 && (
@@ -67,6 +68,17 @@ export default function DashboardPage() {
                 count={alerts.pending_payments}
                 tone="info"
                 label={`payment proof${alerts.pending_payments !== 1 ? "s" : ""} awaiting approval`}
+              />
+            )}
+            {/* Nothing ends a stay on a date, because people overstay and
+                leave early. This is the queue of "did they actually go?" —
+                questions only the owner can answer. */}
+            {alerts.departures_due > 0 && (
+              <AttentionRow
+                href="#vacating"
+                count={alerts.departures_due}
+                tone="danger"
+                label={`departure${alerts.departures_due !== 1 ? "s" : ""} past their date — confirm or reschedule`}
               />
             )}
           </div>
@@ -153,6 +165,7 @@ export default function DashboardPage() {
           lg: because below 1024px this is a single column anyway. */}
       {(!loading && occ && occ.total_beds > 0) && (
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+          <div id="vacating" className="scroll-mt-6">
           <Card title="Vacating Soon">
             {data!.vacating_soon.length === 0 ? (
               <EmptyState compact message="No one has given notice." />
@@ -176,10 +189,14 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        {v.notice_date ? (
+                        {v.days_overdue > 0 ? (
+                          <Badge tone="danger">
+                            Due {v.days_overdue} day{v.days_overdue === 1 ? "" : "s"} ago
+                          </Badge>
+                        ) : v.expected_end_date ? (
+                          <Badge tone="warning">Leaving {v.expected_end_date}</Badge>
+                        ) : v.notice_date ? (
                           <Badge tone="warning">Notice: {v.notice_date}</Badge>
-                        ) : v.end_date ? (
-                          <Badge tone="warning">Ends: {v.end_date}</Badge>
                         ) : null}
                       </div>
                     </Link>
@@ -188,6 +205,7 @@ export default function DashboardPage() {
               </PeekList>
             )}
           </Card>
+          </div>
 
           <Card title="Recent Payments">
             {data!.recent_payments.length === 0 ? (
@@ -434,7 +452,7 @@ function AttentionRow({
 }: {
   href: string;
   count: number;
-  tone: "warning" | "info";
+  tone: "warning" | "info" | "danger";
   label: string;
 }) {
   return (
