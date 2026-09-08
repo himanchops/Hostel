@@ -12,7 +12,7 @@ import {
   formatCurrency,
   today,
 } from "@/lib/api";
-import { Card, useConfirm, useToast } from "@/components/ui";
+import { Button, Card, Field, FormError, Input, useConfirm, useToast } from "@/components/ui";
 
 export default function TenantPortalPage() {
   const { token, isAuthenticated, isLoading } = useTenantAuth();
@@ -72,6 +72,11 @@ function StayCard({ stay, token, onUpdate }: {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [noticeLoading, setNoticeLoading] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const [noticeError, setNoticeError] = useState("");
+  // The tenant could previously say THAT they were leaving but not WHEN — the
+  // old confirm promised the owner would ring them for the date instead.
+  const [leaveDate, setLeaveDate] = useState("");
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -102,21 +107,25 @@ function StayCard({ stay, token, onUpdate }: {
     }
   }
 
-  async function handleGiveNotice() {
-    const ok = await confirm({
-      title: "Submit notice to vacate?",
-      message: "Your owner will be notified. They will contact you about the move-out date.",
-      confirmLabel: "Submit notice",
-      tone: "danger",
-    });
-    if (!ok) return;
+  async function submitNotice(e: React.FormEvent) {
+    e.preventDefault();
+    setNoticeError("");
     setNoticeLoading(true);
     try {
-      const updated = await tenantPortalApi.submitNotice(token, stay.id);
-      onUpdate({ ...stay, notice_date: updated.notice_date as string | undefined });
+      const updated = await tenantPortalApi.submitNotice(token, stay.id, leaveDate || undefined);
+      onUpdate({
+        ...stay,
+        notice_date: updated.notice_date as string | undefined,
+        expected_end_date: updated.expected_end_date as string | undefined,
+      });
+      setNoticeOpen(false);
       toast.success("Notice submitted — your owner has been notified");
-    } catch {
-      toast.error("Could not submit your notice. Please try again.");
+    } catch (err) {
+      // Inline rather than a toast: the message is about the date field sitting
+      // directly above it.
+      setNoticeError(
+        err instanceof ApiError ? err.message : "Could not submit your notice. Please try again.",
+      );
     } finally {
       setNoticeLoading(false);
     }
@@ -148,7 +157,14 @@ function StayCard({ stay, token, onUpdate }: {
           </span>
         </div>
 
-        {stay.notice_date && (
+        {stay.expected_end_date && (
+          <p className="mt-2 text-xs text-stone-500">
+            Leaving on {new Date(stay.expected_end_date).toLocaleDateString("en-IN", {
+              day: "numeric", month: "short", year: "numeric",
+            })}
+          </p>
+        )}
+        {stay.notice_date && !stay.expected_end_date && (
           <p className="mt-2 text-xs text-amber-600">
             Notice given on {new Date(stay.notice_date).toLocaleDateString("en-IN", {
               day: "numeric", month: "short", year: "numeric",
@@ -242,14 +258,50 @@ function StayCard({ stay, token, onUpdate }: {
           )}
 
           {/* Give notice */}
-          {!hasNotice && (
+          {!hasNotice && !noticeOpen && (
             <button
-              onClick={handleGiveNotice}
-              disabled={noticeLoading}
-              className="block text-sm text-red-500 hover:text-red-700 disabled:opacity-60"
+              onClick={() => setNoticeOpen(true)}
+              className="block text-sm text-red-500 hover:text-red-700"
             >
-              {noticeLoading ? "Submitting…" : "Give notice to vacate →"}
+              Give notice to vacate →
             </button>
+          )}
+
+          {!hasNotice && noticeOpen && (
+            <form onSubmit={submitNotice} className="rounded-xl bg-stone-50 p-4">
+              <h4 className="mb-1 text-sm font-semibold text-stone-800">Notice to vacate</h4>
+              <p className="mb-3 text-xs text-stone-500">
+                Your owner will be notified. Your stay stays open and rent keeps
+                running until they confirm you have moved out.
+              </p>
+
+              <Field label="When are you leaving?">
+                <Input
+                  type="date"
+                  value={leaveDate}
+                  min={today()}
+                  onChange={(e) => setLeaveDate(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-stone-400">
+                  Leave blank if you are not sure yet.
+                </p>
+              </Field>
+
+              {noticeError && <FormError>{noticeError}</FormError>}
+
+              <div className="mt-3 flex gap-2">
+                <Button type="submit" variant="danger" size="sm" loading={noticeLoading}>
+                  {noticeLoading ? "Submitting…" : "Submit notice"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => { setNoticeOpen(false); setNoticeError(""); }}
+                  className="text-sm text-stone-500 hover:text-stone-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           )}
         </div>
       )}

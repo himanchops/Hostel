@@ -27,6 +27,12 @@ const (
 	StatusPartial      BedStatus = "partial"
 	StatusOverdue      BedStatus = "overdue"
 	StatusVacatingSoon BedStatus = "vacating_soon"
+	// StatusDepartureDue is a stay whose expected departure has come and gone
+	// without anyone confirming it. Distinct from vacating_soon on purpose: one
+	// is a plan, the other is a question the owner has not answered, and
+	// leaving them the same colour means a bed sits orange for months while
+	// nobody can tell which it is.
+	StatusDepartureDue BedStatus = "departure_due"
 )
 
 type GridTenant struct {
@@ -36,19 +42,20 @@ type GridTenant struct {
 }
 
 type GridBed struct {
-	ID            int64       `json:"id"`
-	Name          string      `json:"name"`
-	Status        BedStatus   `json:"status"`
-	StayID        *int64      `json:"stay_id,omitempty"`
-	Tenant        *GridTenant `json:"tenant,omitempty"`
-	RentAmount    *int64      `json:"rent_amount,omitempty"`    // paise
-	DepositAmount *int64      `json:"deposit_amount,omitempty"` // paise
-	TotalPaid     *int64      `json:"total_paid,omitempty"`
-	TotalExpected *int64      `json:"total_expected,omitempty"`
-	Balance       *int64      `json:"balance,omitempty"` // total_paid - total_expected (negative = owes)
-	StartDate     *time.Time  `json:"start_date,omitempty"`
-	EndDate       *time.Time  `json:"end_date,omitempty"`
-	NoticeDate    *time.Time  `json:"notice_date,omitempty"`
+	ID              int64       `json:"id"`
+	Name            string      `json:"name"`
+	Status          BedStatus   `json:"status"`
+	StayID          *int64      `json:"stay_id,omitempty"`
+	Tenant          *GridTenant `json:"tenant,omitempty"`
+	RentAmount      *int64      `json:"rent_amount,omitempty"`    // paise
+	DepositAmount   *int64      `json:"deposit_amount,omitempty"` // paise
+	TotalPaid       *int64      `json:"total_paid,omitempty"`
+	TotalExpected   *int64      `json:"total_expected,omitempty"`
+	Balance         *int64      `json:"balance,omitempty"` // total_paid - total_expected (negative = owes)
+	StartDate       *time.Time  `json:"start_date,omitempty"`
+	EndDate         *time.Time  `json:"end_date,omitempty"`
+	NoticeDate      *time.Time  `json:"notice_date,omitempty"`
+	ExpectedEndDate *time.Time  `json:"expected_end_date,omitempty"`
 }
 
 type GridRoom struct {
@@ -60,22 +67,23 @@ type GridRoom struct {
 
 // gridRow is the flat DB scan result before grouping.
 type gridRow struct {
-	RoomID        int64          `db:"room_id"`
-	RoomName      string         `db:"room_name"`
-	Floor         int            `db:"floor"`
-	BedID         sql.NullInt64  `db:"bed_id"`
-	BedName       sql.NullString `db:"bed_name"`
-	StayID        sql.NullInt64  `db:"stay_id"`
-	RentAmount    sql.NullInt64  `db:"rent_amount"`
-	DepositAmount sql.NullInt64  `db:"deposit_amount"`
-	RentCycle     sql.NullString `db:"rent_cycle"`
-	StartDate     sql.NullTime   `db:"start_date"`
-	EndDate       sql.NullTime   `db:"end_date"`
-	NoticeDate    sql.NullTime   `db:"notice_date"`
-	TenantID      sql.NullInt64  `db:"tenant_id"`
-	TenantName    sql.NullString `db:"tenant_name"`
-	TenantPhone   sql.NullString `db:"tenant_phone"`
-	TotalPaid     int64          `db:"total_paid"`
+	RoomID          int64          `db:"room_id"`
+	RoomName        string         `db:"room_name"`
+	Floor           int            `db:"floor"`
+	BedID           sql.NullInt64  `db:"bed_id"`
+	BedName         sql.NullString `db:"bed_name"`
+	StayID          sql.NullInt64  `db:"stay_id"`
+	RentAmount      sql.NullInt64  `db:"rent_amount"`
+	DepositAmount   sql.NullInt64  `db:"deposit_amount"`
+	RentCycle       sql.NullString `db:"rent_cycle"`
+	StartDate       sql.NullTime   `db:"start_date"`
+	EndDate         sql.NullTime   `db:"end_date"`
+	NoticeDate      sql.NullTime   `db:"notice_date"`
+	ExpectedEndDate sql.NullTime   `db:"expected_end_date"`
+	TenantID        sql.NullInt64  `db:"tenant_id"`
+	TenantName      sql.NullString `db:"tenant_name"`
+	TenantPhone     sql.NullString `db:"tenant_phone"`
+	TotalPaid       int64          `db:"total_paid"`
 }
 
 func (h *GridHandler) GetGrid(c echo.Context) error {
@@ -109,6 +117,7 @@ func (h *GridHandler) GetGrid(c echo.Context) error {
 			s.start_date,
 			s.end_date,
 			s.notice_date,
+			s.expected_end_date,
 			t.id        AS tenant_id,
 			t.name      AS tenant_name,
 			t.phone     AS tenant_phone,
@@ -121,7 +130,7 @@ func (h *GridHandler) GetGrid(c echo.Context) error {
 		WHERE r.site_id = $1
 		GROUP BY r.id, r.name, r.floor,
 		         b.id, b.name,
-		         s.id, s.rent_amount, s.deposit_amount, s.rent_cycle, s.start_date, s.end_date, s.notice_date,
+		         s.id, s.rent_amount, s.deposit_amount, s.rent_cycle, s.start_date, s.end_date, s.notice_date, s.expected_end_date,
 		         t.id, t.name, t.phone
 		ORDER BY r.floor, r.name, b.name
 	`, siteID)
@@ -182,7 +191,7 @@ func buildBed(row gridRow, today time.Time) GridBed {
 	depositAmount := row.DepositAmount.Int64
 	startDate := row.StartDate.Time
 
-	var endDate, noticeDate *time.Time
+	var endDate, noticeDate, expectedEnd *time.Time
 	if row.EndDate.Valid {
 		t := row.EndDate.Time
 		endDate = &t
@@ -190,6 +199,10 @@ func buildBed(row gridRow, today time.Time) GridBed {
 	if row.NoticeDate.Valid {
 		t := row.NoticeDate.Time
 		noticeDate = &t
+	}
+	if row.ExpectedEndDate.Valid {
+		t := row.ExpectedEndDate.Time
+		expectedEnd = &t
 	}
 
 	cycles := cyclesElapsed(startDate, today, row.RentCycle.String)
@@ -205,6 +218,7 @@ func buildBed(row gridRow, today time.Time) GridBed {
 	bed.StartDate = &startDate
 	bed.EndDate = endDate
 	bed.NoticeDate = noticeDate
+	bed.ExpectedEndDate = expectedEnd
 
 	if row.TenantID.Valid {
 		bed.Tenant = &GridTenant{
@@ -214,16 +228,29 @@ func buildBed(row gridRow, today time.Time) GridBed {
 		}
 	}
 
-	bed.Status = computeBedStatus(balance, rentAmount, noticeDate, endDate, today)
+	bed.Status = computeBedStatus(balance, rentAmount, noticeDate, expectedEnd, today)
 	return bed
 }
 
-func computeBedStatus(balance, rentAmount int64, noticeDate, endDate *time.Time, today time.Time) BedStatus {
-	// Vacating soon: notice given, or end_date within 30 days
-	if noticeDate != nil {
-		return StatusVacatingSoon
+func computeBedStatus(balance, rentAmount int64, noticeDate, expectedEnd *time.Time, today time.Time) BedStatus {
+	// Departure due first: an expected date that has already passed outranks
+	// everything, because it is the only state that needs the owner to answer a
+	// question rather than just be informed.
+	//
+	// The predecessor of this branch tested `endDate` and could never fire —
+	// the grid only ever loads stays WHERE end_date IS NULL, so endDate was
+	// always nil by the time it arrived. It had a passing unit test and was
+	// unreachable in production. Pointing it at expected_end_date is what that
+	// branch was always trying to express.
+	if expectedEnd != nil {
+		if expectedEnd.Before(today) {
+			return StatusDepartureDue
+		}
+		if expectedEnd.Sub(today) <= 30*24*time.Hour {
+			return StatusVacatingSoon
+		}
 	}
-	if endDate != nil && endDate.Sub(today) <= 30*24*time.Hour {
+	if noticeDate != nil {
 		return StatusVacatingSoon
 	}
 

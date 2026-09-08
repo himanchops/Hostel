@@ -22,14 +22,14 @@ func NewStayHandler(db *sqlx.DB) *StayHandler {
 	return &StayHandler{db: db}
 }
 
-const stayCols = `id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, created_at, updated_at`
+const stayCols = `id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, expected_end_date, created_at, updated_at`
 
 // The same columns qualified, for the queries that join tenants to scope by
 // owner. Unqualified, `id` is ambiguous across stays and tenants and Postgres
 // refuses the query — which is what Get did for every stay it was ever asked
 // for. Nothing in the app calls that endpoint, so it 404'd unnoticed until a
 // settlement test read a stay back to check it had been ended.
-const stayColsQualified = `s.id, s.tenant_id, s.bed_id, s.rent_amount, s.deposit_amount, s.rent_cycle, s.start_date, s.end_date, s.notice_date, s.created_at, s.updated_at`
+const stayColsQualified = `s.id, s.tenant_id, s.bed_id, s.rent_amount, s.deposit_amount, s.rent_cycle, s.start_date, s.end_date, s.notice_date, s.expected_end_date, s.created_at, s.updated_at`
 
 type createStayRequest struct {
 	TenantID      int64  `json:"tenant_id"`
@@ -47,12 +47,13 @@ type createStayRequest struct {
 type stayPatch struct {
 	keys map[string]bool
 
-	StartDate     *time.Time
-	EndDate       *time.Time
-	NoticeDate    *time.Time
-	RentAmount    *int64
-	DepositAmount *int64
-	RentCycle     *string
+	StartDate       *time.Time
+	EndDate         *time.Time
+	NoticeDate      *time.Time
+	ExpectedEndDate *time.Time
+	RentAmount      *int64
+	DepositAmount   *int64
+	RentCycle       *string
 }
 
 func (p stayPatch) has(field string) bool { return p.keys[field] }
@@ -69,9 +70,10 @@ func parseStayPatch(c echo.Context) (stayPatch, error) {
 	}
 
 	dates := map[string]**time.Time{
-		"start_date":  &p.StartDate,
-		"end_date":    &p.EndDate,
-		"notice_date": &p.NoticeDate,
+		"start_date":        &p.StartDate,
+		"end_date":          &p.EndDate,
+		"notice_date":       &p.NoticeDate,
+		"expected_end_date": &p.ExpectedEndDate,
 	}
 	for field, dst := range dates {
 		msg, ok := raw[field]
@@ -245,6 +247,9 @@ func (h *StayHandler) Update(c echo.Context) error {
 	if patch.has("notice_date") {
 		next.NoticeDate = patch.NoticeDate
 	}
+	if patch.has("expected_end_date") {
+		next.ExpectedEndDate = patch.ExpectedEndDate
+	}
 	if patch.has("rent_amount") {
 		if patch.RentAmount == nil || *patch.RentAmount <= 0 {
 			return c.JSON(http.StatusBadRequest, errorResponse("rent_amount must be positive"))
@@ -276,6 +281,12 @@ func (h *StayHandler) Update(c echo.Context) error {
 	if next.NoticeDate != nil && next.NoticeDate.Before(next.StartDate) {
 		return c.JSON(http.StatusBadRequest, errorResponse("notice_date cannot be before start_date"))
 	}
+	// An expected departure before the stay began is a typo, not a plan. It is
+	// allowed to be in the past, though — that is precisely the overdue case the
+	// grid needs to surface.
+	if next.ExpectedEndDate != nil && next.ExpectedEndDate.Before(next.StartDate) {
+		return c.JSON(http.StatusBadRequest, errorResponse("expected_end_date cannot be before start_date"))
+	}
 
 	// Reopening a stay (clearing end_date) must not collide with whoever is in
 	// the bed now.
@@ -295,11 +306,11 @@ func (h *StayHandler) Update(c echo.Context) error {
 	var stay models.Stay
 	err = h.db.QueryRowx(
 		`UPDATE stays
-		 SET start_date = $1, end_date = $2, notice_date = $3,
-		     rent_amount = $4, deposit_amount = $5, rent_cycle = $6, updated_at = $7
-		 WHERE id = $8
+		 SET start_date = $1, end_date = $2, notice_date = $3, expected_end_date = $4,
+		     rent_amount = $5, deposit_amount = $6, rent_cycle = $7, updated_at = $8
+		 WHERE id = $9
 		 RETURNING `+stayCols,
-		next.StartDate, next.EndDate, next.NoticeDate,
+		next.StartDate, next.EndDate, next.NoticeDate, next.ExpectedEndDate,
 		next.RentAmount, next.DepositAmount, next.RentCycle, time.Now(), stayID,
 	).StructScan(&stay)
 	if err != nil {

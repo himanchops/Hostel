@@ -89,6 +89,11 @@ type Stay struct {
 	StartDate     time.Time  `db:"start_date" json:"start_date"`
 	EndDate       *time.Time `db:"end_date" json:"end_date,omitempty"`       // Null if ongoing
 	NoticeDate    *time.Time `db:"notice_date" json:"notice_date,omitempty"` // When tenant gave notice
+	// ExpectedEndDate is when they SAY they are going, as opposed to when they
+	// told you (NoticeDate) or when they actually went (EndDate). Advisory
+	// only — nothing ends a stay automatically when it passes, because people
+	// overstay and leave early and only a human knows which.
+	ExpectedEndDate *time.Time `db:"expected_end_date" json:"expected_end_date,omitempty"`
 	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt     time.Time  `db:"updated_at" json:"updated_at"`
 }

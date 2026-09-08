@@ -33,6 +33,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { EndStayDialog } from "@/components/EndStayDialog";
+import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ export default function GridPage() {
 
   // Which stay the end-stay dialog is for, if any.
   const [endingStay, setEndingStay] = useState<GridBed | null>(null);
+  const [noticeBed, setNoticeBed] = useState<GridBed | null>(null);
 
   const fetchGrid = useCallback(() => {
     if (!token) return;
@@ -258,6 +260,7 @@ export default function GridPage() {
             onShowPayment={() => setShowPayment(true)}
             onPaymentAdded={handlePaymentAdded}
             onEndStay={() => setEndingStay(selectedBed)}
+            onRecordNotice={() => setNoticeBed(selectedBed)}
           />
         ))}
       </Drawer>
@@ -271,6 +274,31 @@ export default function GridPage() {
         tenantName={endingStay?.tenant?.name}
         onEnded={handleEnded}
         onClose={() => setEndingStay(null)}
+      />
+
+      {/* Same dialog as the tenant page, for the same reason. */}
+      <RecordNoticeDialog
+        open={noticeBed !== null}
+        stay={
+          noticeBed?.stay_id
+            ? {
+                id: noticeBed.stay_id,
+                notice_date: noticeBed.notice_date,
+                expected_end_date: noticeBed.expected_end_date,
+                start_date: noticeBed.start_date ?? "",
+              }
+            : null
+        }
+        token={token ?? ""}
+        tenantName={noticeBed?.tenant?.name}
+        onSaved={() => {
+          setNoticeBed(null);
+          // Reload rather than patching the tile: a notice changes the bed's
+          // STATUS, and recomputing that here would be a second copy of
+          // computeBedStatus waiting to disagree with the server's.
+          fetchGrid();
+        }}
+        onClose={() => setNoticeBed(null)}
       />
     </div>
   );
@@ -498,7 +526,7 @@ function AssignPanel({
 // ─── Occupied panel ───────────────────────────────────────────────────────────
 
 function OccupiedPanel({
-  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onEndStay,
+  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onEndStay, onRecordNotice,
 }: {
   token: string;
   bed: GridBed;
@@ -506,6 +534,7 @@ function OccupiedPanel({
   onShowPayment: () => void;
   onPaymentAdded: () => void;
   onEndStay: () => void;
+  onRecordNotice: () => void;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -607,12 +636,18 @@ function OccupiedPanel({
 
       {/* Actions */}
       {!showPaymentForm ? (
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           <Button className="flex-1" onClick={onShowPayment}>+ Add payment</Button>
           {bed.stay_id && (
-            <Button variant="secondary" size="sm" onClick={onEndStay} title="Record a move-out date">
-              End stay
-            </Button>
+            <>
+              <Button variant="secondary" size="sm" onClick={onRecordNotice}
+                      title="They are planning to leave — this does not free the bed">
+                {bed.notice_date || bed.expected_end_date ? "Update notice" : "Record notice"}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={onEndStay} title="Record a move-out date">
+                End stay
+              </Button>
+            </>
           )}
         </div>
       ) : (

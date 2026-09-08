@@ -81,33 +81,59 @@ func TestComputeBedStatus_ZeroRentIsAlwaysPaid(t *testing.T) {
 	}
 }
 
-// end_date within 30 days of today marks the bed as vacating. The window is
-// inclusive at 30 days and open-ended in the past — a stay whose end date has
-// already passed but which the grid still returns is vacating, not overdue.
+// An expected departure inside 30 days marks the bed as vacating; one that has
+// already passed marks it as departure_due instead.
+//
+// This test used to run against `end_date` and asserted that a past date still
+// read as "vacating_soon" — behaviour that could never happen in production,
+// because the grid only loads stays WHERE end_date IS NULL, so the parameter was
+// always nil by the time it arrived. It was a passing test for unreachable
+// code. Migration 006 gave the branch a field it can actually receive.
 func TestComputeBedStatus_VacatingWindow(t *testing.T) {
 	today := date(2026, time.August, 11)
 	const rent = 750000
 
 	tests := []struct {
-		name    string
-		endDate time.Time
-		want    BedStatus
+		name        string
+		expectedEnd time.Time
+		want        BedStatus
 	}{
-		{"ends today", today, StatusVacatingSoon},
-		{"ended last week — backfilled vacate", date(2026, time.August, 4), StatusVacatingSoon},
-		{"ends in 29 days", date(2026, time.September, 9), StatusVacatingSoon},
-		{"ends in exactly 30 days", date(2026, time.September, 10), StatusVacatingSoon},
-		{"ends in 31 days — outside the window", date(2026, time.September, 11), StatusPaid},
-		{"ends in three months", date(2026, time.November, 11), StatusPaid},
+		{"leaves today", today, StatusVacatingSoon},
+		{"was due to leave last week — nobody confirmed", date(2026, time.August, 4), StatusDepartureDue},
+		{"was due to leave months ago", date(2026, time.February, 1), StatusDepartureDue},
+		{"leaves in 29 days", date(2026, time.September, 9), StatusVacatingSoon},
+		{"leaves in exactly 30 days", date(2026, time.September, 10), StatusVacatingSoon},
+		{"leaves in 31 days — outside the window", date(2026, time.September, 11), StatusPaid},
+		{"leaves in three months", date(2026, time.November, 11), StatusPaid},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := computeBedStatus(0, rent, nil, ptr(tt.endDate), today)
+			got := computeBedStatus(0, rent, nil, ptr(tt.expectedEnd), today)
 			if got != tt.want {
-				t.Errorf("end_date %s = %q, want %q",
-					tt.endDate.Format("2006-01-02"), got, tt.want)
+				t.Errorf("expected_end_date %s = %q, want %q",
+					tt.expectedEnd.Format("2006-01-02"), got, tt.want)
 			}
 		})
+	}
+}
+
+// A departure the owner has not confirmed outranks the money. The bed may hold
+// someone who left a month ago or someone who never went; either way the
+// question needs answering before the balance is worth reading.
+func TestComputeBedStatus_DepartureDueOutranksArrears(t *testing.T) {
+	today := date(2026, time.August, 11)
+	const rent = 750000
+
+	overdueBalance := int64(-3 * rent) // three cycles behind
+	pastDue := ptr(date(2026, time.July, 1))
+
+	if got := computeBedStatus(overdueBalance, rent, nil, pastDue, today); got != StatusDepartureDue {
+		t.Errorf("three cycles behind AND past due = %q, want %q", got, StatusDepartureDue)
+	}
+	// Without the expected date it is simply overdue, so the arrears path is
+	// not being masked in general — only by an unanswered question.
+	if got := computeBedStatus(overdueBalance, rent, nil, nil, today); got != StatusOverdue {
+		t.Errorf("three cycles behind, no expected date = %q, want %q", got, StatusOverdue)
 	}
 }
 
@@ -121,10 +147,10 @@ func TestComputeBedStatus_NoticeAlwaysVacating(t *testing.T) {
 	farOff := ptr(date(2027, time.June, 30))
 
 	if got := computeBedStatus(0, rent, notice, nil, today); got != StatusVacatingSoon {
-		t.Errorf("notice with no end date = %q, want %q", got, StatusVacatingSoon)
+		t.Errorf("notice with no expected date = %q, want %q", got, StatusVacatingSoon)
 	}
 	if got := computeBedStatus(0, rent, notice, farOff, today); got != StatusVacatingSoon {
-		t.Errorf("notice with a far-off end date = %q, want %q", got, StatusVacatingSoon)
+		t.Errorf("notice with a far-off expected date = %q, want %q", got, StatusVacatingSoon)
 	}
 }
 

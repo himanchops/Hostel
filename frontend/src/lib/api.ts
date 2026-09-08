@@ -120,7 +120,7 @@ export const bedsApi = {
 
 // ─── Grid ────────────────────────────────────────────────────────────────────
 
-export type BedStatus = "vacant" | "paid" | "partial" | "overdue" | "vacating_soon";
+export type BedStatus = "vacant" | "paid" | "partial" | "overdue" | "vacating_soon" | "departure_due";
 
 export interface GridTenant {
   id: number;
@@ -142,6 +142,7 @@ export interface GridBed {
   start_date?: string;
   end_date?: string;
   notice_date?: string;
+  expected_end_date?: string;
 }
 
 export interface GridRoom {
@@ -302,6 +303,7 @@ export interface TenantStay {
   start_date: string;
   end_date?: string;
   notice_date?: string;
+  expected_end_date?: string;
   created_at: string;
   payments: Payment[];
 }
@@ -310,8 +312,14 @@ export const tenantPortalApi = {
   stays: (token: string) => request<TenantStay[]>("/tenant/stays", {}, token),
   submitPayment: (token: string, stayId: number, data: { amount: number; notes?: string; proof_url?: string }) =>
     request<Payment>(`/tenant/stays/${stayId}/payments`, { method: "POST", body: JSON.stringify(data) }, token),
-  submitNotice: (token: string, stayId: number) =>
-    request<Stay>(`/tenant/stays/${stayId}/notice`, { method: "PUT", body: JSON.stringify({}) }, token),
+  /** `expectedEndDate` is optional — a tenant may know they are going without
+   *  knowing exactly when. Omitted leaves any existing date untouched. */
+  submitNotice: (token: string, stayId: number, expectedEndDate?: string) =>
+    request<Stay>(
+      `/tenant/stays/${stayId}/notice`,
+      { method: "PUT", body: JSON.stringify({ expected_end_date: expectedEndDate ?? "" }) },
+      token,
+    ),
 };
 
 // ─── Pending Payments (owner) ─────────────────────────────────────────────────
@@ -343,6 +351,7 @@ export interface Stay {
   start_date: string;
   end_date?: string;
   notice_date?: string;
+  expected_end_date?: string;
   created_at: string;
   updated_at: string;
 }
@@ -357,7 +366,21 @@ export const staysApi = {
     start_date: string;
   }) => request<Stay>("/api/stays", { method: "POST", body: JSON.stringify(data) }, token),
 
-  update: (token: string, id: number, data: { end_date?: string; notice_date?: string }) =>
+  update: (
+    token: string,
+    id: number,
+    /**
+     * Three different dates, and they mean three different things:
+     * notice_date is when they told you, expected_end_date is when they say
+     * they are going, end_date is when they actually went. Only the last one
+     * ends the stay. null clears a field.
+     */
+    data: {
+      end_date?: string | null;
+      notice_date?: string | null;
+      expected_end_date?: string | null;
+    },
+  ) =>
     request<Stay>(`/api/stays/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),
 
   assignBed: (token: string, stayId: number, data: { bed_id: number }) =>
@@ -419,6 +442,8 @@ export interface RevenueSummary {
 export interface AlertsSummary {
   pending_tenants: number;
   pending_payments: number;
+  /** Expected departures that have passed with nobody confirming either way. */
+  departures_due: number;
 }
 
 export interface VacatingTenant {
@@ -431,7 +456,10 @@ export interface VacatingTenant {
   room_name: string;
   site_name: string;
   notice_date?: string;
+  expected_end_date?: string;
   end_date?: string;
+  /** Positive once the expected departure has passed, measured server-side. */
+  days_overdue: number;
 }
 
 export interface RecentPayment {
