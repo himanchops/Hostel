@@ -82,6 +82,14 @@ export interface Room {
   site_id: number;
   name: string;
   floor: number;
+  /**
+   * What a delete would destroy, aggregated across the room's beds. Any stay
+   * at all — ended or not — makes the room undeletable, so `stay_count === 0`
+   * is the whole test. Present on every Room the API returns, including the
+   * one a rename hands back, so it is always safe to trust.
+   */
+  stay_count: number;
+  payment_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +111,9 @@ export interface Bed {
   id: number;
   room_id: number;
   name: string;
+  /** The same footprint as Room's, for this bed alone. */
+  stay_count: number;
+  payment_count: number;
   created_at: string;
   updated_at: string;
 }

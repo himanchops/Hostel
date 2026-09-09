@@ -1597,7 +1597,42 @@ heading.
 
 Tests: `owner/portal-access.test.ts`, `owner/rename.test.ts`,
 `owner/place-on-create.test.ts`, plus four cases added to
-`public/registration.test.ts`. 67 e2e specs pass.
+`public/registration.test.ts`.
+
+### 16e — A dialog that states a rule must not offer to break it ✅
+
+Found by the owner using 16d, and it was 16a's guard wearing the wrong face.
+The confirm read "A bed that anyone has ever stayed in cannot be deleted" and
+then showed a red **Delete** button underneath. Pressing it produced the real
+refusal as a toast. Two messages for one rule, the first a prophecy — and the
+only way to find out which case you were in was to press the button.
+
+The cause was structural, not copy: the page had no idea. The footprint lived
+only inside `DeleteBed`, computed at the moment of refusal, so the client's
+dialog was static text written in hope.
+
+`ListRooms`/`ListBeds` — and `Create`/`Update` with them — now return
+`stay_count` and `payment_count` per row, from `roomSelect`/`bedSelect`. With
+the answer in hand before the click, the page explains instead of asking:
+`useConfirm` gained an `acknowledge` mode that renders a single dismiss button
+and no confirm at all, and the trash/× greys out while staying clickable — a
+disabled control explains nothing, least of all on a touch screen with no hover
+to reveal a tooltip.
+
+Create and Update recompute rather than returning a bare row, and that is the
+subtle part. A rename response replaces the row in the page's state, so a
+stripped-down one would have quietly turned an undeletable bed back into a
+deletable-looking one. `stay_count: 0` now always means "nothing to lose"
+rather than "nobody asked".
+
+The counts and the guard are two pieces of SQL that must agree forever, so the
+test asserts the agreement rather than the numbers: for every bed in a room,
+whatever the list reports as deletable must return 200 and whatever it reports
+as blocked must return 409. `owner/delete-guard.test.ts`, which also replaced
+its old "the UI shows the server's reason" case — that test asserted the very
+behaviour this removed.
+
+70 e2e specs pass.
 
 ---
 
@@ -1622,8 +1657,27 @@ else gets an account, write the 12b multi-tenancy tests: owner A must not be
 able to read or mutate owner B's sites, rooms, beds, tenants, stays or
 payments — one test per endpoint family.
 
-Password reset stays parked until there is a second human who can lock
-themselves out. Until then the fix is a `psql` update on `owners.password_hash`.
+Password reset stays parked, but the reasoning above does **not** transfer to
+it, and saying it did was a mistake worth correcting (Sep 2026). Isolation bugs
+need a second owner to leak *to*; a forgotten password needs nobody but you.
+The trigger is not "a second human signs up" — it is the first human, and that
+is already the case.
+
+What makes it survivable meanwhile is that the manual path genuinely works and
+is now **written down and rehearsed** rather than asserted:
+`docs/DEPLOYMENT.md` → "Password recovery". Two commands, and the `$2y$`
+prefix that looks wrong is fine.
+
+What that path cannot do is serve a person who is not you. So the real trigger
+for building reset is the same one as the isolation tests: **before anyone else
+has an account.** Someone locked out who cannot reach the database has no
+recovery at all, and "email me your new password" is worse than no reset.
+
+Sizing, so it is not mistaken for a papercut: an email sender (Resend or
+Postmark), a `password_reset_tokens` table with expiry and single use, a
+request endpoint with its own rate limit, and a reset form. A session on its
+own. A signed-in **change password** form is separate and much smaller — it
+closes the "typed it into the password manager wrong" case, though not lockout.
 
 Also unaddressed and worth the same note: there is no rate limiting on
 `/auth/login` or `/public/register/:ownerId`. Low risk while the registration

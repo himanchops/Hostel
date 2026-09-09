@@ -30,21 +30,31 @@ type HostelSite struct {
 
 // Room represents a room within a hostel site
 type Room struct {
-	ID        int64     `db:"id" json:"id"`
-	SiteID    int64     `db:"site_id" json:"site_id"`
-	Name      string    `db:"name" json:"name"` // e.g., "Room 101", "A1"
-	Floor     int       `db:"floor" json:"floor,omitempty"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	ID     int64  `db:"id" json:"id"`
+	SiteID int64  `db:"site_id" json:"site_id"`
+	Name   string `db:"name" json:"name"` // e.g., "Room 101", "A1"
+	Floor  int    `db:"floor" json:"floor,omitempty"`
+	// StayCount and PaymentCount are what a cascading delete would destroy —
+	// aggregated across every bed in the room. Computed, never stored, and
+	// present on every Room this API returns so that "0" always means "nothing
+	// to lose" rather than "nobody asked".
+	StayCount    int       `db:"stay_count" json:"stay_count"`
+	PaymentCount int       `db:"payment_count" json:"payment_count"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Bed represents a bed within a room
 type Bed struct {
-	ID        int64     `db:"id" json:"id"`
-	RoomID    int64     `db:"room_id" json:"room_id"`
-	Name      string    `db:"name" json:"name"` // e.g., "Bed A", "Lower Bunk"
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	ID     int64  `db:"id" json:"id"`
+	RoomID int64  `db:"room_id" json:"room_id"`
+	Name   string `db:"name" json:"name"` // e.g., "Bed A", "Lower Bunk"
+	// The same footprint as Room's, for this bed alone. A stay with a NULL
+	// bed_id belongs to no bed and so blocks nothing.
+	StayCount    int       `db:"stay_count" json:"stay_count"`
+	PaymentCount int       `db:"payment_count" json:"payment_count"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // RentCycle defines the billing frequency

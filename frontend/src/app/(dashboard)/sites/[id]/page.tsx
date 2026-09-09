@@ -18,6 +18,22 @@ import {
   useToast,
 } from "@/components/ui";
 
+/**
+ * Why this cannot be deleted, phrased the way the server phrases it.
+ *
+ * The server's `occupancyRefusal` is still the enforcement — anything hitting
+ * the API directly gets a 409 regardless of what this page thinks. This is the
+ * preventive half: with `stay_count` on every row, the page knows the answer
+ * before the owner clicks, so it can explain instead of offering a button that
+ * was always going to fail.
+ */
+function ledgerRefusal(kind: "room" | "bed", stays: number, payments: number) {
+  const n = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  return `This ${kind} has ${n(stays, "stay")} and ${n(payments, "payment")} on record. ` +
+    `Deleting it would destroy that ledger permanently, so it is not allowed. ` +
+    `End the stay from the grid instead — a former tenant's payment history is worth keeping.`;
+}
+
 export default function SiteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const siteId = Number(id);
@@ -74,9 +90,22 @@ export default function SiteDetailPage() {
   async function handleDeleteRoom(roomId: number) {
     if (!token) return;
     const room = rooms.find((r) => r.id === roomId);
+
+    // Explain rather than offer. The old dialog said a room with history
+    // "cannot be deleted" and then showed a red Delete button, because the
+    // page had no idea which case it was in.
+    if (room && room.stay_count > 0) {
+      await confirm({
+        title: `${room.name} cannot be deleted`,
+        message: ledgerRefusal("room", room.stay_count, room.payment_count),
+        acknowledge: true,
+      });
+      return;
+    }
+
     const ok = await confirm({
       title: `Delete ${room?.name ?? "this room"}?`,
-      message: "Its beds go with it. A room with any stay history cannot be deleted.",
+      message: "Its beds go with it. Nobody has ever stayed here, so there is no ledger to lose.",
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -146,9 +175,19 @@ export default function SiteDetailPage() {
   async function handleDeleteBed(roomId: number, bedId: number) {
     if (!token) return;
     const bed = beds[roomId]?.find((b) => b.id === bedId);
+
+    if (bed && bed.stay_count > 0) {
+      await confirm({
+        title: `Bed ${bed.name} cannot be deleted`,
+        message: ledgerRefusal("bed", bed.stay_count, bed.payment_count),
+        acknowledge: true,
+      });
+      return;
+    }
+
     const ok = await confirm({
       title: `Delete bed ${bed?.name ?? ""}?`.replace(" ?", "?"),
-      message: "A bed that anyone has ever stayed in cannot be deleted.",
+      message: "Nobody has ever stayed in it, so there is no ledger to lose.",
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -280,6 +319,9 @@ function RoomCard({
   const [bedName, setBedName] = useState("");
   const [addingBed, setAddingBed] = useState(false);
 
+  // Any stay at all, ended or not, is what blocks a delete.
+  const locked = room.stay_count > 0;
+
   // Renaming the room, in place of its header.
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(room.name);
@@ -364,11 +406,22 @@ function RoomCard({
           >
             <PencilIcon className="h-4 w-4" />
           </button>
+          {/* Still clickable when it has history — a disabled button explains
+              nothing, least of all on a touch screen where there is no hover
+              to reveal a tooltip. It just stops looking like an action. */}
           <button
             onClick={onDelete}
-            className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500"
-            aria-label={`Delete room ${room.name}`}
-            title="Delete room"
+            className={`rounded-lg p-1 transition duration-150 ease-out ${
+              locked
+                ? "text-stone-300 hover:bg-stone-100 hover:text-stone-400"
+                : "text-stone-400 hover:bg-red-50 hover:text-red-500"
+            }`}
+            aria-label={
+              locked
+                ? `Why room ${room.name} cannot be deleted`
+                : `Delete room ${room.name}`
+            }
+            title={locked ? "Has stay history — cannot be deleted" : "Delete room"}
           >
             <TrashIcon className="h-4 w-4" />
           </button>
@@ -442,6 +495,8 @@ function BedChip({
   const [draft, setDraft] = useState(bed.name);
   const [saving, setSaving] = useState(false);
 
+  const locked = bed.stay_count > 0;
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const name = draft.trim();
@@ -500,12 +555,16 @@ function BedChip({
       </button>
       <button
         onClick={onDelete}
-        className="text-stone-400 transition duration-150 ease-out hover:text-red-500 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+        className={`transition duration-150 ease-out focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${
+          locked ? "text-stone-300 hover:text-stone-400" : "text-stone-400 hover:text-red-500"
+        }`}
         /* aria-label, not title: the "×" text content wins the accessible name
            over a title attribute, so this button announced itself as "times"
            to a screen reader. */
-        aria-label={`Remove bed ${bed.name}`}
-        title={`Remove bed ${bed.name}`}
+        aria-label={
+          locked ? `Why bed ${bed.name} cannot be removed` : `Remove bed ${bed.name}`
+        }
+        title={locked ? "Has stay history — cannot be removed" : `Remove bed ${bed.name}`}
       >
         ×
       </button>

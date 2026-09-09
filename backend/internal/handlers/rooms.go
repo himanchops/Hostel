@@ -21,6 +21,41 @@ func NewRoomHandler(db *sqlx.DB) *RoomHandler {
 	return &RoomHandler{db: db}
 }
 
+// roomSelect and bedSelect carry the ledger footprint on every row.
+//
+// They exist so the UI can refuse a delete BEFORE offering it. Without them the
+// only way to learn that a bed has history was to attempt the delete and read
+// the 409 — which is what the confirm dialog used to do: warn that a bed with
+// history "cannot be deleted" and then show a red Delete button anyway, because
+// the client had no idea which case it was in.
+//
+// These MUST agree with ledgerFootprint, which is what actually enforces the
+// rule. Same joins, same predicate — a stay counts whether or not it has ended,
+// and a NULL bed_id belongs to no bed. `owner/delete-guard.test.ts` asserts the
+// two never disagree: whatever these counts say is deletable must actually
+// delete, and whatever they say is not must 409.
+//
+// COUNT(DISTINCT s.id) is required because the payments join fans stays out;
+// COUNT(p.id) needs no DISTINCT because a payment belongs to exactly one stay.
+const roomSelect = `
+	SELECT r.id, r.site_id, r.name, r.floor, r.created_at, r.updated_at,
+	       COUNT(DISTINCT s.id) AS stay_count,
+	       COUNT(p.id)          AS payment_count
+	FROM rooms r
+	LEFT JOIN beds b     ON b.room_id = r.id
+	LEFT JOIN stays s    ON s.bed_id = b.id
+	LEFT JOIN payments p ON p.stay_id = s.id
+	WHERE `
+
+const bedSelect = `
+	SELECT b.id, b.room_id, b.name, b.created_at, b.updated_at,
+	       COUNT(DISTINCT s.id) AS stay_count,
+	       COUNT(p.id)          AS payment_count
+	FROM beds b
+	LEFT JOIN stays s    ON s.bed_id = b.id
+	LEFT JOIN payments p ON p.stay_id = s.id
+	WHERE `
+
 type roomRequest struct {
 	Name  string `json:"name"`
 	Floor int    `json:"floor"`
@@ -60,8 +95,7 @@ func (h *RoomHandler) ListRooms(c echo.Context) error {
 
 	var rooms []models.Room
 	err = h.db.Select(&rooms,
-		`SELECT id, site_id, name, floor, created_at, updated_at
-		 FROM rooms WHERE site_id = $1 ORDER BY floor, name`,
+		roomSelect+`r.site_id = $1 GROUP BY r.id ORDER BY r.floor, r.name`,
 		siteID,
 	)
 	if err != nil {
@@ -89,14 +123,21 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("name is required"))
 	}
 
-	var room models.Room
-	err = h.db.QueryRowx(
+	var roomID int64
+	err = h.db.QueryRow(
 		`INSERT INTO rooms (site_id, name, floor, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $4)
-		 RETURNING id, site_id, name, floor, created_at, updated_at`,
+		 VALUES ($1, $2, $3, $4, $4) RETURNING id`,
 		siteID, req.Name, req.Floor, time.Now(),
-	).StructScan(&room)
+	).Scan(&roomID)
 	if err != nil {
+		return serverError(c, err, "failed to create room")
+	}
+
+	// Re-read through roomSelect rather than RETURNING the row directly: every
+	// Room this API hands out carries a real footprint, so a client never has
+	// to know which endpoint produced it. A new room's is genuinely zero.
+	var room models.Room
+	if err := h.db.Get(&room, roomSelect+`r.id = $1 GROUP BY r.id`, roomID); err != nil {
 		return serverError(c, err, "failed to create room")
 	}
 
@@ -123,15 +164,22 @@ func (h *RoomHandler) UpdateRoom(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("name is required"))
 	}
 
-	var room models.Room
-	err = h.db.QueryRowx(
+	var updatedID int64
+	err = h.db.QueryRow(
 		`UPDATE rooms SET name = $1, floor = $2, updated_at = $3
-		 WHERE id = $4 AND site_id = $5
-		 RETURNING id, site_id, name, floor, created_at, updated_at`,
+		 WHERE id = $4 AND site_id = $5 RETURNING id`,
 		req.Name, req.Floor, time.Now(), roomID, siteID,
-	).StructScan(&room)
+	).Scan(&updatedID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("room not found"))
+	}
+
+	// Counts recomputed rather than assumed zero. A rename response replaces
+	// the row in the client's state, so a stripped-down one would quietly turn
+	// an undeletable room into a deletable-looking one.
+	var room models.Room
+	if err := h.db.Get(&room, roomSelect+`r.id = $1 GROUP BY r.id`, updatedID); err != nil {
+		return serverError(c, err, "failed to load room")
 	}
 
 	return c.JSON(http.StatusOK, room)
@@ -248,7 +296,7 @@ func (h *RoomHandler) ListBeds(c echo.Context) error {
 
 	var beds []models.Bed
 	err = h.db.Select(&beds,
-		`SELECT id, room_id, name, created_at, updated_at FROM beds WHERE room_id = $1 ORDER BY name`,
+		bedSelect+`b.room_id = $1 GROUP BY b.id ORDER BY b.name`,
 		roomID,
 	)
 	if err != nil {
@@ -280,14 +328,18 @@ func (h *RoomHandler) CreateBed(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("name is required"))
 	}
 
-	var bed models.Bed
-	err = h.db.QueryRowx(
+	var bedID int64
+	err = h.db.QueryRow(
 		`INSERT INTO beds (room_id, name, created_at, updated_at)
-		 VALUES ($1, $2, $3, $3)
-		 RETURNING id, room_id, name, created_at, updated_at`,
+		 VALUES ($1, $2, $3, $3) RETURNING id`,
 		roomID, req.Name, time.Now(),
-	).StructScan(&bed)
+	).Scan(&bedID)
 	if err != nil {
+		return serverError(c, err, "failed to create bed")
+	}
+
+	var bed models.Bed
+	if err := h.db.Get(&bed, bedSelect+`b.id = $1 GROUP BY b.id`, bedID); err != nil {
 		return serverError(c, err, "failed to create bed")
 	}
 
@@ -318,15 +370,20 @@ func (h *RoomHandler) UpdateBed(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("name is required"))
 	}
 
-	var bed models.Bed
-	err = h.db.QueryRowx(
+	var updatedID int64
+	err = h.db.QueryRow(
 		`UPDATE beds SET name = $1, updated_at = $2
-		 WHERE id = $3 AND room_id = $4
-		 RETURNING id, room_id, name, created_at, updated_at`,
+		 WHERE id = $3 AND room_id = $4 RETURNING id`,
 		req.Name, time.Now(), bedID, roomID,
-	).StructScan(&bed)
+	).Scan(&updatedID)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("bed not found"))
+	}
+
+	// See UpdateRoom: a rename must not hand back a row that looks deletable.
+	var bed models.Bed
+	if err := h.db.Get(&bed, bedSelect+`b.id = $1 GROUP BY b.id`, updatedID); err != nil {
+		return serverError(c, err, "failed to load bed")
 	}
 
 	return c.JSON(http.StatusOK, bed)

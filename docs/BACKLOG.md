@@ -77,6 +77,12 @@ Found while testing it: the bed's remove button had `title="Remove bed"` but
 text content `×`, and text wins the accessible name — so it announced itself as
 "times". Now carries an `aria-label` naming the bed.
 
+**Follow-up, Sep 2026 — the dialog was lying.** The confirm said a bed with
+history "cannot be deleted" and then offered a red Delete button, because the
+footprint was computed inside `DeleteBed` and the page had no way to know which
+case it was in. The list endpoints now return `stay_count`/`payment_count` per
+row, so the page explains rather than offering. See `docs/PROGRESS.md` → 16e.
+
 ### ~~There is no way to rename a room or a bed~~ ✅ fixed
 Backend `PUT /api/sites/:siteId/rooms/:id` and
 `PUT /api/sites/:siteId/rooms/:roomId/beds/:id` both existed and worked, and
