@@ -45,6 +45,20 @@ Current state (Sep 2026): Phases 0–9.1, **design Phases A–F complete**, **Ph
 
 **Phase 15 (Insights)** added the app's first historical view — `GET /api/insights?months=N` and `/insights`, with collected-vs-billed by month, occupancy in bed-nights, and a per-room breakdown. No migration: every figure was already derivable from `payments.payment_date` and `stays.start_date`/`end_date`. 15b widened `seed-demo` to 20 beds over 15 months so the charts have a shape; 15c added hover readouts and folding panels; 15d made the dashboard's two lists linkable and bounded. **A real account is on production**: Chopra Boys Hostel, owner #4, site #1, 45 beds — see `docs/DEPLOYMENT.md` → "The live owner account".
 
+**Phase 16** closed the eight items the owner found running the live hostel
+(`docs/BACKLOG.md` → "Feedback from running the real hostel", all ✅): delete
+guards on rooms and beds, `expected_end_date` + the `departure_due` status
+(migration 006), settled stays reading as square, owner-set portal passwords,
+renaming rooms and beds, placing a tenant in a bed from the new-tenant form, a
+photo on the registration form, and saying out loud that portal login is phone +
+password. Four of the last five were a capability the backend already had that
+no screen ever offered — check for that before building.
+
+The rent-terms fields and the vacant-bed picker live in
+`frontend/src/components/StayForm.tsx` and had four drifting copies before
+Phase 16d. A fifth screen that needs "rent, deposit, cycle, start date" or "pick
+a vacant bed" imports them; it does not write them again.
+
 UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. **Charts are hand-rolled SVG in `components/ui/Chart.tsx` — do not add a charting library.** The frontend has four runtime dependencies (react, react-dom, next, @sentry/browser) and a charting library would be a conspicuous addition; the charts it needs are bars and a line. One rule learned the hard way: a chart must measure its container rather than scale a fixed `viewBox`, which preserves aspect ratio and letterboxes a short series into an island of bars. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 
 Test dirs are `tests/e2e/{owner,tenant,public}/` — a whole surface with no directory is a surface nobody has tested. E2E tests log in with `loginAs(page, token)` from `tests/e2e/helpers/api.ts` — never `goto("/")` then `localStorage.setItem`, which races with the root redirect.

@@ -62,23 +62,31 @@ function PublicFrame({
 }
 
 /**
- * ID upload with the filename echoed back.
+ * A file upload with the filename echoed back.
  *
  * The confirmation matters more here than anywhere else in the app: this is
  * someone on a phone in a corridor picking a photo out of a camera roll, and
  * "did that attach?" has no other answer on the page. The name takes the hint
  * slot once a file is chosen, which is exactly what the pre-kit version did.
+ *
+ * `accept` is a prop because the photo field wants images only while the ID
+ * fields also take a PDF — but there is deliberately no `capture` attribute on
+ * either. Forcing the camera would break picking an existing photo out of the
+ * gallery, and that flow was singled out as the part of this page that already
+ * works well on a phone.
  */
-function IdProofField({
+function UploadField({
   label,
   file,
   onChange,
   hint,
+  accept = "image/jpeg,image/png,image/webp,application/pdf",
 }: {
   label: React.ReactNode;
   file: File | null;
   onChange: (f: File | null) => void;
   hint?: string;
+  accept?: string;
 }) {
   return (
     <Field
@@ -86,7 +94,7 @@ function IdProofField({
       hint={file ? `${file.name} (${(file.size / 1024).toFixed(0)} KB)` : hint}
     >
       <FileInput
-        accept="image/jpeg,image/png,image/webp,application/pdf"
+        accept={accept}
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
       />
     </Field>
@@ -106,6 +114,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   const [emergencyPhone, setEmergencyPhone] = useState("");
   const [workplace, setWorkplace] = useState("");
   const [aadhaarNumber, setAadhaarNumber] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
   const [idProofFront, setIdProofFront] = useState<File | null>(null);
   const [idProofBack, setIdProofBack] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -139,8 +148,10 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
     setError("");
     setLoading(true);
     try {
+      let photoUrl: string | undefined;
       let idProofFrontUrl: string | undefined;
       let idProofBackUrl: string | undefined;
+      if (photo) photoUrl = await uploadApi.publicUpload(photo);
       if (idProofFront) idProofFrontUrl = await uploadApi.publicUpload(idProofFront);
       if (idProofBack) idProofBackUrl = await uploadApi.publicUpload(idProofBack);
 
@@ -149,6 +160,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
         phone,
         email: email || undefined,
         password,
+        photo_url: photoUrl,
         id_proof_url: idProofFrontUrl,       // legacy fallback
         id_proof_front_url: idProofFrontUrl,
         id_proof_back_url: idProofBackUrl,
@@ -253,7 +265,10 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
                 onChange={(e) => setPhone(e.target.value)}
               />
             </Field>
-            <Field label={<>Email {optionalSpan}</>}>
+            <Field
+              label={<>Email {optionalSpan}</>}
+              hint="For contact only — you sign in with your phone number."
+            >
               <Input
                 type="email"
                 placeholder="your@email.com"
@@ -321,14 +336,25 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
             />
           </Field>
 
+          {/* The photo asks for nothing the owner-side form does not already
+              have a column and a field for — it was simply never asked here,
+              at the one moment the person is standing there with a phone. */}
+          <UploadField
+            label={<>Your photo {optionalSpan}</>}
+            onChange={setPhoto}
+            file={photo}
+            hint="A clear photo of your face, so the owner can recognise you."
+            accept="image/jpeg,image/png,image/webp"
+          />
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <IdProofField
+            <UploadField
               label={<>ID proof — front {optionalSpan}</>}
               onChange={setIdProofFront}
               file={idProofFront}
               hint="Aadhaar, passport, driving licence…"
             />
-            <IdProofField
+            <UploadField
               label={<>ID proof — back {optionalSpan}</>}
               onChange={setIdProofBack}
               file={idProofBack}
@@ -339,7 +365,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
           <Field
             label="Password"
             required
-            hint="You'll use this to log in to your tenant portal after approval."
+            hint={`You'll sign in to your tenant portal with your phone number${phone ? ` (${phone})` : ""} and this password, once the owner approves you.`}
           >
             <Input
               required

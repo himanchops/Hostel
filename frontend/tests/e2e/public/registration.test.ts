@@ -100,4 +100,68 @@ test.describe("Public registration", () => {
     });
     expect((await pending.json()).some((t: { name: string }) => t.name === applicant)).toBe(true);
   });
+  /**
+   * The photo field: the tenant is standing there with a phone, which is the
+   * cheapest moment in the whole system to get a face on the record. The column
+   * and the owner-side field both already existed; the public form simply never
+   * asked, and the payload carried no `photo_url` at all.
+   */
+  test("a photo taken at registration reaches the owner's record", async ({ page, request }) => {
+    const { token, owner } = await createOwner(request, `pub-photo-${RUN_ID}`);
+    const applicant = `Photo Person ${RUN_ID}`;
+
+    await page.goto(`/register/${owner.id}`);
+
+    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByPlaceholder("10-digit number").fill(`7${RUN_ID.slice(-9)}`);
+    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+
+    // A 1×1 PNG, built here rather than committed: the assertion is about the
+    // upload round-trip, not about the pixels.
+    await page.getByLabel(/Your photo/).setInputFiles({
+      name: "selfie.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    });
+
+    // The filename echoed back is the only confirmation this page can give
+    // someone who just picked a file out of a camera roll.
+    await expect(page.getByText(/selfie\.png/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Submit registration" }).click();
+    await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
+
+    const pending = await request.get(`${BASE}/api/tenants?pending=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const created = (await pending.json()).find((t: { name: string }) => t.name === applicant);
+    expect(created.photo_url).toBeTruthy();
+  });
+
+  /**
+   * The owner asked "what email does the tenant log in with, if email is
+   * optional?" — a reasonable question that the form invited and never
+   * answered. They do not: portal login is phone + password, and email takes
+   * no part in authentication at all.
+   */
+  test("the form says plainly that the phone number is the login", async ({ page, request }) => {
+    const { owner } = await createOwner(request, `pub-hint-${RUN_ID}`);
+    await page.goto(`/register/${owner.id}`);
+
+    await expect(
+      page.getByText("For contact only — you sign in with your phone number.")
+    ).toBeVisible();
+
+    // And the password hint names the number they just typed.
+    await page.getByPlaceholder("10-digit number").fill("9876500000");
+    await expect(page.getByText(/sign in to your tenant portal with your phone number \(9876500000\)/)).toBeVisible();
+  });
+
+  test("the portal login page says it too", async ({ page }) => {
+    await page.goto("/my/login");
+    await expect(page.getByText("Sign in with your phone number — not your email.")).toBeVisible();
+  });
 });

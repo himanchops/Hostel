@@ -93,6 +93,32 @@ export default function SiteDetailPage() {
     }
   }
 
+  /**
+   * Rename a room.
+   *
+   * `PUT /api/sites/:siteId/rooms/:id` and `roomsApi.update` have both existed
+   * and worked since Phase 2 with **zero call sites** — built, wired, never
+   * surfaced. A hostel renumbers rooms; the only way to fix a typo was to
+   * delete the room, which is now correctly refused once anyone has stayed in
+   * it. So the workaround for a typo was "live with it".
+   */
+  async function handleRenameRoom(roomId: number, name: string, floor: number) {
+    if (!token) return;
+    const room = await roomsApi.update(token, siteId, roomId, { name, floor });
+    setRooms((prev) => prev.map((r) => (r.id === roomId ? room : r)));
+    toast.success(`Renamed to ${room.name}`);
+  }
+
+  async function handleRenameBed(roomId: number, bedId: number, name: string) {
+    if (!token) return;
+    const bed = await bedsApi.update(token, siteId, roomId, bedId, { name });
+    setBeds((prev) => ({
+      ...prev,
+      [roomId]: prev[roomId].map((b) => (b.id === bedId ? bed : b)),
+    }));
+    toast.success(`Renamed to bed ${bed.name}`);
+  }
+
   async function toggleRoom(roomId: number) {
     setExpandedRooms((prev) => {
       const next = new Set(prev);
@@ -217,8 +243,10 @@ export default function SiteDetailPage() {
               expanded={expandedRooms.has(room.id)}
               onToggle={() => toggleRoom(room.id)}
               onDelete={() => handleDeleteRoom(room.id)}
+              onRename={(name, floor) => handleRenameRoom(room.id, name, floor)}
               onAddBed={(name) => handleAddBed(room.id, name)}
               onDeleteBed={(bedId) => handleDeleteBed(room.id, bedId)}
+              onRenameBed={(bedId, name) => handleRenameBed(room.id, bedId, name)}
             />
           ))}
         </div>
@@ -233,19 +261,30 @@ function RoomCard({
   expanded,
   onToggle,
   onDelete,
+  onRename,
   onAddBed,
   onDeleteBed,
+  onRenameBed,
 }: {
   room: Room;
   beds?: Bed[];
   expanded: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onRename: (name: string, floor: number) => Promise<void>;
   onAddBed: (name: string) => void;
   onDeleteBed: (id: number) => void;
+  onRenameBed: (id: number, name: string) => Promise<void>;
 }) {
+  const toast = useToast();
   const [bedName, setBedName] = useState("");
   const [addingBed, setAddingBed] = useState(false);
+
+  // Renaming the room, in place of its header.
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(room.name);
+  const [draftFloor, setDraftFloor] = useState(String(room.floor));
+  const [savingName, setSavingName] = useState(false);
 
   async function submitBed(e: React.FormEvent) {
     e.preventDefault();
@@ -256,29 +295,85 @@ function RoomCard({
     setAddingBed(false);
   }
 
+  function startRename() {
+    setDraftName(room.name);
+    setDraftFloor(String(room.floor));
+    setRenaming(true);
+  }
+
+  async function submitRename(e: React.FormEvent) {
+    e.preventDefault();
+    const name = draftName.trim();
+    if (!name) return;
+    setSavingName(true);
+    try {
+      await onRename(name, Number(draftFloor) || 0);
+      setRenaming(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to rename the room");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   return (
     <Card padding="none">
-      <div className="flex items-center justify-between px-4 py-3">
-        <button
-          className="flex flex-1 items-center gap-3 text-left"
-          onClick={onToggle}
-        >
-          <ChevronIcon expanded={expanded} />
-          <div>
-            <span className="font-semibold text-stone-900">{room.name}</span>
-            {room.floor > 0 && (
-              <span className="ml-2 text-sm text-stone-400">Floor {room.floor}</span>
-            )}
-          </div>
-        </button>
-        <button
-          onClick={onDelete}
-          className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500"
-          title="Delete room"
-        >
-          <TrashIcon className="h-4 w-4" />
-        </button>
-      </div>
+      {renaming ? (
+        <form onSubmit={submitRename} className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <Input
+            autoFocus
+            required
+            aria-label={`Room name`}
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            className="w-40"
+          />
+          <Input
+            type="number"
+            aria-label="Floor"
+            value={draftFloor}
+            onChange={(e) => setDraftFloor(e.target.value)}
+            className="w-20"
+          />
+          <Button type="submit" size="sm" loading={savingName} disabled={!draftName.trim()}>
+            Save
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setRenaming(false)}>
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            className="flex flex-1 items-center gap-3 text-left"
+            onClick={onToggle}
+          >
+            <ChevronIcon expanded={expanded} />
+            <div>
+              <span className="font-semibold text-stone-900">{room.name}</span>
+              {room.floor > 0 && (
+                <span className="ml-2 text-sm text-stone-400">Floor {room.floor}</span>
+              )}
+            </div>
+          </button>
+          <button
+            onClick={startRename}
+            className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600"
+            aria-label={`Rename room ${room.name}`}
+            title="Rename room"
+          >
+            <PencilIcon className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500"
+            aria-label={`Delete room ${room.name}`}
+            title="Delete room"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {expanded && (
         <div className="border-t border-stone-100 px-4 py-3">
@@ -290,24 +385,12 @@ function RoomCard({
           ) : (
             <div className="mb-3 flex flex-wrap gap-2">
               {beds.map((bed) => (
-                <div
+                <BedChip
                   key={bed.id}
-                  data-testid="bed-chip"
-                  className="group flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-700"
-                >
-                  {bed.name}
-                  <button
-                    onClick={() => onDeleteBed(bed.id)}
-                    className="ml-1 hidden text-stone-400 transition duration-150 ease-out hover:text-red-500 group-hover:inline"
-                    /* aria-label, not title: the "×" text content wins the
-                       accessible name over a title attribute, so this button
-                       announced itself as "times" to a screen reader. */
-                    aria-label={`Remove bed ${bed.name}`}
-                    title={`Remove bed ${bed.name}`}
-                  >
-                    ×
-                  </button>
-                </div>
+                  bed={bed}
+                  onDelete={() => onDeleteBed(bed.id)}
+                  onRename={(name) => onRenameBed(bed.id, name)}
+                />
               ))}
             </div>
           )}
@@ -328,6 +411,113 @@ function RoomCard({
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * One bed, renameable in place.
+ *
+ * The chip is the whole affordance — it is too small for a row of controls, so
+ * the pencil appears on hover beside the × that was already there. Both carry
+ * an aria-label naming the bed: on a wall of "A / B / Lower / Upper" chips,
+ * "Rename" alone tells a screen-reader user nothing about which one.
+ *
+ * They fade rather than `hidden`, because `display: none` also removed them
+ * from the tab order — the × had been unreachable by keyboard since it was
+ * written, and the fix for the pencil was the fix for both. And the fade only
+ * starts at `sm`: a phone has no hover at all, so hover-gating them there made
+ * them permanently invisible, which is the same bug wearing a different hat.
+ */
+function BedChip({
+  bed,
+  onDelete,
+  onRename,
+}: {
+  bed: Bed;
+  onDelete: () => void;
+  onRename: (name: string) => Promise<void>;
+}) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(bed.name);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const name = draft.trim();
+    if (!name) return;
+    if (name === bed.name) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await onRename(name);
+      setEditing(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to rename the bed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <form onSubmit={submit} className="flex items-center gap-1">
+        <Input
+          autoFocus
+          required
+          aria-label={`New name for bed ${bed.name}`}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-28 py-1 text-sm"
+        />
+        <Button type="submit" size="sm" loading={saving} disabled={!draft.trim()}>
+          Save
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => { setDraft(bed.name); setEditing(false); }}
+        >
+          Cancel
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div
+      data-testid="bed-chip"
+      className="group flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-700"
+    >
+      {bed.name}
+      <button
+        onClick={() => { setDraft(bed.name); setEditing(true); }}
+        className="ml-1 text-stone-400 transition duration-150 ease-out hover:text-indigo-600 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+        aria-label={`Rename bed ${bed.name}`}
+        title={`Rename bed ${bed.name}`}
+      >
+        <PencilIcon className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={onDelete}
+        className="text-stone-400 transition duration-150 ease-out hover:text-red-500 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+        /* aria-label, not title: the "×" text content wins the accessible name
+           over a title attribute, so this button announced itself as "times"
+           to a screen reader. */
+        aria-label={`Remove bed ${bed.name}`}
+        title={`Remove bed ${bed.name}`}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zM19.5 13.5V19a2 2 0 01-2 2h-11a2 2 0 01-2-2V8a2 2 0 012-2h5.5" />
+    </svg>
   );
 }
 

@@ -1524,21 +1524,80 @@ Local DNS refused to resolve the Neon pooler host (`REFUSED`, not `NXDOMAIN`;
 an ISP resolver issue, worked around by changing the resolver. Worth knowing
 before assuming a migration failure means a dead endpoint.
 
-### Still open from the same feedback round
+### 16d — The last five feedback items ✅
 
-In rough order of leverage:
+The five that were still open, closed in one session. Four of them turned out
+to be the same shape: something the app already had, that no screen ever
+offered.
 
-1. **Owner-created tenants have no portal account** — `TenantAuthHandler.Login`
-   requires `password_hash IS NOT NULL` and owner-side `Create` never sets one.
-   This compounds: every tenant added by hand today is one to fix later.
-2. **No way to rename a room or bed** — both `PUT` endpoints and both API client
-   methods exist with **zero call sites**. Built, wired, never surfaced.
-3. **A stay can only be created from the grid** — `/tenants/new` creates a
-   person and nothing about where they sleep.
-4. **The registration form has no photo upload**, though the column and the
-   owner-side field both exist.
-5. The registration Email field implies it is a login; portal login is phone +
-   password.
+**An owner can now give a tenant a portal login.** `TenantAuthHandler.Login`
+required a password hash and only the public registration form ever wrote one,
+so every tenant an owner typed in by hand was locked out of `/my` permanently.
+That is what made the standing rule — *no capability may be
+tenant-portal-exclusive* — a correctness rule rather than a symmetry one: a
+portal-only action was not merely awkward for those tenants, it was unreachable
+forever. `PUT /api/tenants/:id/portal-password` sets one, owner-scoped like
+every other write, sharing `validatePassword(pw, 6)` with public registration
+so the two paths cannot drift apart the way the bcrypt-72 bug did.
+
+It is a **set**, not a change: the owner never knew the old password. The
+dialog says so, offers "Show password" because the owner has to read it aloud,
+and warns that it cannot be read back.
+
+The hash still never leaves the process. What leaves is a computed
+`has_portal_login`, derived in `tenantCols` as
+`password_hash IS NOT NULL AND password_hash <> ''` — because "can this person
+sign in?" is a question the owner side has to be able to answer, and there was
+no way to ask it. The login query changed to `password_hash <> ''` at the same
+time, so there is exactly one spelling of that predicate.
+
+**Rooms and beds can be renamed.** `PUT .../rooms/:id` and `PUT .../beds/:id`
+had both worked since Phase 2 with **zero call sites** in the app or the tests
+— built, wired, never surfaced. Since 16a correctly refuses to delete anything
+with a ledger behind it, the workaround for a typo in a room number was to keep
+the typo. A pencil on the room header and on each bed chip, both editing in
+place.
+
+Found doing it: the chip's buttons were `hidden ... group-hover:inline`, which
+took them out of the tab order entirely — the `×` had been unreachable by
+keyboard since it was written — and on a phone, which has no hover, they never
+appeared at all. They now fade from `sm` up and stay visible below it.
+
+**A tenant can be placed in a bed while being created.** `/tenants/new` made a
+*person* and nothing about where they would sleep; the only `staysApi.create`
+call site in the whole frontend was the grid, so adding a tenant meant filling
+the form and then walking Sites → site → room → bed → assign.
+
+The backlog said to reuse the grid's assign form rather than grow a second one.
+There were already **four** copies of these fields — the grid drawer, the
+pending-approval drawer, the tenant page's assign modal, and nothing at all on
+the new-tenant form. They had already drifted: only the pending drawer's rent
+label followed the billing cycle, so the grid asked for "Monthly rent" while
+collecting a daily one. `components/StayForm.tsx` now holds `StayTermsFields`
+(with `stayTermsPayload` as the one rupees→paise conversion) and `BedPicker`,
+and the three existing call sites use them.
+
+The terms are validated **before** the tenant is created, and a stay that fails
+after the tenant exists says so rather than throwing the submission away — the
+same honesty as the backend's "tenant approved but failed to create stay".
+
+**The registration form asks for a photo.** The column and the owner-side field
+both existed; the payload simply carried no `photo_url`. The tenant is standing
+in a corridor with a phone, which is the cheapest moment in the system to get a
+face on the record. `IdProofField` became `UploadField` with an `accept` prop —
+and still no `capture` attribute on any of them, because forcing the camera
+would break picking an existing photo out of the gallery, which is the part of
+this page the owner said already works well.
+
+**And the Email field no longer implies it is a login.** It never was: portal
+login is phone + password and email takes no part in authentication. The field
+now says "For contact only — you sign in with your phone number", the password
+hint names the number they just typed, and `/my/login` says it under the
+heading.
+
+Tests: `owner/portal-access.test.ts`, `owner/rename.test.ts`,
+`owner/place-on-create.test.ts`, plus four cases added to
+`public/registration.test.ts`. 67 e2e specs pass.
 
 ---
 

@@ -19,11 +19,18 @@ issue list become a second backlog — this file is the one that gets worked fro
 
 ---
 
-## Feedback from running the real hostel (Sep 2026) — work this section first
+## Feedback from running the real hostel (Sep 2026) — ✅ all closed
 
 Found by the owner using the live app against real tenants, not by building it.
-These come **before** the sections below: they are small, and each one is
+These came **before** the sections below: they were small, and each one was
 something that blocked or misled a real person on a real evening.
+
+**All eight are now fixed** (Sep 2026 — see `docs/PROGRESS.md` → Phase 16a–16d).
+The entries are kept rather than deleted, because what each one turned out to be
+is the useful part: four of the last five were a capability the app already had
+that no screen ever offered. Only one thing raised here is still open, noted
+inside its entry: sending the registration link to a tenant the owner added by
+hand, so they set their own password rather than being told one.
 
 **A standing rule that came out of this round:** *anything a tenant can do in
 the portal, an owner must be able to do from the owner side.* No capability is
@@ -70,26 +77,46 @@ Found while testing it: the bed's remove button had `title="Remove bed"` but
 text content `×`, and text wins the accessible name — so it announced itself as
 "times". Now carries an `aria-label` naming the bed.
 
-### There is no way to rename a room or a bed — S
+### ~~There is no way to rename a room or a bed~~ ✅ fixed
 Backend `PUT /api/sites/:siteId/rooms/:id` and
-`PUT /api/sites/:siteId/rooms/:roomId/beds/:id` both exist and work.
-`roomsApi.update` and `bedsApi.update` both exist in `lib/api.ts`. Neither has
-a single call site in the app or the tests. Built, wired, never surfaced — this
-is a form and nothing else. Add/delete are already on the site page; rename
-sits beside them.
+`PUT /api/sites/:siteId/rooms/:roomId/beds/:id` both existed and worked, and
+`roomsApi.update` / `bedsApi.update` both existed in `lib/api.ts`, with not one
+call site between them. Built, wired, never surfaced.
 
-### A stay can only be created from the grid — M
-`/tenants/new` creates a *person*: name, phone, Aadhaar, photos, and nothing
-about where they will sleep. The only call to `staysApi.create` in the entire
-frontend is `sites/[id]/grid/page.tsx:390`. So adding a tenant means: fill the
-tenant form, then navigate to Sites → the site → the room → the bed → assign.
-The "Assign bed" button on the tenant page only rescues a stay that already
-exists without a bed, which only happens via pending-registration approval.
+**Fixed.** A pencil on the room header (name + floor) and on each bed chip,
+both editing in place beside the delete that was already there.
 
-Wants an optional "place them now" step on the tenant form — bed, rent,
-deposit, cycle, start date — reusing the grid's assign form rather than growing
-a second one that can drift from it (the same drift that
-`EndStayDialog` was created to end).
+Found while doing it: the chip's buttons were `hidden ... group-hover:inline`.
+`display: none` also removes an element from the tab order, so the `×` had been
+unreachable by keyboard since it was written — and on a phone, which has no
+hover at all, neither button ever appeared. They fade from `sm` up now and stay
+visible below it.
+
+### ~~A stay can only be created from the grid~~ ✅ fixed
+`/tenants/new` created a *person* — name, phone, Aadhaar, photos — and nothing
+about where they would sleep. The only `staysApi.create` call site in the whole
+frontend was `sites/[id]/grid/page.tsx`, so adding a tenant meant filling the
+tenant form and then navigating Sites → site → room → bed → assign.
+
+**Fixed with the extraction this entry asked for, and it was overdue.** There
+were already four copies of these fields: the grid drawer, the
+pending-approval drawer, the tenant page's assign modal, and nothing at all on
+the new-tenant form. They had drifted — only the pending drawer's rent label
+followed the billing cycle, so the grid asked for "Monthly rent (₹)" while
+collecting a daily one. `components/StayForm.tsx` now holds `StayTermsFields`
+and `BedPicker`; the three existing call sites use them and the new-tenant form
+is the fourth.
+
+An optional "Place them in a bed now" section, off by default because an owner
+often adds someone days before a bed frees up. Terms are validated **before**
+the tenant is created — a rent typo must not cost a half-made record — and a
+stay that fails after the tenant exists says exactly that rather than
+discarding the submission.
+
+Not converted: the pending drawer's bed selector is a two-stage `Select` with a
+deliberate "Select a site…" placeholder, inside a mode-selection flow.
+`BedPicker` preselects the first site, which is right for the other two callers
+and wrong for that one. Left alone on purpose.
 
 ### ~~The known end date has nowhere to go~~ ✅ fixed — migration 006
 The owner knew the tenant's departure date at the moment of adding them, and
@@ -125,37 +152,58 @@ Nothing acts on the date automatically. People overstay and leave early, so a
 passed date raises a question on the dashboard rather than ending a stay, and
 "They're staying" clears it without inventing a departure that never happened.
 
-### Tenants added by the owner have no portal account — S/M
-`TenantAuthHandler.Login` requires `password_hash IS NOT NULL`
-(`tenant_auth.go:46`). The password is collected only by the public
-registration form; owner-side `TenantHandler.Create` never inserts one
-(`tenants.go:87`). So every tenant the owner adds by hand is permanently locked
-out of `/my` — which is how the vacating-notice gap became total rather than
-merely annoying.
+### ~~Tenants added by the owner have no portal account~~ ✅ fixed
+`TenantAuthHandler.Login` required `password_hash IS NOT NULL`, and the password
+was collected only by the public registration form — owner-side
+`TenantHandler.Create` never inserted one. So every tenant an owner added by
+hand was permanently locked out of `/my`, which is how the vacating-notice gap
+became total rather than merely annoying.
 
-Two ways out, and they are not exclusive: let the owner set or reset a portal
-password from the tenant page, and/or send the registration link to a tenant
-who was added manually. Worth deciding before more owner-created tenants
-accumulate on the live account.
+**Fixed the first of the two ways listed here:** the owner can set or reset a
+portal password from the tenant page. `PUT /api/tenants/:id/portal-password`,
+owner-scoped, sharing `validatePassword(pw, 6)` with public registration so the
+two paths cannot drift the way the bcrypt-72 bug did.
 
-### The registration form has no photo upload — S
-`/register/[ownerId]` uploads ID front and ID back, and the payload carries no
-`photo_url` at all (`register/[ownerId]/page.tsx:147`) — even though `tenants`
-has the column and the owner-side form has the field. The tenant is standing
-there with a phone; that is the cheapest moment in the whole system to get a
-face on the record. `uploadApi.publicUpload` already handles it, so this is one
-more `UploadField` and one more line in the payload.
+A *set*, not a change — the owner does not know the old password and should not.
+The dialog offers "Show password" because the owner has to read it out loud, and
+says plainly that it cannot be read back.
 
-(Recorded alongside: the file-picker flow itself was called out as working
-beautifully on a phone. Do not regress it while adding the field.)
+The tenant page now shows which state a tenant is in, from a computed
+`has_portal_login` (`password_hash IS NOT NULL AND password_hash <> ''`) added
+to `tenantCols`. The hash itself stays `json:"-"`; what leaves the process is
+the one bit the owner needs. The login query moved to `password_hash <> ''` at
+the same time so there is one spelling of that predicate rather than two.
 
-### Resolved on inspection — no action
+Still not done, and still worth doing: **sending the registration link to a
+tenant who was added manually**, so they can set their own password rather than
+being told one.
+
+### ~~The registration form has no photo upload~~ ✅ fixed
+`/register/[ownerId]` uploaded ID front and back and its payload carried no
+`photo_url` at all — even though `tenants` has the column and the owner-side
+form has the field.
+
+**Fixed.** `IdProofField` became `UploadField` with an `accept` prop, and the
+photo field uses it with images only. `publicRegisterRequest` gained
+`photo_url`, validated by `ValidateUploadedURL` like the other three.
+
+The file-picker flow was not regressed: still no `capture` attribute on any of
+the three fields, because forcing the camera would break picking an existing
+photo out of the gallery — which is the part of this page that was singled out
+as already working well on a phone.
+
+### ~~Resolved on inspection~~ ✅ the wording is fixed too
 - **"What email does the tenant log in with, if email is optional?"** They do
   not. Portal login is **phone + password** (`tenant_auth.go:46`); email never
-  participates in auth and is stored for contact only. Nothing to fix in the
-  code — but the registration form's Email field says nothing about this, and
-  the owner reasonably assumed otherwise. Worth a hint on the field, and worth
-  saying plainly on `/my/login`.
+  participates in auth and is stored for contact only. Nothing was wrong in the
+  code — but the registration form invited the question and never answered it,
+  which is its own kind of bug.
+
+  The Email field now reads "For contact only — you sign in with your phone
+  number", the password hint names the number they just typed, and `/my/login`
+  says "Sign in with your phone number — not your email" under the heading. Its
+  password field also points somewhere when there is no password: ask the owner
+  — which is now an answer, because the owner can set one.
 
 ---
 
@@ -264,6 +312,24 @@ of the exposure without removing the feature.
 
 Cheapest first step is (1). Do not touch the column without deciding (3), or the
 migration gets done twice.
+
+### `ValidateUploadedURL` checks the extension, not the host — S
+It exists to sanity-check client-supplied URLs before they are stored, and it
+only tests `filepath.Ext(url)` against the allowed types. So a registration or a
+tenant update can store `https://anywhere.example/x.jpg` and the owner's browser
+will fetch it when the profile renders — a small SSRF-by-browser and a tracking
+pixel aimed at one person.
+
+Pre-existing across `id_proof_url`, `id_proof_front_url` and `id_proof_back_url`;
+noticed while adding `photo_url` as a fourth (Phase 16d), which follows the same
+weak rule rather than inventing a stricter one for itself.
+
+**Why it is not a one-liner:** the allowed prefix is the storage service's public
+base, which differs between the local disk backend and R2, and is not visible
+from `handlers` — `ValidateUploadedURL` is a package-level function with eight
+call sites and no access to `storage.Service`. It also wants deciding alongside
+the presigned-URL item above, which turns all four columns into keys and makes
+the check trivial. Do that first, or do this one knowing it will be redone.
 
 ### `/public/upload` is unauthenticated by design — S, once registration has a token
 A stranger scanning the QR code has to upload their ID before any account exists,
