@@ -30,21 +30,31 @@ type HostelSite struct {
 
 // Room represents a room within a hostel site
 type Room struct {
-	ID        int64     `db:"id" json:"id"`
-	SiteID    int64     `db:"site_id" json:"site_id"`
-	Name      string    `db:"name" json:"name"` // e.g., "Room 101", "A1"
-	Floor     int       `db:"floor" json:"floor,omitempty"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	ID     int64  `db:"id" json:"id"`
+	SiteID int64  `db:"site_id" json:"site_id"`
+	Name   string `db:"name" json:"name"` // e.g., "Room 101", "A1"
+	Floor  int    `db:"floor" json:"floor,omitempty"`
+	// StayCount and PaymentCount are what a cascading delete would destroy —
+	// aggregated across every bed in the room. Computed, never stored, and
+	// present on every Room this API returns so that "0" always means "nothing
+	// to lose" rather than "nobody asked".
+	StayCount    int       `db:"stay_count" json:"stay_count"`
+	PaymentCount int       `db:"payment_count" json:"payment_count"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Bed represents a bed within a room
 type Bed struct {
-	ID        int64     `db:"id" json:"id"`
-	RoomID    int64     `db:"room_id" json:"room_id"`
-	Name      string    `db:"name" json:"name"` // e.g., "Bed A", "Lower Bunk"
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	ID     int64  `db:"id" json:"id"`
+	RoomID int64  `db:"room_id" json:"room_id"`
+	Name   string `db:"name" json:"name"` // e.g., "Bed A", "Lower Bunk"
+	// The same footprint as Room's, for this bed alone. A stay with a NULL
+	// bed_id belongs to no bed and so blocks nothing.
+	StayCount    int       `db:"stay_count" json:"stay_count"`
+	PaymentCount int       `db:"payment_count" json:"payment_count"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // RentCycle defines the billing frequency
@@ -58,24 +68,29 @@ const (
 
 // Tenant represents a person renting a bed
 type Tenant struct {
-	ID                    int64     `db:"id" json:"id"`
-	OwnerID               int64     `db:"owner_id" json:"owner_id"` // For multi-tenant isolation
-	Name                  string    `db:"name" json:"name"`
-	Phone                 string    `db:"phone" json:"phone"`
-	Email                 string    `db:"email" json:"email,omitempty"`
-	IDProofURL            *string   `db:"id_proof_url" json:"id_proof_url,omitempty"`
-	PhotoURL              *string   `db:"photo_url" json:"photo_url,omitempty"`
-	Address               *string   `db:"address" json:"address,omitempty"`
-	EmergencyContactName  *string   `db:"emergency_contact_name" json:"emergency_contact_name,omitempty"`
-	EmergencyContactPhone *string   `db:"emergency_contact_phone" json:"emergency_contact_phone,omitempty"`
-	Workplace             *string   `db:"workplace" json:"workplace,omitempty"`
-	AadhaarNumber         *string   `db:"aadhaar_number" json:"aadhaar_number,omitempty"`
-	IDProofFrontURL       *string   `db:"id_proof_front_url" json:"id_proof_front_url,omitempty"`
-	IDProofBackURL        *string   `db:"id_proof_back_url" json:"id_proof_back_url,omitempty"`
-	PasswordHash          string    `db:"password_hash" json:"-"`
-	IsApproved            bool      `db:"is_approved" json:"is_approved"`
-	CreatedAt             time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt             time.Time `db:"updated_at" json:"updated_at"`
+	ID                    int64   `db:"id" json:"id"`
+	OwnerID               int64   `db:"owner_id" json:"owner_id"` // For multi-tenant isolation
+	Name                  string  `db:"name" json:"name"`
+	Phone                 string  `db:"phone" json:"phone"`
+	Email                 string  `db:"email" json:"email,omitempty"`
+	IDProofURL            *string `db:"id_proof_url" json:"id_proof_url,omitempty"`
+	PhotoURL              *string `db:"photo_url" json:"photo_url,omitempty"`
+	Address               *string `db:"address" json:"address,omitempty"`
+	EmergencyContactName  *string `db:"emergency_contact_name" json:"emergency_contact_name,omitempty"`
+	EmergencyContactPhone *string `db:"emergency_contact_phone" json:"emergency_contact_phone,omitempty"`
+	Workplace             *string `db:"workplace" json:"workplace,omitempty"`
+	AadhaarNumber         *string `db:"aadhaar_number" json:"aadhaar_number,omitempty"`
+	IDProofFrontURL       *string `db:"id_proof_front_url" json:"id_proof_front_url,omitempty"`
+	IDProofBackURL        *string `db:"id_proof_back_url" json:"id_proof_back_url,omitempty"`
+	PasswordHash          string  `db:"password_hash" json:"-"`
+	// HasPortalLogin is computed, never stored: whether this tenant can sign
+	// in at /my at all. The hash itself must never leave the process, but
+	// "can they log in?" has to, because an owner-created tenant has no
+	// password and the owner has no other way to find that out.
+	HasPortalLogin bool      `db:"has_portal_login" json:"has_portal_login"`
+	IsApproved     bool      `db:"is_approved" json:"is_approved"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Stay represents a tenant's occupancy of a bed
@@ -94,8 +109,8 @@ type Stay struct {
 	// only — nothing ends a stay automatically when it passes, because people
 	// overstay and leave early and only a human knows which.
 	ExpectedEndDate *time.Time `db:"expected_end_date" json:"expected_end_date,omitempty"`
-	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt     time.Time  `db:"updated_at" json:"updated_at"`
+	CreatedAt       time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 // PaymentType defines how the payment was made

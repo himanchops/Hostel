@@ -13,7 +13,6 @@ import {
   GridBed,
   PendingPayment,
   ApiError,
-  today,
   formatCurrency,
   maskAadhaar,
 } from "@/lib/api";
@@ -26,7 +25,6 @@ import {
   Field,
   FormError,
   InboxIcon,
-  Input,
   ReceiptIcon,
   PageHeader,
   Select,
@@ -34,6 +32,9 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import {
+  StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
+} from "@/components/StayForm";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -101,35 +102,6 @@ function IdProofTile({ label, url, isImage }: { label: string; url: string; isIm
   );
 }
 
-function RentFields({ rentCycle, setRentCycle, rentAmount, setRentAmount, depositAmount, setDepositAmount, startDate, setStartDate, rentLabel }: {
-  rentCycle: string; setRentCycle: (v: string) => void;
-  rentAmount: string; setRentAmount: (v: string) => void;
-  depositAmount: string; setDepositAmount: (v: string) => void;
-  startDate: string; setStartDate: (v: string) => void;
-  rentLabel: string;
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <Field label="Billing cycle">
-        <Select value={rentCycle} onChange={(e) => setRentCycle(e.target.value)}>
-          <option value="monthly">Monthly</option>
-          <option value="weekly">Weekly</option>
-          <option value="daily">Daily</option>
-        </Select>
-      </Field>
-      <Field label={rentLabel} required>
-        <Input type="number" min="0" placeholder="e.g. 5000" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)} />
-      </Field>
-      <Field label="Deposit (₹)">
-        <Input type="number" min="0" placeholder="e.g. 10000" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
-      </Field>
-      <Field label="Start date" required className="sm:col-span-2">
-        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-      </Field>
-    </div>
-  );
-}
-
 // ── Unified Review + Approve Drawer ──────────────────────────────────────────
 
 type ApproveMode = "approve_only" | "assign_bed" | "collect_deposit";
@@ -153,16 +125,11 @@ function ReviewDrawer({
   const [siteId, setSiteId] = useState<number | "">("");
   const [rooms, setRooms] = useState<GridRoom[]>([]);
   const [selectedBed, setSelectedBed] = useState<GridBed | null>(null);
-  const [rentAmount, setRentAmount] = useState("");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [rentCycle, setRentCycle] = useState("monthly");
-  const [startDate, setStartDate] = useState(today());
+  const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [sitesLoading, setSitesLoading] = useState(false);
   const [roomsLoading, setRoomsLoading] = useState(false);
-
-  const rentLabel = rentCycle === "monthly" ? "Monthly rent (₹)" : rentCycle === "weekly" ? "Weekly rent (₹)" : "Daily rent (₹)";
 
   const idFront = tenant.id_proof_front_url ?? tenant.id_proof_url;
   const idBack = tenant.id_proof_back_url;
@@ -191,27 +158,20 @@ function ReviewDrawer({
     try {
       const payload: Parameters<typeof tenantsApi.approve>[2] = {};
 
-      if (mode === "assign_bed") {
-        if (!selectedBed || !rentAmount || !startDate) {
-          setError("Select a bed, enter rent amount and start date.");
+      if (mode === "assign_bed" || mode === "collect_deposit") {
+        if (mode === "assign_bed" && !selectedBed) {
+          setError("Select a bed.");
           setLoading(false);
           return;
         }
-        payload.bed_id = selectedBed.id;
-        payload.rent_amount = Math.round(parseFloat(rentAmount) * 100);
-        payload.deposit_amount = Math.round(parseFloat(depositAmount || "0") * 100);
-        payload.rent_cycle = rentCycle;
-        payload.start_date = startDate;
-      } else if (mode === "collect_deposit") {
-        if (!rentAmount) {
-          setError("Enter an advance/deposit amount.");
+        const invalid = stayTermsError(terms);
+        if (invalid) {
+          setError(invalid);
           setLoading(false);
           return;
         }
-        payload.rent_amount = Math.round(parseFloat(rentAmount) * 100);
-        payload.deposit_amount = Math.round(parseFloat(depositAmount || "0") * 100);
-        payload.rent_cycle = rentCycle;
-        payload.start_date = startDate;
+        if (mode === "assign_bed") payload.bed_id = selectedBed!.id;
+        Object.assign(payload, stayTermsPayload(terms));
       }
 
       const approved = await tenantsApi.approve(token, tenant.id, payload);
@@ -380,7 +340,7 @@ function ReviewDrawer({
                     )}
                   </Field>
                 )}
-                {selectedBed && <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />}
+                {selectedBed && <StayTermsFields value={terms} onChange={setTerms} layout="grid" />}
               </div>
             )}
 
@@ -388,7 +348,7 @@ function ReviewDrawer({
             {mode === "collect_deposit" && (
               <div className="space-y-4 rounded-xl border border-stone-200 p-4">
                 <p className="text-xs text-stone-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
-                <RentFields rentCycle={rentCycle} setRentCycle={setRentCycle} rentAmount={rentAmount} setRentAmount={setRentAmount} depositAmount={depositAmount} setDepositAmount={setDepositAmount} startDate={startDate} setStartDate={setStartDate} rentLabel={rentLabel} />
+                <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
               </div>
             )}
           </>

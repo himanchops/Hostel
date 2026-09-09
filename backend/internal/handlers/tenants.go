@@ -25,9 +25,15 @@ func NewTenantHandler(db *sqlx.DB, authService *auth.Service) *TenantHandler {
 }
 
 // tenantCols is the SELECT column list for all tenant queries.
+//
+// has_portal_login is derived here rather than stored: the hash is the only
+// place the fact lives, and the hash itself is `json:"-"` and must stay that
+// way. Owner-created tenants have no hash at all, so without this the owner
+// side has no way to tell a tenant who can sign in from one who never could.
 const tenantCols = `id, owner_id, name, phone, email, id_proof_url, photo_url,
 	address, emergency_contact_name, emergency_contact_phone,
 	workplace, aadhaar_number, id_proof_front_url, id_proof_back_url,
+	(password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
 	is_approved, created_at, updated_at`
 
 type tenantRequest struct {
@@ -129,6 +135,7 @@ type publicRegisterRequest struct {
 	EmergencyContactPhone string `json:"emergency_contact_phone"`
 	Workplace             string `json:"workplace"`
 	AadhaarNumber         string `json:"aadhaar_number"`
+	PhotoURL              string `json:"photo_url"`
 }
 
 // PublicOwner returns just enough about an owner to make a registration link
@@ -219,6 +226,16 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		}
 		idProofBackURL = &req.IDProofBackURL
 	}
+	// The photo is the cheapest identity signal in the system to collect and
+	// the most expensive to chase later: the person is standing in the
+	// corridor with a phone in their hand at exactly this moment.
+	var photoURL *string
+	if req.PhotoURL != "" {
+		if !ValidateUploadedURL(req.PhotoURL) {
+			return c.JSON(http.StatusBadRequest, errorResponse("invalid photo_url"))
+		}
+		photoURL = &req.PhotoURL
+	}
 
 	var address, emergencyName, emergencyPhone, workplace, aadhaar *string
 	if req.Address != "" {
@@ -240,14 +257,14 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	var tenant models.Tenant
 	err = h.db.QueryRowx(
 		`INSERT INTO tenants (owner_id, name, phone, email, password_hash,
-			id_proof_url, id_proof_front_url, id_proof_back_url,
+			id_proof_url, id_proof_front_url, id_proof_back_url, photo_url,
 			address, emergency_contact_name, emergency_contact_phone,
 			workplace, aadhaar_number,
 			is_approved, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, false, $14, $14)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false, $15, $15)
 		 RETURNING `+tenantCols,
 		ownerID, req.Name, req.Phone, req.Email, hash,
-		idProofURL, idProofFrontURL, idProofBackURL,
+		idProofURL, idProofFrontURL, idProofBackURL, photoURL,
 		address, emergencyName, emergencyPhone, workplace, aadhaar,
 		time.Now(),
 	).StructScan(&tenant)
@@ -425,6 +442,66 @@ func (h *TenantHandler) Update(c echo.Context) error {
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+	}
+	return c.JSON(http.StatusOK, tenant)
+}
+
+type portalPasswordRequest struct {
+	Password string `json:"password"`
+}
+
+// SetPortalPassword gives an owner-created tenant a way into /my, or resets a
+// forgotten one.
+//
+// Until this existed, `TenantAuthHandler.Login` required a password_hash and
+// only the public registration form ever wrote one — so every tenant an owner
+// typed in by hand was locked out of the portal permanently, and any
+// capability that lived only in the portal was unreachable for them forever
+// rather than merely inconvenient. That is the rule this endpoint enforces:
+// nothing may be tenant-portal-exclusive.
+//
+// Deliberately a set, not a change: the owner does not know the old password
+// and should not need to. That makes this an owner power over a tenant's
+// account, which is why it is owner-scoped like every other write here — the
+// UPDATE's `owner_id = $3` is the whole authorisation story.
+//
+// The minimum matches public registration (6), not owner signup (8): the same
+// person ends up typing it, and two minimums for one credential is how the
+// bcrypt-72 bug came to exist on two paths at once.
+//
+// PUT /api/tenants/:id/portal-password
+func (h *TenantHandler) SetPortalPassword(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	tenantID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid tenant id"))
+	}
+
+	var req portalPasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid request body"))
+	}
+	if msg := validatePassword(req.Password, 6); msg != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse(msg))
+	}
+
+	hash, err := h.authService.HashPassword(req.Password)
+	if err != nil {
+		return serverError(c, err, "failed to process password")
+	}
+
+	var tenant models.Tenant
+	err = h.db.QueryRowx(
+		`UPDATE tenants SET password_hash = $1, updated_at = $2
+		 WHERE id = $3 AND owner_id = $4
+		 RETURNING `+tenantCols,
+		hash, time.Now(), tenantID, ownerID,
+	).StructScan(&tenant)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+		}
+		return serverError(c, err, "failed to set portal password")
 	}
 	return c.JSON(http.StatusOK, tenant)
 }

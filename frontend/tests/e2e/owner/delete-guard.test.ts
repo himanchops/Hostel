@@ -117,29 +117,137 @@ test.describe("Deleting a bed or room cannot destroy a ledger", () => {
     expect(res.status()).toBe(200);
   });
 
-  test("the UI shows the server's reason, not a generic failure", async ({ page, request }) => {
+  /**
+   * The dialog used to state the rule and then offer a red Delete button
+   * underneath it, because the page could not tell which case it was in — so
+   * the only way to discover the refusal was to press the button. Now the
+   * footprint arrives with the bed, and the dialog explains instead of asking.
+   */
+  test("a bed with history is never offered a Delete button", async ({ page, request }) => {
     const { token } = await createOwner(request, `${RUN_ID}-ui`);
-    const { siteId, roomId } = await seedLedger(request, token, "ui");
+    const { siteId } = await seedLedger(request, token, "ui");
 
     await loginAs(page, token);
     await page.goto(`/sites/${siteId}`);
-
-    // Expand the room so its beds render.
     await page.getByRole("button", { name: /Room 1/ }).first().click();
 
-    // The remove button only exists on hover (`hidden … group-hover:inline`),
-    // so the chip has to be hovered before the × is clickable at all.
     const chip = page.locator(`[data-testid="bed-chip"]`).first();
-    await chip.hover();
-    await chip.getByRole("button", { name: /^Remove bed/ }).click();
+    await expect(chip).toBeVisible();
+
+    // The control names its own outcome before it is pressed.
+    await chip.getByRole("button", { name: /^Why bed .* cannot be removed/ }).click();
+
+    await expect(page.getByText(/cannot be deleted/i)).toBeVisible();
+    await expect(page.getByText(/1 stay and 1 payment on record/i)).toBeVisible();
+
+    // The whole point: no button that would have failed.
+    await expect(page.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "OK" }).click();
+    await expect(chip).toBeVisible();
+  });
+
+  test("a bed with no history still gets a real confirm", async ({ page, request }) => {
+    const { token } = await createOwner(request, `${RUN_ID}-ui-clean`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { siteId, roomId } = await createSiteRoomBed(request, token, `${RUN_ID}-ui-clean`);
+    await request.post(`${BASE}/api/sites/${siteId}/rooms/${roomId}/beds`, {
+      headers: auth,
+      data: { name: "Spare" },
+    });
+
+    await loginAs(page, token);
+    await page.goto(`/sites/${siteId}`);
+    await page.getByRole("button", { name: /Room 1/ }).first().click();
+
+    const spare = page.locator(`[data-testid="bed-chip"]`).filter({ hasText: "Spare" });
+    await spare.getByRole("button", { name: "Remove bed Spare" }).click();
 
     await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(spare).toHaveCount(0);
+  });
+  /**
+   * The counts the list endpoints report and the rule the DELETE enforces are
+   * two pieces of SQL that must never disagree. If they drift, the page starts
+   * either offering a delete that 409s (the wart this replaced) or hiding one
+   * that would have worked.
+   *
+   * So this asserts the agreement directly rather than the counts' values:
+   * whatever the list says is deletable must delete, and whatever it says is
+   * not must be refused.
+   */
+  test("the reported footprint agrees with what DELETE actually does", async ({ request }) => {
+    const { token } = await createOwner(request, `${RUN_ID}-agree`);
+    const { siteId, roomId, bedId, auth } = await seedLedger(request, token, "agree");
 
-    // The refusal reaches the owner in the server's own words.
-    await expect(page.getByText(/would destroy that ledger/i)).toBeVisible();
+    // A second bed in the same room that nobody has ever used.
+    const freshRes = await request.post(`${BASE}/api/sites/${siteId}/rooms/${roomId}/beds`, {
+      headers: auth,
+      data: { name: "Untouched" },
+    });
+    const fresh = await freshRes.json();
+    expect(fresh.stay_count).toBe(0);
+    expect(fresh.payment_count).toBe(0);
 
-    // And the bed is still on screen afterwards.
-    await expect(chip).toBeVisible();
-    expect(roomId).toBeTruthy();
+    const beds = await (await request.get(
+      `${BASE}/api/sites/${siteId}/rooms/${roomId}/beds`, { headers: auth },
+    )).json();
+
+    for (const bed of beds) {
+      const res = await request.delete(
+        `${BASE}/api/sites/${siteId}/rooms/${roomId}/beds/${bed.id}`, { headers: auth },
+      );
+      if (bed.stay_count === 0) {
+        expect(res.status(), `bed ${bed.name} reported deletable`).toBe(200);
+      } else {
+        expect(res.status(), `bed ${bed.name} reported ${bed.stay_count} stays`).toBe(409);
+      }
+    }
+
+    // The occupied bed survived, so the room still reports a footprint — and
+    // the room's counts aggregate its beds rather than counting one of them.
+    const rooms = await (await request.get(
+      `${BASE}/api/sites/${siteId}/rooms`, { headers: auth },
+    )).json();
+    const room = rooms.find((r: { id: number }) => r.id === roomId);
+    expect(room.stay_count).toBe(1);
+    expect(room.payment_count).toBe(1);
+
+    const roomDelete = await request.delete(
+      `${BASE}/api/sites/${siteId}/rooms/${roomId}`, { headers: auth },
+    );
+    expect(roomDelete.status()).toBe(409);
+
+    // And the bed is still there with its ledger intact.
+    const after = await (await request.get(
+      `${BASE}/api/sites/${siteId}/rooms/${roomId}/beds`, { headers: auth },
+    )).json();
+    expect(after.map((b: { id: number }) => b.id)).toContain(bedId);
+  });
+
+  /**
+   * A rename must not hand back a row that looks deletable. The response
+   * replaces the row in the page's state, so a stripped-down one would quietly
+   * re-enable the delete the guard exists to prevent.
+   */
+  test("renaming a bed with history keeps its footprint in the response", async ({ request }) => {
+    const { token } = await createOwner(request, `${RUN_ID}-rename`);
+    const { siteId, roomId, bedId, auth } = await seedLedger(request, token, "rename");
+
+    const renamed = await (await request.put(
+      `${BASE}/api/sites/${siteId}/rooms/${roomId}/beds/${bedId}`,
+      { headers: auth, data: { name: "Renamed With History" } },
+    )).json();
+
+    expect(renamed.name).toBe("Renamed With History");
+    expect(renamed.stay_count).toBe(1);
+    expect(renamed.payment_count).toBe(1);
+
+    const renamedRoom = await (await request.put(
+      `${BASE}/api/sites/${siteId}/rooms/${roomId}`,
+      { headers: auth, data: { name: "Renamed Room", floor: 3 } },
+    )).json();
+    expect(renamedRoom.floor).toBe(3);
+    expect(renamedRoom.stay_count).toBe(1);
   });
 });

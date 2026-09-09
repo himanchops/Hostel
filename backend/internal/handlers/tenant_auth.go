@@ -40,10 +40,16 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("phone and password are required"))
 	}
 
+	// `password_hash <> ''` rather than `IS NOT NULL`: NULL <> '' is NULL, so
+	// this excludes both, and it is the same predicate has_portal_login is
+	// computed from. Two spellings of "can this person sign in?" is one more
+	// than the codebase can keep honest.
 	var tenant models.Tenant
 	err := h.db.QueryRowx(
-		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, password_hash, is_approved, created_at, updated_at
-		 FROM tenants WHERE phone = $1 AND is_approved = true AND password_hash IS NOT NULL`,
+		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, password_hash,
+		        (password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
+		        is_approved, created_at, updated_at
+		 FROM tenants WHERE phone = $1 AND is_approved = true AND password_hash <> ''`,
 		req.Phone,
 	).StructScan(&tenant)
 	if err != nil {
@@ -67,7 +73,9 @@ func (h *TenantAuthHandler) Me(c echo.Context) error {
 
 	var tenant models.Tenant
 	err := h.db.QueryRowx(
-		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, is_approved, created_at, updated_at
+		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url,
+		        (password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
+		        is_approved, created_at, updated_at
 		 FROM tenants WHERE id = $1`,
 		tenantID,
 	).StructScan(&tenant)

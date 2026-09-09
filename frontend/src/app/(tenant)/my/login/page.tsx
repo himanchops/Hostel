@@ -35,23 +35,32 @@ export default function TenantLoginPage() {
   return (
     <div className="flex min-h-[70vh] items-center justify-center">
       <div className="w-full max-w-sm">
-        <h1 className="mb-6 text-center font-display text-2xl font-bold text-stone-900">Tenant login</h1>
+        <h1 className="mb-2 text-center font-display text-2xl font-bold text-stone-900">Tenant login</h1>
+        {/* Said out loud because the registration form asks for an email and
+            people reasonably assume that is the login. It never was: email is
+            stored for contact only and takes no part in authentication. */}
+        <p className="mb-6 text-center text-sm text-stone-500">
+          Sign in with your phone number — not your email.
+        </p>
 
         <Card padding="none" className="p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && <FormError>{error}</FormError>}
 
-            <Field label="Phone number">
+            <Field label="Phone number" hint="The number you registered with.">
               <Input
                 required
                 type="tel"
-                placeholder="Your registered phone"
+                placeholder="10-digit number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
             </Field>
 
-            <Field label="Password">
+            <Field
+              label="Password"
+              hint="Set when you registered. Ask the owner if you do not have one."
+            >
               <Input
                 required
                 type="password"

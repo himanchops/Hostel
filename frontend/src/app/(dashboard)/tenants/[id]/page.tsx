@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import {
-  tenantsApi, staysApi, paymentsApi, sitesApi, gridApi, settlementsApi,
-  Tenant, Stay, Payment, TenantSummary, TenantUpdateData, Site, GridRoom, Settlement,
+  tenantsApi, staysApi, paymentsApi, settlementsApi,
+  Tenant, Stay, Payment, TenantSummary, TenantUpdateData, Settlement,
   formatCurrency, today, maskAadhaar, ApiError, uploadApi,
 } from "@/lib/api";
 import {
@@ -26,6 +26,8 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import { BedPicker, VacantBed } from "@/components/StayForm";
+import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
 import { EndStayDialog } from "@/components/EndStayDialog";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { SettleStayDrawer } from "@/components/SettleStayDrawer";
@@ -62,31 +64,16 @@ function AssignBedModal({
 }: {
   stayId: number; token: string; onAssigned: (stay: Stay) => void; onClose: () => void;
 }) {
-  const [sites, setSites] = useState<Site[]>([]);
-  const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
-  const [grid, setGrid] = useState<GridRoom[]>([]);
-  const [selectedBedId, setSelectedBedId] = useState<number | null>(null);
+  const [bed, setBed] = useState<VacantBed | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    sitesApi.list(token).then((s) => {
-      setSites(s);
-      if (s.length > 0) setSelectedSiteId(s[0].id);
-    });
-  }, [token]);
-
-  useEffect(() => {
-    if (!selectedSiteId) return;
-    gridApi.get(token, selectedSiteId).then(setGrid).catch(() => setGrid([]));
-  }, [token, selectedSiteId]);
-
   async function handleAssign() {
-    if (!selectedBedId) return;
+    if (!bed) return;
     setError("");
     setLoading(true);
     try {
-      const updated = await staysApi.assignBed(token, stayId, { bed_id: selectedBedId });
+      const updated = await staysApi.assignBed(token, stayId, { bed_id: bed.id });
       onAssigned(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to assign bed");
@@ -95,58 +82,22 @@ function AssignBedModal({
     }
   }
 
-  const vacantBeds = grid.flatMap((room) =>
-    room.beds
-      .filter((b) => b.status === "vacant")
-      .map((b) => ({ bedId: b.id, bedName: b.name, roomName: room.name }))
-  );
-
   return (
     <Modal
       open
       onClose={onClose}
-      title="Assign Bed"
+      title="Assign bed"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={!selectedBedId} loading={loading} onClick={handleAssign}>
+          <Button disabled={!bed} loading={loading} onClick={handleAssign}>
             {loading ? "Assigning…" : "Assign"}
           </Button>
         </>
       }
     >
-      {sites.length > 1 && (
-        <Field label="Site" className="mb-3">
-          <Select
-            value={selectedSiteId ?? ""}
-            onChange={(e) => setSelectedSiteId(Number(e.target.value))}
-          >
-            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </Select>
-        </Field>
-      )}
-
       <div className="mb-4">
-        <p className="mb-1 text-[13px] font-medium text-stone-600">Vacant Beds</p>
-        {vacantBeds.length === 0 ? (
-          <p className="text-sm text-stone-400">No vacant beds in this site.</p>
-        ) : (
-          <div className="max-h-48 space-y-1.5 overflow-y-auto">
-            {vacantBeds.map((b) => (
-              <label key={b.bedId} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition duration-150 ease-out hover:bg-stone-50">
-                <input
-                  type="radio"
-                  name="bed"
-                  value={b.bedId}
-                  checked={selectedBedId === b.bedId}
-                  onChange={() => setSelectedBedId(b.bedId)}
-                  className="accent-indigo-600"
-                />
-                <span className="text-sm text-stone-700">{b.roomName} · {b.bedName}</span>
-              </label>
-            ))}
-          </div>
-        )}
+        <BedPicker token={token} value={bed} onChange={setBed} />
       </div>
 
       {error && <FormError>{error}</FormError>}
@@ -317,6 +268,9 @@ export default function TenantDetailPage() {
 
   // Assign bed modal
   const [assigningStay, setAssigningStay] = useState<number | null>(null);
+
+  // Portal password — the only way a hand-typed tenant ever reaches /my.
+  const [settingPassword, setSettingPassword] = useState(false);
 
   // Settling ends the stay server-side, and the response is the settlement
   // rather than the stay — so the card's dates come from a refetch.
@@ -498,6 +452,30 @@ export default function TenantDetailPage() {
             </p>
           </Card>
         </div>
+      )}
+
+      {/* Portal access */}
+      {tenant && (
+        <Card className="mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-stone-900">Tenant portal</p>
+              <p className="mt-0.5 text-[13px] text-stone-500">
+                {tenant.has_portal_login
+                  ? `Signs in at /my with ${tenant.phone} and their password.`
+                  : "No login yet — they cannot see their ledger, submit a payment, or give notice online."}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Badge tone={tenant.has_portal_login ? "success" : "neutral"}>
+                {tenant.has_portal_login ? "Can sign in" : "No login"}
+              </Badge>
+              <Button variant="secondary" onClick={() => setSettingPassword(true)}>
+                {tenant.has_portal_login ? "Reset password" : "Create login"}
+              </Button>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Stays */}
@@ -854,6 +832,16 @@ export default function TenantDetailPage() {
             loadSummary();
           }}
           onClose={() => setSettlingStay(null)}
+        />
+      )}
+
+      {token && (
+        <PortalPasswordDialog
+          open={settingPassword}
+          tenant={tenant}
+          token={token}
+          onSaved={(updated) => { setTenant(updated); setSettingPassword(false); }}
+          onClose={() => setSettingPassword(false)}
         />
       )}
 

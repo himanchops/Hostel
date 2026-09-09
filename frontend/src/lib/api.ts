@@ -82,6 +82,14 @@ export interface Room {
   site_id: number;
   name: string;
   floor: number;
+  /**
+   * What a delete would destroy, aggregated across the room's beds. Any stay
+   * at all — ended or not — makes the room undeletable, so `stay_count === 0`
+   * is the whole test. Present on every Room the API returns, including the
+   * one a rename hands back, so it is always safe to trust.
+   */
+  stay_count: number;
+  payment_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +111,9 @@ export interface Bed {
   id: number;
   room_id: number;
   name: string;
+  /** The same footprint as Room's, for this bed alone. */
+  stay_count: number;
+  payment_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -174,6 +185,12 @@ export interface Tenant {
   aadhaar_number?: string;
   id_proof_front_url?: string;
   id_proof_back_url?: string;
+  /**
+   * Whether this person can sign in at /my at all. Computed server-side from
+   * the password hash, which never leaves the backend. False for every tenant
+   * an owner typed in by hand until the owner sets one.
+   */
+  has_portal_login: boolean;
   is_approved: boolean;
   created_at: string;
   updated_at: string;
@@ -222,6 +239,21 @@ export const tenantsApi = {
     request<Stay[]>(`/api/tenants/${id}/stays`, {}, token),
   summary: (token: string, id: number) =>
     request<TenantSummary>(`/api/tenants/${id}/summary`, {}, token),
+
+  /**
+   * Set or reset this tenant's portal password.
+   *
+   * A set, not a change — the owner never knew the old one. This is the only
+   * way a tenant the owner created by hand ever gets into /my, and therefore
+   * the only thing keeping portal-only capabilities from being unreachable
+   * for them.
+   */
+  setPortalPassword: (token: string, id: number, password: string) =>
+    request<Tenant>(
+      `/api/tenants/${id}/portal-password`,
+      { method: "PUT", body: JSON.stringify({ password }) },
+      token,
+    ),
 };
 
 // ─── File Uploads ─────────────────────────────────────────────────────────────
@@ -262,6 +294,7 @@ export interface PublicRegisterData {
   emergency_contact_phone?: string;
   workplace?: string;
   aadhaar_number?: string;
+  photo_url?: string;
 }
 
 export const registrationApi = {

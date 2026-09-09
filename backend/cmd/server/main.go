@@ -198,6 +198,7 @@ func main() {
 	api.DELETE("/tenants/:id/reject", tenantHandler.Reject)
 	api.GET("/tenants/:id/stays", stayHandler.ListByTenant)
 	api.GET("/tenants/:id/summary", tenantHandler.Summary)
+	api.PUT("/tenants/:id/portal-password", tenantHandler.SetPortalPassword)
 	api.GET("/tenants/:id/settlements", settlementHandler.ListByTenant)
 
 	// Stays

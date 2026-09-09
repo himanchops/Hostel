@@ -598,9 +598,54 @@ live database.
 `HOSTEL_PASSWORD`. It is **gitignored, and must stay that way** — the GitHub
 repo is public. The environment overrides the file if both are set.
 
-The app has no change-password feature, so rotating that password today means a
-direct `UPDATE` against the Neon database with a fresh bcrypt hash. Worth
-knowing before you decide the password needs rotating.
+The app has no change-password feature and no password reset (see "Password
+recovery" below, which is the same procedure). Worth knowing before you decide
+the password needs rotating.
+
+### Password recovery — the only way back in (Sep 2026)
+
+**There is no password reset.** `/auth/login` and `/auth/signup` are the only
+owner auth endpoints there are; nothing emails a link, and there is no
+change-password form. If the owner password is lost, this is the whole recovery
+path, and it needs database access — so it is written out here rather than left
+as "do an UPDATE with a bcrypt hash", which is not a procedure anyone can follow
+under pressure at 11pm.
+
+**Rehearsed against a local backend, Sep 2026** — every step below was run, not
+reasoned about.
+
+```bash
+# 1. Generate a bcrypt hash at cost 10, which is bcrypt.DefaultCost and what
+#    auth.HashPassword uses. htpasswd ships with macOS; the empty "" is the
+#    username field, which we throw away with tr.
+htpasswd -bnBC 10 "" 'the-new-password' | tr -d ':\n'
+# → $2y$10$....
+
+# 2. Write it. Use the Neon connection string, and mind the shell: single
+#    quotes, because a bcrypt hash is full of $ signs.
+psql "$NEON_URL" -c "UPDATE owners SET password_hash = '<hash>' WHERE email = '<owner email>';"
+```
+
+Then log in with the new password. Two things that look wrong and are not:
+
+- **The `$2y$` prefix is fine as-is.** htpasswd emits `$2y$`, Go's bcrypt emits
+  `$2a$`, and the formats are identical — `golang.org/x/crypto/bcrypt` reads any
+  minor version byte. Verified by logging in with an unmodified `$2y$` hash; do
+  not "fix" it to `$2a$`.
+- **A tenant password is the same procedure** against `tenants` instead of
+  `owners` — but do not use it. The owner can set a tenant's portal password
+  from the tenant page (Phase 16d), which is the supported path.
+
+**Do not paste the connection string into a chat window or a shell you do not
+control.** Same rule as everywhere else in this file.
+
+**Why this is acceptable for now, and when it stops being.** It is genuinely
+recoverable, the person who needs it has database access, and there is exactly
+one owner. It stops being acceptable the moment somebody who is *not* you has an
+account — they cannot run this, and asking them to email you their new password
+is worse than having no reset at all. Real reset is a phase, not a papercut: an
+email sender, a `password_reset_tokens` table with expiry and single use, and
+rate limiting on the request endpoint. See `docs/PROGRESS.md` → Deferred.
 
 ### Bed naming
 
@@ -624,6 +669,7 @@ can read.
 - **Migrations** are still run manually from your laptop against the Neon URL.
   When this becomes annoying, we'll wire it into the Render pre-deploy hook.
 - **Email** (password reset, verification) is not set up. Skip until you have
-  a second user asking for it.
+  a second user asking for it — but read "Password recovery" above first, so
+  the manual path is one you have seen before you need it.
 - **Backups.** Neon takes its own snapshots on the free tier. If you want
   an off-site copy, add a daily `pg_dump` cron from your laptop.

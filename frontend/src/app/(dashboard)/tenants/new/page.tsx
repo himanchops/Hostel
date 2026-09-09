@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
-import { tenantsApi, uploadApi, TenantUpdateData, ApiError } from "@/lib/api";
+import { tenantsApi, staysApi, uploadApi, TenantUpdateData, ApiError } from "@/lib/api";
 import {
   Button,
   Card,
@@ -16,6 +16,10 @@ import {
   Textarea,
   useToast,
 } from "@/components/ui";
+import {
+  BedPicker, VacantBed,
+  StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
+} from "@/components/StayForm";
 
 export default function NewTenantPage() {
   const { token } = useAuth();
@@ -36,10 +40,26 @@ export default function NewTenantPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Placing them is optional and off by default: an owner often adds someone
+  // days before there is a bed free, and the alternative — forcing a bed —
+  // would be worse than the walk through Sites this replaces.
+  const [placing, setPlacing] = useState(false);
+  const [bed, setBed] = useState<VacantBed | null>(null);
+  const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token) return;
     setError("");
+
+    // Checked before the tenant is created, not after: a rent typo should not
+    // cost the owner a half-made record they then have to finish by hand.
+    if (placing) {
+      if (!bed) { setError("Pick a bed, or turn off \u201CPlace them in a bed now\u201D."); return; }
+      const invalid = stayTermsError(terms);
+      if (invalid) { setError(invalid); return; }
+    }
+
     setLoading(true);
     try {
       let photoUrl: string | undefined;
@@ -65,9 +85,32 @@ export default function NewTenantPage() {
       };
 
       const tenant = await tenantsApi.create(token, data);
-      // ToastProvider lives in the dashboard layout, so this survives the
-      // navigation and lands on the tenant's page.
-      toast.success(`${tenant.name} added`);
+
+      // The tenant exists from here on, so nothing below may throw the whole
+      // submission away. A stay that fails to create leaves a real person on
+      // record with nowhere to sleep, and the honest thing is to say so and
+      // hand them the page where "Assign bed" lives — the same shape as the
+      // backend's "tenant approved but failed to create stay".
+      if (placing && bed) {
+        try {
+          await staysApi.create(token, {
+            tenant_id: tenant.id,
+            bed_id: bed.id,
+            ...stayTermsPayload(terms),
+          });
+          toast.success(`${tenant.name} added and placed in ${bed.roomName} · ${bed.name}`);
+        } catch (stayErr) {
+          toast.error(
+            stayErr instanceof ApiError
+              ? `${tenant.name} was added, but the bed was not assigned: ${stayErr.message}`
+              : `${tenant.name} was added, but the bed was not assigned.`,
+          );
+        }
+      } else {
+        // ToastProvider lives in the dashboard layout, so this survives the
+        // navigation and lands on the tenant's page.
+        toast.success(`${tenant.name} added`);
+      }
       router.push(`/tenants/${tenant.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create tenant");
@@ -134,11 +177,38 @@ export default function NewTenantPage() {
           </div>
         </Card>
 
+        <Card title="Place them in a bed">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={placing}
+              onChange={(e) => setPlacing(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-indigo-600"
+            />
+            <span>
+              <span className="block text-sm font-medium text-stone-800">
+                Place them in a bed now
+              </span>
+              <span className="block text-[13px] text-stone-500">
+                Starts their rent ledger. Leave this off and assign a bed later
+                from their profile or the grid.
+              </span>
+            </span>
+          </label>
+
+          {placing && token && (
+            <div className="mt-4 space-y-4 border-t border-stone-100 pt-4">
+              <BedPicker token={token} value={bed} onChange={setBed} />
+              <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
+            </div>
+          )}
+        </Card>
+
         {error && <FormError>{error}</FormError>}
 
         <div className="flex gap-3">
           <Button type="submit" loading={loading}>
-            {loading ? "Creating…" : "Create tenant"}
+            {loading ? "Creating…" : placing ? "Create & place tenant" : "Create tenant"}
           </Button>
           <Link href="/tenants" className="inline-flex items-center rounded-lg px-4 py-2 text-sm text-stone-500 transition duration-150 ease-out hover:bg-stone-100">
             Cancel

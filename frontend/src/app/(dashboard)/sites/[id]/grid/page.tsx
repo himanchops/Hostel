@@ -21,7 +21,6 @@ import {
   Drawer,
   EmptyAvatar,
   EmptyState,
-  Field,
   FormError,
   Input,
   PageHeader,
@@ -33,6 +32,9 @@ import {
   useToast,
 } from "@/components/ui";
 import { EndStayDialog } from "@/components/EndStayDialog";
+import {
+  StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
+} from "@/components/StayForm";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -379,10 +381,7 @@ function AssignPanel({
 
   // Stay fields
   const [tenantId, setTenantId] = useState<number | null>(null);
-  const [rent, setRent] = useState("");         // in rupees
-  const [deposit, setDeposit] = useState("0");  // in rupees
-  const [cycle, setCycle] = useState("monthly");
-  const [startDate, setStartDate] = useState(today());
+  const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
   const [step, setStep] = useState<"select" | "stay">("select");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -412,16 +411,15 @@ function AssignPanel({
   }
 
   async function handleAssign() {
-    if (!tenantId || !rent) { setError("All fields required"); return; }
+    if (!tenantId) { setError("Pick a tenant first."); return; }
+    const invalid = stayTermsError(terms);
+    if (invalid) { setError(invalid); return; }
     setLoading(true);
     try {
       await staysApi.create(token, {
         tenant_id: tenantId,
         bed_id: bed.id,
-        rent_amount: Math.round(parseFloat(rent) * 100),
-        deposit_amount: Math.round(parseFloat(deposit || "0") * 100),
-        rent_cycle: cycle,
-        start_date: startDate,
+        ...stayTermsPayload(terms),
       });
       const name = tenants.find((t) => t.id === tenantId)?.name ?? "Tenant";
       toast.success(`${name} assigned to bed ${bed.name}`);
@@ -492,22 +490,7 @@ function AssignPanel({
             Tenant: <strong>{tenants.find((t) => t.id === tenantId)?.name}</strong>
           </p>
 
-          <Field label="Monthly rent (₹)">
-            <Input type="number" placeholder="e.g. 8000" value={rent} onChange={(e) => setRent(e.target.value)} />
-          </Field>
-          <Field label="Deposit (₹)">
-            <Input type="number" placeholder="e.g. 16000" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
-          </Field>
-          <Field label="Billing cycle">
-            <Select value={cycle} onChange={(e) => setCycle(e.target.value)}>
-              <option value="monthly">Monthly</option>
-              <option value="weekly">Weekly</option>
-              <option value="daily">Daily</option>
-            </Select>
-          </Field>
-          <Field label="Start date">
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </Field>
+          <StayTermsFields value={terms} onChange={setTerms} />
 
           <div className="flex gap-2 pt-1">
             <Button className="flex-1" loading={loading} onClick={handleAssign}>
