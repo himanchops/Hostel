@@ -119,14 +119,17 @@ Key conventions to carry forward:
 
 ## Git Remote
 
-Remote: `git@github-personal:himanchops/Hostel.git`
-
-Uses SSH host alias `github-personal` (defined in `~/.ssh/config` → `~/.ssh/github_personal` key). Always use this alias in remote URLs — **not** `git@github.com`.
+Remote: `git@github.com:himanchops/Hostel.git`
 
 ```bash
-git remote add origin git@github-personal:himanchops/Hostel.git
+git remote add origin git@github.com:himanchops/Hostel.git
 git push -u origin master
 ```
+
+This file used to require an SSH host alias, `github-personal`, and to say
+plainly "not `git@github.com`". That alias is gone (Sep 2026) and the plain
+GitHub host is correct. Noted rather than silently deleted, because the old
+instruction was emphatic enough to be worth contradicting once.
 
 ---
 
