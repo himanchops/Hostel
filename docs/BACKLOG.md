@@ -19,6 +19,169 @@ issue list become a second backlog — this file is the one that gets worked fro
 
 ---
 
+---
+
+## Found by the UX audit (Sep 2026) — work this section first
+
+Seven testers walked the app cold — no source, no access to this file — as
+personas with a job to do (`docs/UX_REVIEW.md` has the method, the themes and
+the full ranked list). Hit counts below are how many found the same thing
+**independently**, which is why some small-looking items rank high.
+
+Two things this round taught, before the items:
+
+**The old lesson again, inverted.** Phase 16 closed seven capabilities the code
+had and no screen offered. This round, four testers reported "there is no way to
+record a payment from the tenant page" — and the button is right there at
+`tenants/[id]/page.tsx:694`, behind an expander whose only affordance is
+`cursor-pointer`, which does not exist on a touchscreen. A shipped feature that
+five people cannot find is indistinguishable from a missing one. Grep before
+believing either claim, including one of ours.
+
+**A regression test can pass because of the bug.** `insights.test.ts` asserts
+`documentElement.scrollWidth - clientWidth <= 1` at 375px — which
+`overflow-x-hidden` guarantees *by clipping the thing it was meant to protect*.
+It also runs against a fresh owner with no data, so it never renders a chart.
+Both halves need fixing alongside U2.
+
+### Settling a stay refunds a deposit that may never have been paid — M
+`settlements.go:226,232,318` feed `stay.DepositAmount` — the deposit agreed as a
+rent *term* at intake — into `refundFor()` as money held. A tenant created with a
+₹16,000 deposit who has paid nothing is offered a ₹8,000 refund. It is
+irreversible, has no confirmation step, and the tenant profile shows no deposit
+to check against. Compute held deposit from recorded deposit payments; show
+"₹16,000 agreed · ₹0 received" when the two differ.
+
+### The hover-only fix was applied to one file of four — S, 3 hits
+Phase 16c fixed the bed chip with `sm:opacity-0 sm:group-hover:opacity-100` plus
+`focus-visible:opacity-100`. Three destructive controls still use the bare old
+pattern and are `display:none` on touch and unreachable by keyboard:
+`sites/page.tsx:149` (delete a site), `sites/[id]/grid/page.tsx:684` and
+`tenants/[id]/page.tsx:772` (delete a payment). Since there is no *edit* for a
+payment either, delete-and-re-add is the only way to fix a wrong amount — so on
+a phone, correcting a money mistake is not hard, it is impossible. The recipe is
+already in the repo; this is three one-line changes and a shared decision about
+edit.
+
+### The tenant profile is a worse copy of the grid's bed drawer — M, 5 hits
+The page named after the person shows `Bed #31` instead of `Room 202 · 1L`,
+shows `Paid —` for a tenant who has paid ₹1,27,500, shows no deposit, and hides
+the ledger behind the invisible expander above. The `Paid —` is not a data bug —
+Phase 11 chose the dash over a false `₹0` precisely because the ledger loads on
+expand (`PROGRESS.md`). It is right until the expander becomes undiscoverable,
+at which point the placeholder is all anyone ever sees. The grid drawer — same tenant,
+same data — has all of it. Five testers arriving by five routes each concluded
+the profile was broken. Reuse the drawer's ledger component.
+
+### Three roll-ups disagree, and no tile says how it was computed — S each
+The per-tenant engine is correct (Insights reconciles exactly three ways). The
+summaries do not:
+- **Collected this month**: dashboard ₹69,900 vs Insights ₹53,600. `dashboard.go:218`
+  bounds the month but never caps at today, so two future-dated payments count.
+- **Overdue**: dashboard ₹40,400 vs Collections ₹47,900 — the bed-less tenant,
+  already logged under "Correctness / consistency" below and now independently
+  rediscovered on a link that reads "chase it from Collections".
+- **Occupancy**: 65% (beds today) vs 61% (bed-nights), both labelled "now".
+Insights footnotes its methods and is the one nobody questioned; the dashboard
+footnotes nothing.
+
+### Insights charts are drawn off-screen at 375px and cannot be reached — S, 3 hits
+Measured: chart 672px wide, right edge at 704, `document.scrollWidth` pinned at
+375. **`ChartScroll` is correct** — the failure is above it. The grid item never
+shrinks (default `min-width:auto`), so the card grows to 704px and the scroller
+ends up 680 wide with 680 of content, i.e. nothing to scroll; `<main>`'s
+`overflow-x-hidden` then clips it. One `min-w-0` on the grid item fixes it, and
+that recipe is already twice in this layout's ancestor chain. The recent months
+— the whole story in the data — are the part cut off.
+
+### The grid's "Overdue" filter hides the largest debt in the building — M
+A tenant 70 days in arrears who has given notice is filed under `Vacating`, so
+HSR's chip reads `Overdue 0` while she owes ₹17,000. The precedence is
+deliberate (`grid.go:31-35`) and right for a bed's *colour*; inheriting it for
+the *filter* means the chips surface ₹19,500 of ₹47,900. Wants an "owes money"
+filter that ignores lifecycle status.
+
+### Nothing can be corrected, anywhere — M
+No edit for a payment, no undo for a settlement, no un-approve for a proof, no
+way for a tenant to withdraw a notice or fix their own submission, no owner
+password change or recovery. Entry is easy on every screen; correction is absent
+on every screen. The safety is also inverted: rejecting a registration (which
+the applicant can resubmit) confirms; settling a deposit (irreversible, largest
+sum in the business) does not. The owner's "Reset portal password" dialog is the
+template — it already does confirm, reveal and honest framing.
+
+### Owner sign-out leaves the tenant session signed in — S
+`auth.tsx:61` clears only `hostel_token`. A tester signed the owner out, opened
+`/my`, and landed in a tenant's ledger. Front-desk machines are shared. Clear
+both keys on either sign-out.
+
+### A rejected payment proof is deleted and the tenant is never told — M
+The confirm says "Reject and delete" and means it: the row vanishes from the
+tenant's history with no status, no reason, no evidence they ever submitted it.
+Soft-reject with a "Not accepted" status instead.
+
+### Settling a tenant erases what they still owe from Collections — M
+A settlement that leaves the tenant ₹5,500 down removes them from the chase list
+and the dashboard total. The tenant who has already left is the one most likely
+to skip. Keep settled stays with a balance under "Moved out — still owes".
+
+### An empty state claims "No sites yet" while sites are loading — S
+Three seconds of confident, actionable, wrong instruction on `/tenants/new`,
+shown to an owner who has two sites. Render loading before empty.
+
+### Touch targets are under 44px almost everywhere — M, 5 hits
+Nudge 32px, inputs 38px, room rename/delete 24px with **zero** gap between them,
+portal Sign out 20px, the three stay actions 16px text links 12px apart — one of
+which irreversibly settles a deposit. Best fixed once as a minimum height on the
+shared `Button` / `Input` / chip components below `lg:`.
+
+### "Vacating Soon" shows two different dates under one heading — S, 3 hits
+`Notice: 2026-08-31` beside `Leaving 2026-09-30`, unlabelled. Three testers read
+the first as "he left nine days ago" and one said he would have re-let the bed.
+The `RecordNoticeDialog` explains this distinction better than anything else in
+the product; the dashboard throws it away. Render them as distinct sentences.
+
+### The public half did not get the owner half's care — S each
+Raw lowercase server strings (`invalid phone or password`, `registration link
+not found`) against the owner side's `Enter the rent amount.`; phone and Aadhaar
+accept any characters; a duplicate registration is silently accepted and sorts
+*above* the complete one; `/register/999999` renders the whole form and only
+404s after three photo uploads; validation errors paint at the top of the form
+while focus jumps to the bottom. Also: an unapproved tenant who follows the
+success screen's own link is told "invalid phone or password", which is the
+wrong answer to a correct password.
+
+### The tenant portal is a stub wearing the product's logo — M
+No balance (the number is already computed and correct on the owner's screen for
+the same tenant), no deposit, no headings at all, no way to contact the owner,
+no payment date or method field, and its two forms are visibly from different
+eras. `/my/page.tsx` was untouched by Phase 16.
+
+### Smaller, verified, and cheap — S each
+- `Since` on `/tenants` renders `created_at` (`tenants/page.tsx:114`), so all 22
+  rows read the same month; no room, no balance, and no portal-access column
+  though `has_portal_login` is already in the response.
+- Approve on a payment proof has no confirmation; Reject does.
+- The Pending badge counts registrations only, so waiting money is invisible in
+  the nav, and it is stale until reload.
+- "72 characters or fewer" counts **bytes** — a 28-character Hindi passphrase is
+  rejected with a message that is factually wrong, in an India-facing app.
+- The settlement's whole-cycle billing is described as "Rent is billed up to this
+  date"; moving the date nine days swung a settlement by ₹9,000. Adjustments
+  never appear as a line, so the visible sum reads 18,000 − 22,000 = 5,500.
+- A brand-new owner is greeted "Welcome back".
+- Payment type is "Online", not "UPI". The nudge says "at your convenience" to
+  someone 70 days late and carries no UPI handle.
+- The registration-link panel promises "or a QR code pointing to it" and the app
+  never makes one; the Copy button failed outright.
+- 404s land on Next.js's raw black page; a missing tenant or site redirects
+  silently with no message.
+- `BASE_URL` does not follow `PORT`, so a local backend on a non-default port
+  silently breaks every upload with no warning. (This cost the audit two false
+  Blockers — see `docs/UX_REVIEW.md` → retractions.)
+
+---
+
 ## Feedback from running the real hostel (Sep 2026) — ✅ all closed
 
 Found by the owner using the live app against real tenants, not by building it.
@@ -216,6 +379,11 @@ as already working well on a phone.
 ## UX polish
 
 ### Password fields have no visibility toggle — S
+
+**Confirmed cold by the Sep 2026 UX audit.** Worth noting the app already ships
+a correct one — the portal-password dialog has a working "Show password"
+checkbox, a confirm field and helper text. The signup form needs the same group,
+not a new component.
 Every password field in the app is write-only: `/register/[ownerId]`,
 `/my/login`, `/login`, `/signup`. Someone typing a password on a phone keyboard
 has no way to check what they typed, and the registration page asks for one they
@@ -237,6 +405,11 @@ around existing data.
 only the fallback it was meant to be. Closed on discovery during Phase 15d.
 
 ### A payments list page — M
+
+**Confirmed cold by the Sep 2026 UX audit** — a tester asked "show me all the
+payments I received this month", hit "Only the 10 most recent payments are
+shown", and could not tell whether September had 10 payments or 30. Re-verified:
+no `GET /api/payments` route exists.
 Neither dashboard list has a "view all" destination: there is no `GET
 /api/payments` endpoint at all, and `/tenants` has no notice filter. The lists
 are capped at 10 and now say so, which is honest but not a way to see the 11th.
@@ -269,6 +442,13 @@ Still needs a human to create the account and paste the two DSNs.
 ## Security / privacy
 
 ### Tenant ID scans live at permanent public URLs — M, and gets worse with time
+
+**Found cold by the Sep 2026 UX audit**, by a tester who then read the form's own
+promise — "stored securely and only visible to the property owner" — and called
+it untrue. They added a detail worth carrying: the pending-queue API ships
+`aadhaar_number` in full plaintext to the browser while the UI masks it to
+`XXXX-XXXX-7777`, so the masking protects nothing and the owner still cannot
+verify the number against the card.
 The R2 bucket is publicly readable (decided at deploy, Aug 2026). Object keys are
 `public/<32 hex>.jpg` from `crypto/rand`, so they are unguessable and the r2.dev
 subdomain does not list directories — the model is a Google Docs "anyone with the
@@ -436,6 +616,10 @@ under the limit by any rune count, over it by the only measure bcrypt uses.
 ## Correctness / consistency
 
 ### Collections and the dashboard disagree about bed-less stays — S
+
+**Rediscovered independently by two testers in the Sep 2026 UX audit**, on a link
+whose own subtitle reads "chase it from Collections →". Measured: ₹40,400 vs
+₹47,900, the gap being exactly one bed-less tenant.
 `GET /api/collections` includes stays with no bed assigned; the dashboard's
 `overdue_amount` excludes them (`s.bed_id IS NOT NULL`). An owner who has taken
 a deposit without allocating a room sees two different totals for the same
@@ -444,6 +628,10 @@ tested figure, so it wants its own change rather than riding along with
 something else. Flagged during Phase 10.
 
 ### No rate limiting on the remaining public endpoints — M
+
+**Confirmed cold by the Sep 2026 UX audit**: 15 consecutive wrong passwords, 15
+clean 401s, no delay or lockout. Compounded by there being no password
+complexity rule at all — a ten-space password created a working owner account.
 `/auth/login`, `/tenant-auth/login` and `/public/register/:ownerId` are still
 unthrottled. Low risk while the registration link is on a fridge; a real one the
 day it is printed on a QR code by the door. Tracked in PROGRESS.md under

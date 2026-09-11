@@ -1729,6 +1729,53 @@ work put a refund figure next to it, where a false zero stops being cosmetic.
 
 ---
 
+## UX audit — seven fresh-eyes sessions ✅ (Sep 2026)
+
+The first testing round run by people who had not built the app. Seven personas
+walked it cold — no source, no `BACKLOG.md` — each with a job to do: a day-one
+owner with an empty account, the monthly chase on a phone, a full move-in to
+settlement, the QR stranger plus the approval queue, the tenant portal, the auth
+edges, and a month-end read of the numbers. Method and full ranked findings:
+`docs/UX_REVIEW.md`; the actionable list is `docs/BACKLOG.md` → "Found by the UX
+audit".
+
+Run against `98520c3` on an isolated stack — a separate `hostel_ux` database and
+non-default ports — so that a concurrent branch and the dev database were never
+touched. No product code was changed in this pass.
+
+**What it was worth.** Three blockers, none of which any existing test could
+have caught: settling a stay refunds a deposit computed from the agreed rent
+*term* rather than money actually received; correcting a payment is impossible
+on a phone because the only delete is `hidden … group-hover`; and an owner can
+neither change nor recover a password, while sign-out does not revoke the token.
+Five open backlog items were rediscovered independently, which is the useful
+signal — a thing three strangers hit is not a papercut.
+
+**Two lessons about our own process, which are the parts to carry forward:**
+
+- **Phase 16's lesson, inverted.** That phase closed seven capabilities the code
+  had and no screen offered. This round, four testers reported that recording a
+  payment from the tenant page was impossible — and the button is at
+  `tenants/[id]/page.tsx:694`, behind an expander whose only affordance is
+  `cursor-pointer`, which does not exist on a touchscreen. A feature five people
+  cannot find is indistinguishable from one that was never built. Grep before
+  believing a missing-capability claim, including our own: two of the audit's
+  own findings were retracted this way, and one of them was my test rig, not the
+  app (`BASE_URL` does not follow `PORT`).
+- **A regression test can pass because of the bug it guards.**
+  `insights.test.ts` asserts `documentElement.scrollWidth - clientWidth <= 1` at
+  375px — which `overflow-x-hidden` guarantees *by clipping the charts it was
+  meant to protect*. It also runs against a fresh owner with no data, so it
+  never renders a chart at all. The charts really are drawn 672px wide inside a
+  375px viewport with nothing scrollable; `ChartScroll` is correct and its grid
+  parent never shrinks. Fix the test in the same change as the `min-w-0`.
+
+**Still to run:** the production pass — read-only against the real account, a
+throwaway owner for anything that writes, and cold-start latency timed. It is
+the only way to see the pooler 500s and Render waking from sleep.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
