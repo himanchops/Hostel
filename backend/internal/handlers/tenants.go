@@ -616,7 +616,7 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 			st.refund_paise AS settlement_refund,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
-				WHERE p.stay_id = s.id AND p.is_approved = true
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
 			), 0) AS total_paid
 		FROM stays s
 		LEFT JOIN settlements st ON st.stay_id = s.id

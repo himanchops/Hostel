@@ -15,6 +15,7 @@ import {
   SkeletonCard,
   useConfirm,
   useToast,
+  HOVER_REVEAL,
 } from "@/components/ui";
 
 export default function SitesPage() {
@@ -144,10 +145,14 @@ export default function SitesPage() {
                 )}
                 <p className="mt-3 text-xs text-indigo-600">View rooms →</p>
               </Link>
+              {/* Was hidden with display:none until hover — so absent on
+                  every touchscreen and unreachable by keyboard. See
+                  HOVER_REVEAL. */}
               <button
                 onClick={() => handleDelete(site.id)}
-                className="absolute right-3 top-3 hidden rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 group-hover:block"
+                aria-label={`Delete site ${site.name}`}
                 title="Delete site"
+                className={`absolute right-2 top-2 rounded-lg p-2 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
               >
                 <TrashIcon className="h-4 w-4" />
               </button>

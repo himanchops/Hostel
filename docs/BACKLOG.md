@@ -42,9 +42,20 @@ believing either claim, including one of ours.
 `documentElement.scrollWidth - clientWidth <= 1` at 375px — which
 `overflow-x-hidden` guarantees *by clipping the thing it was meant to protect*.
 It also runs against a fresh owner with no data, so it never renders a chart.
-Both halves need fixing alongside U2.
+✅ Both halves fixed with the `min-w-0` (Sep 2026) — and the new test was run
+against the unfixed page first, to see it fail there (right edge at 708px).
 
-### Settling a stay refunds a deposit that may never have been paid — M
+### ~~Settling a stay refunds a deposit that may never have been paid~~ ✅ fixed — migration 007
+**Fixed (Sep 2026, `ux-audit-blockers`).** The fix as written assumed "recorded
+deposit payments" existed. They did not: every payment counted as rent in nine
+queries, so a deposit written down as a payment was refunded twice — once from
+the agreed term, once as "rent paid in advance". `payments.kind` (`rent` |
+`deposit`) now separates them, every rent sum filters `kind = 'rent'`, the
+settlement refunds approved deposit payments only, and the drawer shows
+"₹16,000 agreed · ₹0 received" when they differ. Details in `docs/PROGRESS.md`.
+The original report:
+
+
 `settlements.go:226,232,318` feed `stay.DepositAmount` — the deposit agreed as a
 rent *term* at intake — into `refundFor()` as money held. A tenant created with a
 ₹16,000 deposit who has paid nothing is offered a ₹8,000 refund. It is
@@ -52,7 +63,16 @@ irreversible, has no confirmation step, and the tenant profile shows no deposit
 to check against. Compute held deposit from recorded deposit payments; show
 "₹16,000 agreed · ₹0 received" when the two differ.
 
-### The hover-only fix was applied to one file of four — S, 3 hits
+### ~~The hover-only fix was applied to one file of four~~ ✅ fixed
+**Fixed (Sep 2026).** And the one "correct" copy was not: `sm:opacity-0
+sm:group-hover:opacity-100` keys off width, an iPad is wider than `sm`, and
+Tailwind v4 only applies `group-hover` under `@media (hover: hover)` — so on
+the primary device the bed controls were invisible. All four now use
+`HOVER_REVEAL` (`components/ui/reveal.ts`), which hides only when the pointer is
+fine; a unit test bans the old patterns in source. Still open from this item:
+there is no *edit* for a payment — delete-and-re-add remains the correction.
+The original report:
+
 Phase 16c fixed the bed chip with `sm:opacity-0 sm:group-hover:opacity-100` plus
 `focus-visible:opacity-100`. Three destructive controls still use the bare old
 pattern and are `display:none` on touch and unreachable by keyboard:
@@ -73,6 +93,12 @@ at which point the placeholder is all anyone ever sees. The grid drawer — same
 same data — has all of it. Five testers arriving by five routes each concluded
 the profile was broken. Reuse the drawer's ledger component.
 
+**Partly fixed (Sep 2026).** The expander is a real `<button>` with a chevron
+and a payment count, open by default for a single stay (M1); every ledger loads
+with the page, so `Paid —` lasts only as long as the request; and the stay card
+now shows the deposit, agreed against received. Still open: `Bed #31` instead
+of the room label (M7), and converging on one ledger component with the drawer.
+
 ### Three roll-ups disagree, and no tile says how it was computed — S each
 The per-tenant engine is correct (Insights reconciles exactly three ways). The
 summaries do not:
@@ -85,7 +111,11 @@ summaries do not:
 Insights footnotes its methods and is the one nobody questioned; the dashboard
 footnotes nothing.
 
-### Insights charts are drawn off-screen at 375px and cannot be reached — S, 3 hits
+### ~~Insights charts are drawn off-screen at 375px and cannot be reached~~ ✅ fixed
+**Fixed (Sep 2026)** with `min-w-0` on the card. `insights.test.ts` now seeds a
+year and asserts the scroller sits inside the screen and scrolls to the latest
+month, at 375, 768 and 1024px. The original report:
+
 Measured: chart 672px wide, right edge at 704, `document.scrollWidth` pinned at
 375. **`ChartScroll` is correct** — the failure is above it. The grid item never
 shrinks (default `min-width:auto`), so the card grows to 704px and the scroller
@@ -109,6 +139,14 @@ on every screen. The safety is also inverted: rejecting a registration (which
 the applicant can resubmit) confirms; settling a deposit (irreversible, largest
 sum in the business) does not. The owner's "Reset portal password" dialog is the
 template — it already does confirm, reveal and honest framing.
+
+**Partly fixed (Sep 2026, B3):** `/account` lets an owner change their password
+and sign out everywhere, and both now actually revoke — owner tokens carry a
+version checked on every request (migration 008). **Recovering a forgotten
+password is still the psql runbook** in `docs/DEPLOYMENT.md`: an emailed reset
+needs a mail sender, and there is none, so it was scoped out rather than
+half-built. Still open here: edit a payment, undo a settlement, un-approve a
+proof, a tenant withdrawing a notice, and a confirm step on settling.
 
 ### Owner sign-out leaves the tenant session signed in — S
 `auth.tsx:61` clears only `hostel_token`. A tester signed the owner out, opened
@@ -179,6 +217,11 @@ eras. `/my/page.tsx` was untouched by Phase 16.
 - `BASE_URL` does not follow `PORT`, so a local backend on a non-default port
   silently breaks every upload with no warning. (This cost the audit two false
   Blockers — see `docs/UX_REVIEW.md` → retractions.)
+- The pending queue's "Approve & collect deposit" option and its "Approve &
+  record deposit" button still promise to record money. Approving only saves
+  the agreed terms. The explanatory line under it was corrected with B1 (it
+  claimed "will be recorded as a payment"); the option and button labels were
+  not. Found while fixing B1.
 
 ---
 

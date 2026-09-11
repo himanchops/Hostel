@@ -5,9 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import {
   tenantsApi, staysApi, paymentsApi, settlementsApi,
-  Tenant, Stay, Payment, TenantSummary, TenantUpdateData, Settlement,
+  Tenant, Stay, Payment, PaymentKind, TenantSummary, TenantUpdateData, Settlement,
   formatCurrency, today, maskAadhaar, ApiError, uploadApi,
 } from "@/lib/api";
+import { depositSummary } from "@/lib/settlement";
 import {
   Badge,
   BedIcon,
@@ -17,6 +18,7 @@ import {
   Field,
   FileInput,
   FormError,
+  HOVER_REVEAL,
   Input,
   Modal,
   PageHeader,
@@ -245,13 +247,15 @@ export default function TenantDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editingProfile, setEditingProfile] = useState(false);
 
-  // Expanded stay → payments
+  // Every stay's payments, loaded with the page, and which ledger is open.
   const [payments, setPayments] = useState<Record<number, Payment[]>>({});
+  const [paymentsFailed, setPaymentsFailed] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
 
   // Add payment inline
   const [addingPayment, setAddingPayment] = useState<number | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [payKind, setPayKind] = useState<PaymentKind>("rent");
   const [payType, setPayType] = useState("cash");
   const [payDate, setPayDate] = useState(today());
   const [payNotes, setPayNotes] = useState("");
@@ -297,18 +301,27 @@ export default function TenantDetailPage() {
         setTenant(t);
         setStays(s);
         setSettlements(Object.fromEntries(settled.map((x) => [x.stay_id, x])));
+        // One stay means there is nothing to choose between: open it.
+        if (s.length === 1) setExpanded(s[0].id);
+
+        // Every ledger loads with the page. They used to load on expand, which
+        // was fine until the expander turned out to be invisible (UX audit M1):
+        // five of seven testers never opened it, "Paid —" became the permanent
+        // state, and one re-recorded a payment already saved. A tenant has a
+        // handful of stays, and a request each is cheaper than a figure nobody
+        // sees. A failure must not cost them the page, so it is reported where
+        // the ledger would have been.
+        Promise.all(s.map((st) => staysApi.payments(token, st.id).then((p) => [st.id, p] as const)))
+          .then((loaded) => setPayments(Object.fromEntries(loaded)))
+          .catch(() => setPaymentsFailed(true));
       })
       .catch(() => router.replace("/tenants"))
       .finally(() => setLoading(false));
     loadSummary();
   }, [token, tenantId, router, loadSummary]);
 
-  async function toggleStay(stayId: number) {
-    setExpanded(expanded === stayId ? null : stayId);
-    if (!payments[stayId] && token) {
-      const p = await staysApi.payments(token, stayId).catch(() => []);
-      setPayments((prev) => ({ ...prev, [stayId]: p }));
-    }
+  function toggleStay(stayId: number) {
+    setExpanded((open) => (open === stayId ? null : stayId));
   }
 
   async function handleAddPayment(e: React.FormEvent, stayId: number) {
@@ -320,15 +333,17 @@ export default function TenantDetailPage() {
       const p = await staysApi.addPayment(token, stayId, {
         amount: Math.round(parseFloat(payAmount) * 100),
         payment_type: payType,
+        kind: payKind,
         payment_date: payDate,
         notes: payNotes || undefined,
       });
       setPayments((prev) => ({ ...prev, [stayId]: [p, ...(prev[stayId] || [])] }));
       setPayAmount("");
       setPayNotes("");
+      setPayKind("rent");
       setAddingPayment(null);
       loadSummary();
-      toast.success(`Recorded ${formatCurrency(p.amount)}`);
+      toast.success(`Recorded ${formatCurrency(p.amount)}${p.kind === "deposit" ? " deposit" : ""}`);
     } catch (err) {
       setPayError(err instanceof ApiError ? err.message : "Failed");
     } finally {
@@ -493,17 +508,24 @@ export default function TenantDetailPage() {
             const active = !stay.end_date;
             const unassigned = stay.bed_id == null;
             const stayPayments = payments[stay.id];
-            const totalPaid = (stayPayments || []).reduce((s, p) => s + p.amount, 0);
+            // Rent and deposit are different money: "Paid" is rent, the same
+            // figure as the summary above, and the deposit gets its own line.
+            const approved = (stayPayments || []).filter((p) => p.is_approved);
+            const rentPaid = approved.filter((p) => p.kind === "rent").reduce((s, p) => s + p.amount, 0);
+            const depositPaid = approved.filter((p) => p.kind === "deposit").reduce((s, p) => s + p.amount, 0);
+            const deposit = depositSummary(stay.deposit_amount, stayPayments === undefined ? undefined : depositPaid);
             const isEndingThis = endingStay === stay.id;
             const settlement = settlements[stay.id];
+            const open = expanded === stay.id;
+            const ledgerId = `ledger-${stay.id}`;
 
             return (
               <Card key={stay.id} padding="none">
-                {/* Stay header */}
-                <div
-                  onClick={() => { if (!isEndingThis) toggleStay(stay.id); }}
-                  className="flex w-full cursor-pointer items-start justify-between px-4 py-3 text-left"
-                >
+                {/* Stay header — information and actions only. This used to be
+                    the expander itself: a clickable <div> whose one affordance
+                    was cursor-pointer, which a touchscreen does not have. The
+                    ledger now has a button of its own, below. */}
+                <div className="flex items-start justify-between gap-3 px-4 py-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={active ? "success" : "neutral"}>
@@ -542,13 +564,16 @@ export default function TenantDetailPage() {
                       {" · "}
                       {formatCurrency(stay.rent_amount)}/{stay.rent_cycle}
                     </p>
+                    {deposit && (
+                      <p className="mt-0.5 text-xs tabular-nums text-stone-500">{deposit}</p>
+                    )}
                   </div>
                   <div className="text-right">
-                    {/* Payments load when the card is expanded, so before that
-                        totalPaid is 0 — which is not "nothing was paid". Saying
-                        so next to a refund figure would be a money lie. */}
+                    {/* Until the payments arrive the total is unknown, not 0 —
+                        and saying ₹0 next to a refund figure would be a money
+                        lie. The dash now only lasts as long as the request. */}
                     <p className="text-sm font-semibold tabular-nums text-stone-700">
-                      {stayPayments === undefined ? "Paid —" : `Paid ${formatCurrency(totalPaid)}`}
+                      {stayPayments === undefined ? "Paid —" : `Paid ${formatCurrency(rentPaid)}`}
                     </p>
                     {settlement && (
                       <p className={`text-xs font-medium tabular-nums ${
@@ -560,7 +585,7 @@ export default function TenantDetailPage() {
                       </p>
                     )}
                     {active && (
-                      <div className="mt-1 flex flex-wrap items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="mt-1 flex flex-wrap items-center justify-end gap-3">
                         {unassigned && !isEndingThis && (
                           <button
                             onClick={() => setAssigningStay(stay.id)}
@@ -602,7 +627,7 @@ export default function TenantDetailPage() {
                         settling", still has a deposit to account for. Without
                         this the money conversation has nowhere to happen. */}
                     {!active && !settlement && (
-                      <div className="mt-1 flex justify-end" onClick={(e) => e.stopPropagation()}>
+                      <div className="mt-1 flex justify-end">
                         <button
                           onClick={() => setSettlingStay(stay.id)}
                           className="text-xs font-medium text-indigo-600 hover:underline"
@@ -614,9 +639,37 @@ export default function TenantDetailPage() {
                   </div>
                 </div>
 
+                {/* The ledger's own control: a real button, full width, a
+                    chevron, and the payment count, so a closed ledger still
+                    says whether there is anything in it. */}
+                <button
+                  type="button"
+                  onClick={() => toggleStay(stay.id)}
+                  aria-expanded={open}
+                  aria-controls={ledgerId}
+                  className="flex min-h-11 w-full items-center gap-2 border-t border-stone-100 px-4 py-2 text-left text-sm font-medium text-indigo-700 transition duration-150 ease-out last:rounded-b-xl hover:bg-stone-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-500"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-hidden
+                    className={`h-4 w-4 shrink-0 transition-transform duration-150 ease-out ${open ? "rotate-90" : ""}`}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  {open ? "Hide ledger" : "Show ledger"}
+                  <span className="ml-auto text-xs font-normal tabular-nums text-stone-500">
+                    {stayPayments === undefined
+                      ? "…"
+                      : `${stayPayments.length} payment${stayPayments.length === 1 ? "" : "s"}`}
+                  </span>
+                </button>
+
                 {/* Expanded: payment ledger */}
-                {expanded === stay.id && (
-                  <div className="border-t border-stone-100 px-4 py-3">
+                {open && (
+                  <div id={ledgerId} className="border-t border-stone-100 px-4 py-3">
                     {/* What the refund was made of. Kept on the page because
                         the tenant asks about it weeks later, and the owner
                         should not have to remember. */}
@@ -705,11 +758,25 @@ export default function TenantDetailPage() {
                               placeholder="Amount (₹)"
                               value={payAmount}
                               onChange={(e) => setPayAmount(e.target.value)}
+                              aria-label="Amount in rupees"
                               className="w-32"
                             />
+                            {/* What it is for, beside how it arrived. A deposit
+                                is held, not rent: it never reduces what they
+                                owe, and it is what a settlement refunds. */}
+                            <Select
+                              value={payKind}
+                              onChange={(e) => setPayKind(e.target.value as PaymentKind)}
+                              aria-label="Payment is for"
+                              className="w-auto"
+                            >
+                              <option value="rent">Rent</option>
+                              <option value="deposit">Deposit</option>
+                            </Select>
                             <Select
                               value={payType}
                               onChange={(e) => setPayType(e.target.value)}
+                              aria-label="Paid by"
                               className="w-auto"
                             >
                               <option value="cash">Cash</option>
@@ -745,7 +812,11 @@ export default function TenantDetailPage() {
 
                     {/* Payments list */}
                     {stayPayments === undefined ? (
-                      <p className="text-xs text-stone-400">Loading…</p>
+                      paymentsFailed ? (
+                        <FormError>Could not load the payments. Reload the page to try again.</FormError>
+                      ) : (
+                        <p className="text-xs text-stone-400">Loading…</p>
+                      )
                     ) : stayPayments.length === 0 ? (
                       <p className="text-xs text-stone-400">No payments recorded.</p>
                     ) : (
@@ -763,13 +834,21 @@ export default function TenantDetailPage() {
                           {stayPayments.map((p) => (
                             <tr key={p.id} className="group">
                               <td className="py-2 tabular-nums text-stone-600">{p.payment_date.slice(0, 10)}</td>
-                              <td className="py-2 font-medium tabular-nums text-stone-800">{formatCurrency(p.amount)}</td>
+                              <td className="py-2 font-medium tabular-nums text-stone-800">
+                                {formatCurrency(p.amount)}
+                                {p.kind === "deposit" && <Badge tone="info" className="ml-2">Deposit</Badge>}
+                              </td>
                               <td className="py-2 capitalize text-stone-500">{p.payment_type}</td>
                               <td className="py-2 text-stone-400">{p.notes || "—"}</td>
                               <td className="py-2 text-right">
+                                {/* Delete-and-re-add is the only way to correct
+                                    a payment, so this must be reachable on a
+                                    phone, an iPad and a keyboard — see
+                                    HOVER_REVEAL for how it once was not. */}
                                 <button
                                   onClick={() => handleDeletePayment(stay.id, p.id)}
-                                  className="hidden text-stone-300 transition duration-150 ease-out hover:text-red-500 group-hover:inline"
+                                  aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${p.payment_date.slice(0, 10)}`}
+                                  className={`-my-1.5 inline-flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
                                 >
                                   ✕
                                 </button>

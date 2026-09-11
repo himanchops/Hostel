@@ -347,7 +347,12 @@ function ReviewDrawer({
             {/* Collect deposit flow */}
             {mode === "collect_deposit" && (
               <div className="space-y-4 rounded-xl border border-stone-200 p-4">
-                <p className="text-xs text-stone-500">The deposit/advance will be recorded as a payment. Bed can be assigned later from the tenant profile.</p>
+                {/* This used to say the deposit "will be recorded as a
+                    payment". Nothing ever recorded one — approving only saves
+                    the agreed terms — and since a settlement now refunds only
+                    deposit money actually received, the promise would have
+                    cost the tenant their refund. */}
+                <p className="text-xs text-stone-500">This saves the agreed deposit, not the money. Once they pay it, record it on their tenant page as a deposit payment. The bed can be assigned there later too.</p>
                 <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
               </div>
             )}

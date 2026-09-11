@@ -1776,6 +1776,150 @@ the only way to see the pooler 500s and Render waking from sleep.
 
 ---
 
+## UX audit blockers — B1, B2, B3, M1, M2 ✅ (Sep 2026)
+
+Branch `ux-audit-blockers`, migrations 007 and 008. The first five items of
+`docs/BACKLOG.md` → "Found by the UX audit"; the rest of that list was left
+alone on purpose. Himanshu asked for the iPad, in both orientations, to be
+treated as the likely primary device — which turned out to matter to B2.
+
+### B1 — a settlement refunds the deposit received, not the deposit agreed (migration 007)
+
+The audit's fix read "compute held deposit from recorded deposit payments".
+There were no deposit payments: `payment_type` is `cash | online`, and every
+payment counted as rent in nine queries. So the bug had two faces. A tenant who
+paid nothing was offered the agreed deposit back (the audit's ₹8,000). And a
+tenant whose deposit *was* written down — as an ordinary payment, the only way
+the app allowed — got it back twice: ₹17,000 "deposit held" from the agreed
+term, plus ₹17,000 "paid in advance" from the same money. ₹34,000 offered for
+₹25,500 received.
+
+- **Migration 007** adds `payments.kind` (`rent` | `deposit`, default `rent`).
+  No backfill: every existing row was already being counted as rent, and
+  inventing a deposit payment per stay would put money in the ledger that
+  nobody recorded receiving. Production holds only test data (Himanshu, 11
+  Sep), so a deposit mis-logged as rent is deleted and re-added — no
+  reclassify tool was built.
+- **Every rent sum filters `kind = 'rent'`**: settlements, grid, dashboard ×2,
+  collections (the total *and* `last_payment_date` — a deposit last week is not
+  a rent payment last week), insights ×2, the tenant summary. The bulk importer
+  (`cmd/import`) takes a `kind` per payment too.
+- The preview returns `deposit_agreed_paise` beside `deposit_paise`, which is
+  now the deposit held. The drawer shows "₹16,000 agreed · ₹0 received" when
+  they differ, and says only money received is refunded.
+- Both payment forms (tenant page, grid drawer) ask Rent or Deposit; deposit
+  rows are badged there, on the dashboard's recent list and in the tenant
+  portal. The stay card shows the deposit, agreed against received — the
+  audit's "the deposit appears nowhere".
+- The pending queue's "collect deposit" explainer claimed the deposit "will be
+  recorded as a payment". Nothing ever recorded one. Corrected; the option and
+  button labels still overpromise (BACKLOG → "Smaller, verified, and cheap").
+- **Tests.** Four Go cases on `previewFor` at exact paise, on the existing
+  ₹8,500 / ₹17,000 fixture — nothing paid, part-paid in two instalments, the
+  double count, overpaid — plus the frontend mirror in `tests/unit/deposit.test.ts`
+  and an e2e that watches the refund go from −₹8,500 to +₹1,500 as ₹10,000 of
+  deposit arrives while dues, the summary and Collections stay put.
+- **The e2e suite had the bug in it.** `seedStayForSettlement` created a ₹17,000
+  deposit and never paid it, and every settlement test then refunded it. It
+  now records the deposit as a payment.
+
+### B2 — hover-only controls, and the "correct" recipe was wrong on an iPad
+
+Three destructive controls were still `hidden … group-hover:*`. The fourth, the
+bed chip Phase 16 had fixed with `sm:opacity-0 sm:group-hover:opacity-100`, was
+broken too: it keys off *width*, an iPad is wider than `sm`, and Tailwind v4
+wraps every `hover:` variant in `@media (hover: hover)`, which a touch iPad does
+not match. On the primary device the bed controls were invisible and still
+tappable by accident.
+
+- `HOVER_REVEAL` in `components/ui/reveal.ts` —
+  `pointer-fine:opacity-0 group-hover:opacity-100 focus-visible:opacity-100` —
+  hides a control only when there is a mouse. Applied to all four; the payment
+  deletes gained an aria-label naming the amount and a 36px target.
+- `tests/unit/hover-reveal.test.ts` scans `src` and fails on either old pattern.
+  `tests/e2e/owner/hover-reveal.test.ts` taps every one of them on a phone and
+  an iPad in both orientations under touch emulation — after first asserting
+  the browser reports no fine pointer and no hover, so it cannot pass on a
+  mouse by accident — and checks the mouse case still hides until hover and
+  shows on keyboard focus.
+
+### B3 — an owner account screen, and sign-out that revokes (migration 008)
+
+- **Migration 008** adds `owners.token_version`; owner JWTs carry it as `tv`,
+  and `AuthMiddleware` compares it on every request (one primary-key lookup). A
+  counter rather than an "issued before" timestamp, because `iat` has
+  one-second resolution. Tokens minted before the claim existed decode as 0, the
+  column default, so deploying this signs nobody out. A failed lookup is a 500,
+  not a 401 — a database outage must not bounce the owner round a login loop.
+- `PUT /api/me/password` (current + new; a wrong current password is a 400, not
+  a 401, which every client reads as "signed out") bumps the version and
+  returns a fresh token, so this device stays in and every other one is out.
+  `POST /api/me/sign-out-everywhere` bumps it and ends this session too.
+- `/account`, reached from the name at the foot of the sidebar or from the
+  avatar menu — the nav stays at six tabs. Sign-out-everywhere lands on
+  `/login?signed_out=everywhere` with a banner, by full page load: `logout()`
+  followed by `router.replace` lost a race with the layout's own redirect to
+  plain `/login`, which dropped the query string.
+- **Scoped out: reset by email.** Nothing in the backend can send mail. A
+  "Forgot password?" link with no sender behind it would be the half-build the
+  brief warned about. The psql runbook in `docs/DEPLOYMENT.md` is still the
+  recovery path, and now bumps `token_version` too.
+- Plain sign-out stays local by design. M8 — owner sign-out leaving the
+  tenant-portal token behind — is still open.
+- **Tests.** Six Go middleware cases (current, revoked, pre-versioning token,
+  deleted owner, lookup failure, tenant token), and `account.test.ts`: wrong
+  current password, mismatch, change → both earlier tokens 401 with the "session
+  has ended" message while this device carries on, sign-out-everywhere, and the
+  screen reachable at 375, 768 and 1024.
+
+### M1 — the ledger has a real button
+
+The stay header was a `<div onClick>` with `cursor-pointer` as its only
+affordance. It is now information and actions only; below it a full-width
+`<button aria-expanded aria-controls>`, 44px tall, with a chevron and the
+payment count, so a shut ledger still answers "did it save?". Every ledger
+loads with the page instead of on expand — `Paid —` now lasts only as long as
+the request, and a failure says so where the ledger would be. A single stay
+opens by default. "Paid" is rent only, the same figure as the summary above it.
+`tenant-ledger.test.ts` covers the default, the count, keyboard, several stays,
+recording a deposit, and a tap on an iPad.
+
+### M2 — Insights charts reachable at 375px
+
+`min-w-0` on the Card that is the grid item. `insights.test.ts`'s mobile test
+was rewritten: it seeds a year so the chart takes its natural 672px, then
+asserts the scroller sits inside the screen, actually scrolls at 375, and
+brings the latest month into view — at 375, 768 and 1024. **Run against the
+unfixed page first:** it failed with the scroller's right edge at 708px on a
+375px screen, which is the audit's measurement. A test that cannot fail on the
+bug it guards is the thing this replaces.
+
+### Operational note — deploying this branch
+
+**Apply migrations 007 and 008 to Neon before the new backend deploys.** The new
+queries read `payments.kind` and `owners.token_version` and will 500 against
+the old schema. The old backend is unaffected by the new schema (both columns
+have defaults and it reads neither), so the safe order is migrate, then deploy.
+Verify by column, not by version number — see the migration 006 note.
+
+### Verification
+
+`go test ./...` passes (auth, handlers, middleware and the rest). Frontend unit
+tests 43/43, including the deposit mirror and the source guard. Full e2e suite
+**89/89** in one clean run. One existing test needed a locator change, not a
+behaviour change: `tenant-profile-enrichment` looked for `₹2,500` once, and
+with a single stay's ledger now open by default the payment row says it too.
+One lint error remains in `contexts/auth.tsx` (setState in the restore-session
+effect); it is on master too and was left alone.
+
+The settle drawer was also checked in a real 768×1024 and 1024×768 touch
+viewport (flush right, 512px wide). The in-app preview pane drew it half
+off-screen at the same size. That was the pane's emulation — it sizes fixed
+elements from its own 1280px window — and not the app. Worth knowing before
+trusting that pane for any fixed-position overlay at tablet widths.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

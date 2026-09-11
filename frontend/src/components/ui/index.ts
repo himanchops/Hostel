@@ -29,3 +29,4 @@ export { ChartScroll, GroupedBarChart, PercentLineChart, Meter } from "./Chart";
 export type { BarPair, LinePoint } from "./Chart";
 export { SegmentedControl } from "./SegmentedControl";
 export { Collapsible } from "./Collapsible";
+export { HOVER_REVEAL } from "./reveal";

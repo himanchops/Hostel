@@ -30,10 +30,108 @@ func settleStay() settlementStayRow {
 		TenantID:      1,
 		TenantName:    "Asha Rao",
 		RentAmount:    settleRent,
-		DepositAmount: settleDeposit,
+		DepositAgreed: settleDeposit,
+		DepositHeld:   settleDeposit, // paid in full; the tests below take it away
 		RentCycle:     "monthly",
 		StartDate:     settleStart,
 		TotalPaid:     settlePaid,
+	}
+}
+
+// ─── The deposit refunded is the deposit received ────────────────────────────
+//
+// The UX audit's first blocker. The calculator used to refund the deposit
+// AGREED at intake as if it were money in the drawer. Three ways that went
+// wrong, all on the same ₹8,500/month stay with a ₹17,000 deposit agreed.
+
+// Nothing paid at all. One cycle billed (15 Mar → 20 Mar). The old code offered
+// him ₹17,000 − ₹8,500 = ₹8,500 back; he owes ₹8,500.
+func TestPreview_NothingPaidIsNotRefundedAnything(t *testing.T) {
+	stay := settleStay()
+	stay.DepositHeld = 0
+	stay.TotalPaid = 0
+
+	p := (&SettlementHandler{}).previewFor(stay, date(2026, time.March, 20))
+
+	if p.CyclesBilled != 1 {
+		t.Fatalf("cycles = %d, want 1", p.CyclesBilled)
+	}
+	if p.DepositPaise != 0 {
+		t.Errorf("deposit held = %d, want 0 — nothing was received", p.DepositPaise)
+	}
+	if p.DepositAgreedPaise != 1700000 {
+		t.Errorf("deposit agreed = %d, want 1700000 — the term is still shown", p.DepositAgreedPaise)
+	}
+	if p.RefundPaise != -850000 {
+		t.Errorf("refund = %d, want -850000 (the tenant owes one month); the old code said +850000", p.RefundPaise)
+	}
+}
+
+// The deposit arrived in two instalments and fell short: ₹6,000 + ₹4,000 of
+// the ₹17,000 agreed. Six cycles billed, five paid, so ₹8,500 of rent comes out
+// of the ₹10,000 actually held.
+func TestPreview_PartDepositIsRefundedOnlyAsFarAsItWasPaid(t *testing.T) {
+	stay := settleStay()
+	stay.DepositHeld = 600000 + 400000
+
+	p := (&SettlementHandler{}).previewFor(stay, settleEnd)
+
+	if p.DepositPaise != 1000000 || p.DepositAgreedPaise != 1700000 {
+		t.Errorf("deposit held/agreed = %d/%d, want 1000000/1700000", p.DepositPaise, p.DepositAgreedPaise)
+	}
+	if p.DuesPaise != 850000 {
+		t.Errorf("dues = %d, want 850000 (₹51,000 billed − ₹42,500 paid)", p.DuesPaise)
+	}
+	if p.RefundPaise != 150000 {
+		t.Errorf("refund = %d, want 150000 (₹10,000 held − ₹8,500 dues)", p.RefundPaise)
+	}
+}
+
+// Before payments had a kind, the only way to write a deposit down was as an
+// ordinary payment. Here ₹25,500 arrived for one billed cycle: ₹17,000 of it was
+// the deposit. The old code counted it twice — ₹17,000 "deposit held" from the
+// agreed term, plus ₹17,000 "paid in advance" — and offered ₹34,000 back for
+// ₹25,500 received.
+func TestPreview_ADepositWrittenAsRentIsNeverRefundedTwice(t *testing.T) {
+	end := date(2026, time.March, 20)
+
+	asRent := settleStay()
+	asRent.DepositHeld = 0
+	asRent.TotalPaid = 2550000
+	old := refundFor(asRent.DepositAgreed, 850000-2550000, 1700000, nil)
+	if old != 3400000 {
+		t.Fatalf("fixture is wrong: the old arithmetic should give 3400000, got %d", old)
+	}
+
+	p := (&SettlementHandler{}).previewFor(asRent, end)
+	if p.RefundPaise != 1700000 {
+		t.Errorf("refund = %d, want 1700000 — once, as a rent advance the owner chooses about", p.RefundPaise)
+	}
+	if p.AdvancePaise != 1700000 {
+		t.Errorf("advance = %d, want 1700000", p.AdvancePaise)
+	}
+
+	// Recorded properly, the same money lands in the same place, but as a
+	// deposit rather than as an advance.
+	asDeposit := settleStay()
+	asDeposit.DepositHeld = 1700000
+	asDeposit.TotalPaid = 850000
+	q := (&SettlementHandler{}).previewFor(asDeposit, end)
+	if q.RefundPaise != 1700000 || q.DuesPaise != 0 || q.AdvancePaise != 0 {
+		t.Errorf("refund/dues/advance = %d/%d/%d, want 1700000/0/0", q.RefundPaise, q.DuesPaise, q.AdvancePaise)
+	}
+}
+
+// A tenant who paid more deposit than was agreed gets back what they paid.
+// The agreed figure is a label; it caps nothing.
+func TestPreview_DepositOverpaidIsRefundedInFull(t *testing.T) {
+	stay := settleStay()
+	stay.DepositHeld = 2000000 // ₹20,000 against ₹17,000 agreed
+	stay.TotalPaid = 5100000   // every cycle paid
+
+	p := (&SettlementHandler{}).previewFor(stay, settleEnd)
+	if p.RefundPaise != 2000000 {
+		t.Errorf("refund = %d, want 2000000", p.RefundPaise)
 	}
 }
 

@@ -12,7 +12,7 @@ import {
   formatCurrency,
   today,
 } from "@/lib/api";
-import { Button, Card, Field, FormError, Input, useConfirm, useToast } from "@/components/ui";
+import { Badge, Button, Card, Field, FormError, Input, useConfirm, useToast } from "@/components/ui";
 
 export default function TenantPortalPage() {
   const { token, isAuthenticated, isLoading } = useTenantAuth();
@@ -314,6 +314,9 @@ function PaymentRow({ payment }: { payment: Payment }) {
     <div className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2">
       <div>
         <span className="text-sm font-medium text-stone-900">{formatCurrency(payment.amount)}</span>
+        {/* A deposit is held, not rent — the tenant should see it filed as
+            what it is, since it comes back to them at move-out. */}
+        {payment.kind === "deposit" && <Badge tone="info" className="ml-2">Deposit</Badge>}
         {payment.notes && (
           <span className="ml-2 text-xs text-stone-500">{payment.notes}</span>
         )}

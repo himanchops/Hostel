@@ -54,6 +54,20 @@ photo on the registration form, and saying out loud that portal login is phone +
 password. Four of the last five were a capability the backend already had that
 no screen ever offered — check for that before building.
 
+**The UX audit (Sep 2026)** — seven strangers walked the app cold; report in
+`docs/UX_REVIEW.md`, work list in `docs/BACKLOG.md` → "Found by the UX audit".
+Its three blockers and first two majors are fixed on `ux-audit-blockers`:
+deposits are their own payment kind and only money received is refunded
+(migration 007), hover-only controls are reachable by touch and keyboard, owners
+have `/account` with change-password and sign-out-everywhere backed by token
+revocation (migration 008), the tenant ledger has a real button, and Insights
+charts fit a phone. The rest of that list is open.
+
+**The primary device is probably an iPad**, in either orientation — which puts
+it on both sides of the 1024px sidebar breakpoint. Test layout and interaction
+changes at 375×812, 768×1024 and 1024×768, and use touch emulation for the iPad
+sizes: width never stands in for "has no mouse".
+
 The rent-terms fields and the vacant-bed picker live in
 `frontend/src/components/StayForm.tsx` and had four drifting copies before
 Phase 16d. A fifth screen that needs "rent, deposit, cycle, start date" or "pick
@@ -66,6 +80,23 @@ Test dirs are `tests/e2e/{owner,tenant,public}/` — a whole surface with no dir
 **Roadmap decision (Apr 2026): deployment is deferred until after the UI modernization and two value features.** Execution order: design Phases A–B (`docs/DESIGN_PLAN.md`) → Phase 10 Collections & WhatsApp nudges (`docs/PROGRESS.md`) → design Phases C–E → Phase 11 Settlement calculator → design Phase F → deploy (Phase 9.2–9.6, `docs/DEPLOYMENT.md`).
 
 Key conventions to carry forward:
+- **A payment has a kind: rent or deposit** (migration 007). Any query that sums
+  payments as rent — dues, balances, collected, arrears, "last payment" — must
+  say `p.kind = 'rent'`; there were nine when the column arrived. A deposit is
+  held money, never rent collected. A settlement refunds approved deposit
+  *payments*, never `stays.deposit_amount`, which is only the figure agreed at
+  intake — refunding the agreement is how a tenant who paid nothing was once
+  offered their deposit back.
+- **A control that hides until hover uses `HOVER_REVEAL`**
+  (`components/ui/reveal.ts`), never `hidden group-hover:*` and never a
+  width-keyed `sm:opacity-0`. Tailwind v4 applies `hover:` only under
+  `@media (hover: hover)`, which a touch iPad does not match, so anything keyed
+  off width is invisible on the primary device. `tests/unit/hover-reveal.test.ts`
+  fails the build on the old patterns.
+- **Owner tokens carry a version** (`owners.token_version`, migration 008),
+  checked on every request. Anything that should end sessions — a password
+  change, sign-out-everywhere, the psql recovery runbook — increments it.
+  Plain sign-out stays local to the device on purpose.
 - **Never swallow an error.** A handler that returns 500 must log the underlying
   error first — `c.Logger().Errorf(...)` with enough context to identify the row
   — and a `db.Get`/`db.Select` whose error is discarded is a bug, not a

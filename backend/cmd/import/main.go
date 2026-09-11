@@ -59,10 +59,14 @@ type importStay struct {
 }
 
 type importPayment struct {
-	Date        string  `json:"date"`
-	AmountPaise int64   `json:"amount_paise"`
-	Type        string  `json:"type"`
-	Note        *string `json:"note"`
+	Date        string `json:"date"`
+	AmountPaise int64  `json:"amount_paise"`
+	Type        string `json:"type"` // how it arrived: "cash" | "online"
+	// What it was for: "rent" (the default) | "deposit". A paper ledger records
+	// the deposit as a line like any other; imported as rent it would clear
+	// two months of arrears and never be refunded (migration 007).
+	Kind string  `json:"kind"`
+	Note *string `json:"note"`
 }
 
 type stats struct {
@@ -352,12 +356,21 @@ func insertPayment(tx *sqlx.Tx, stayID int64, p importPayment) (bool, error) {
 	if pType != "cash" && pType != "online" {
 		return false, fmt.Errorf("invalid payment.type %q", pType)
 	}
+	kind := p.Kind
+	if kind == "" {
+		kind = "rent"
+	}
+	if kind != "rent" && kind != "deposit" {
+		return false, fmt.Errorf("invalid payment.kind %q", kind)
+	}
 
+	// Kind is part of the identity: an ₹8,000 deposit and the first month's
+	// ₹8,000 rent, paid the same day in cash, are two payments, not a duplicate.
 	var dup int
 	err = tx.Get(&dup,
 		`SELECT COUNT(*) FROM payments
-		 WHERE stay_id = $1 AND payment_date = $2 AND amount = $3 AND payment_type = $4`,
-		stayID, date, p.AmountPaise, pType,
+		 WHERE stay_id = $1 AND payment_date = $2 AND amount = $3 AND payment_type = $4 AND kind = $5`,
+		stayID, date, p.AmountPaise, pType, kind,
 	)
 	if err != nil {
 		return false, fmt.Errorf("dedup check: %w", err)
@@ -367,9 +380,9 @@ func insertPayment(tx *sqlx.Tx, stayID int64, p importPayment) (bool, error) {
 	}
 
 	_, err = tx.Exec(
-		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, notes, is_approved, created_at)
-		 VALUES ($1, $2, $3, $4, $5, true, NOW())`,
-		stayID, p.AmountPaise, pType, date, p.Note,
+		`INSERT INTO payments (stay_id, amount, payment_type, kind, payment_date, notes, is_approved, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, true, NOW())`,
+		stayID, p.AmountPaise, pType, kind, date, p.Note,
 	)
 	if err != nil {
 		return false, err

@@ -9,11 +9,14 @@ import (
 
 // Owner represents a hostel/PG owner (tenant in multi-tenant sense)
 type Owner struct {
-	ID           int64     `db:"id" json:"id"`
-	Email        string    `db:"email" json:"email"`
-	PasswordHash string    `db:"password_hash" json:"-"`
-	Name         string    `db:"name" json:"name"`
-	Phone        string    `db:"phone" json:"phone,omitempty"`
+	ID           int64  `db:"id" json:"id"`
+	Email        string `db:"email" json:"email"`
+	PasswordHash string `db:"password_hash" json:"-"`
+	Name         string `db:"name" json:"name"`
+	Phone        string `db:"phone" json:"phone,omitempty"`
+	// TokenVersion is copied into every token issued; see auth.Claims. Not
+	// secret, but nothing a client does with it is useful, so it stays out.
+	TokenVersion int       `db:"token_version" json:"-"`
 	CreatedAt    time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
@@ -121,12 +124,27 @@ const (
 	PaymentTypeOnline PaymentType = "online"
 )
 
+// PaymentKind is what a payment is FOR, where PaymentType is how it arrived.
+//
+// Rent counts against dues, collections and every revenue figure. A deposit
+// counts against none of them: it is money held, and it is the only thing a
+// settlement refunds as a deposit. Before migration 007 the settlement
+// refunded stays.deposit_amount — the figure agreed at intake — whether or not
+// anyone had paid it.
+type PaymentKind string
+
+const (
+	PaymentKindRent    PaymentKind = "rent"
+	PaymentKindDeposit PaymentKind = "deposit"
+)
+
 // Payment represents a payment made by a tenant
 type Payment struct {
 	ID          int64       `db:"id" json:"id"`
 	StayID      int64       `db:"stay_id" json:"stay_id"`
 	Amount      int64       `db:"amount" json:"amount"` // In paise
 	PaymentType PaymentType `db:"payment_type" json:"payment_type"`
+	Kind        PaymentKind `db:"kind" json:"kind"`
 	PaymentDate time.Time   `db:"payment_date" json:"payment_date"`
 	ProofURL    *string     `db:"proof_url" json:"proof_url,omitempty"`
 	Notes       *string     `db:"notes" json:"notes,omitempty"`

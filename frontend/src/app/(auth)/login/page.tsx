@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/contexts/auth";
-import { Button, Card, Field, FormError, Input } from "@/components/ui";
+import { Banner, Button, Card, Field, FormError, Input } from "@/components/ui";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -14,6 +14,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // "Sign out everywhere" lands here, and its confirmation cannot be a toast:
+  // the toast lives in the signed-in layout, which is gone by now. Read from
+  // location in an effect rather than useSearchParams, which would force a
+  // Suspense boundary around the whole page for one line of text.
+  const [signedOutEverywhere, setSignedOutEverywhere] = useState(false);
+  useEffect(() => {
+    setSignedOutEverywhere(new URLSearchParams(window.location.search).get("signed_out") === "everywhere");
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,6 +40,12 @@ export default function LoginPage() {
   return (
     <Card padding="none" className="p-6">
       <h2 className="mb-6 text-xl font-semibold text-stone-900">Sign in to your account</h2>
+
+      {signedOutEverywhere && !error && (
+        <Banner tone="success" className="mb-4">
+          Signed out on every device. Sign in again to carry on.
+        </Banner>
+      )}
 
       {error && <div className="mb-4"><FormError>{error}</FormError></div>}
 

@@ -67,7 +67,7 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 	for i := range stays {
 		var payments []models.Payment
 		if err := h.db.Select(&payments,
-			`SELECT id, stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at
+			`SELECT id, stay_id, amount, payment_type, kind, payment_date, proof_url, notes, is_approved, created_at
 			 FROM payments WHERE stay_id = $1 ORDER BY payment_date DESC`,
 			stays[i].ID,
 		); err != nil {
@@ -130,7 +130,7 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 		// no tenant-submitted payment ever reached the database.
 		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at)
 		 VALUES ($1, $2, 'online', $3, $4, $5, false, $6)
-		 RETURNING id, stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at`,
+		 RETURNING id, stay_id, amount, payment_type, kind, payment_date, proof_url, notes, is_approved, created_at`,
 		stayID, req.Amount, now, proofURL, req.Notes, now,
 	).StructScan(&payment)
 	if err != nil {

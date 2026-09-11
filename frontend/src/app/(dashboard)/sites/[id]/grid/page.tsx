@@ -6,10 +6,11 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import {
   gridApi, sitesApi, tenantsApi, staysApi, paymentsApi,
-  GridRoom, GridBed, BedStatus, Site, Tenant, Payment,
+  GridRoom, GridBed, BedStatus, Site, Tenant, Payment, PaymentKind,
   formatCurrency, today,
   ApiError,
 } from "@/lib/api";
+import { depositSummary } from "@/lib/settlement";
 import {
   Avatar,
   Badge,
@@ -30,6 +31,7 @@ import {
   StatusPill,
   useConfirm,
   useToast,
+  HOVER_REVEAL,
 } from "@/components/ui";
 import { EndStayDialog } from "@/components/EndStayDialog";
 import {
@@ -526,6 +528,7 @@ function OccupiedPanel({
 
   // Payment form
   const [amount, setAmount] = useState("");
+  const [payKind, setPayKind] = useState<PaymentKind>("rent");
   const [payType, setPayType] = useState("cash");
   const [payDate, setPayDate] = useState(today());
   const [notes, setNotes] = useState("");
@@ -549,10 +552,13 @@ function OccupiedPanel({
       await staysApi.addPayment(token, bed.stay_id, {
         amount: Math.round(parseFloat(amount) * 100),
         payment_type: payType,
+        kind: payKind,
         payment_date: payDate,
         notes: notes || undefined,
       });
-      toast.success(`Recorded ${formatCurrency(Math.round(parseFloat(amount) * 100))}`);
+      toast.success(
+        `Recorded ${formatCurrency(Math.round(parseFloat(amount) * 100))}${payKind === "deposit" ? " deposit" : ""}`
+      );
       onPaymentAdded();
     } catch (e) {
       setPayError(e instanceof ApiError ? e.message : "Failed");
@@ -575,6 +581,12 @@ function OccupiedPanel({
 
   const balance = bed.balance ?? 0;
   const settled = balance >= 0;
+  // Agreed against received, the same line the tenant page and the settlement
+  // drawer show — undefined while loading so it never claims ₹0 received early.
+  const depositReceived = payments
+    .filter((p) => p.kind === "deposit" && p.is_approved)
+    .reduce((s, p) => s + p.amount, 0);
+  const deposit = depositSummary(bed.deposit_amount ?? 0, paymentsLoading ? undefined : depositReceived);
 
   return (
     <div>
@@ -612,7 +624,7 @@ function OccupiedPanel({
         {bed.rent_amount && (
           <p className="mt-0.5 text-xs tabular-nums text-stone-400">
             Rent: {formatCurrency(bed.rent_amount)}/{bed.stay_id ? "mo" : ""}
-            {bed.deposit_amount ? ` · Deposit: ${formatCurrency(bed.deposit_amount)}` : ""}
+            {deposit ? ` · ${deposit}` : ""}
           </p>
         )}
       </div>
@@ -645,7 +657,18 @@ function OccupiedPanel({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
-            <Select value={payType} onChange={(e) => setPayType(e.target.value)}>
+            {/* What it is for, beside how it arrived. A deposit is held, not
+                rent: it never reduces what they owe, and it is the only money
+                a settlement refunds as a deposit. */}
+            <Select
+              value={payKind}
+              onChange={(e) => setPayKind(e.target.value as PaymentKind)}
+              aria-label="Payment is for"
+            >
+              <option value="rent">Rent</option>
+              <option value="deposit">Deposit</option>
+            </Select>
+            <Select value={payType} onChange={(e) => setPayType(e.target.value)} aria-label="Paid by">
               <option value="cash">Cash</option>
               <option value="online">Online</option>
             </Select>
@@ -673,16 +696,21 @@ function OccupiedPanel({
             {payments.map((p) => (
               <div key={p.id} className="group flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2">
                 <div>
-                  <p className="text-sm font-medium tabular-nums text-stone-800">{formatCurrency(p.amount)}</p>
+                  <p className="text-sm font-medium tabular-nums text-stone-800">
+                    {formatCurrency(p.amount)}
+                    {p.kind === "deposit" && <Badge tone="info" className="ml-2">Deposit</Badge>}
+                  </p>
                   <p className="text-xs tabular-nums text-stone-400">
                     {p.payment_type} · {p.payment_date.slice(0, 10)}
                     {p.notes ? ` · ${p.notes}` : ""}
                   </p>
                 </div>
+                {/* Delete-and-re-add is the only correction a payment has, so
+                    this must be reachable without a mouse — see HOVER_REVEAL. */}
                 <button
                   onClick={() => handleDeletePayment(p.id)}
-                  className="hidden text-stone-300 transition duration-150 ease-out hover:text-red-500 group-hover:block"
-                  title="Delete"
+                  aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${p.payment_date.slice(0, 10)}`}
+                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
                 >
                   ✕
                 </button>

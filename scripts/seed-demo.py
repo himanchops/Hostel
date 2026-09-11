@@ -313,9 +313,11 @@ def main():
             "rent_cycle": cycle, "start_date": start,
         })
 
-    def pay(s, amount, when, kind="cash", notes=None):
+    # `kind` here is how the money arrived (the API's payment_type); `purpose`
+    # is what it was for (the API's kind). The names predate the second one.
+    def pay(s, amount, when, kind="cash", notes=None, purpose="rent"):
         return api("POST", f"/api/stays/{s['id']}/payments", {
-            "amount": amount, "payment_type": kind,
+            "amount": amount, "payment_type": kind, "kind": purpose,
             "payment_date": when, "notes": notes,
         })
 
@@ -333,6 +335,15 @@ def main():
         progress(f"{name} — {bed_key.split('/', 1)[1]}, {pattern}")
         t = tenant(name, phone, workplace=workplaces[i % len(workplaces)])
         s = stay(t, bed_key, rent, deposit, months_ago(start_n, anchor))
+
+        # The deposit as money received on move-in day. Since migration 007 a
+        # settlement refunds only deposit PAYMENTS, not the agreed term — so
+        # without this every demo stay would read "₹X agreed · ₹0 received".
+        # Deepa (bed-less) and Meera (approved from the queue) below are left
+        # agreed-but-unpaid on purpose, so the demo shows that case too.
+        if deposit:
+            pay(s, deposit, months_ago(start_n, anchor), "cash",
+                "Deposit at move-in", purpose="deposit")
 
         last_n = end_n if end_n is not None else 0
         cycles = list(range(start_n, last_n - 1, -1))

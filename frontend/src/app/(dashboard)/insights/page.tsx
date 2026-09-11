@@ -103,8 +103,14 @@ export default function InsightsPage() {
               do, because this page is read in two different moods — "how did we
               do this month", which is the first chart alone, and "why", which
               is everything else. */}
+          {/* min-w-0 on the card, not on ChartScroll. A grid item's default
+              min-width is `auto` — its content's width — so without this the
+              card grew to fit a 672px chart, the scroller inside it was as
+              wide as what it held and had nothing to scroll, and <main>'s
+              overflow-x-hidden clipped the most recent months off a 375px
+              screen (UX audit M2). */}
           <div className="mb-4 grid gap-4">
-            <Card title="Collected vs billed">
+            <Card title="Collected vs billed" className="min-w-0">
               <ChartScroll minWidth={Math.max(280, data.revenue.length * 56)}>
                 <GroupedBarChart
                   data={data.revenue.map((r) => ({

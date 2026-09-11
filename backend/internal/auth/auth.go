@@ -28,6 +28,12 @@ const MaxPasswordBytes = 72
 type Claims struct {
 	OwnerID int64  `json:"owner_id"`
 	Role    string `json:"role"` // "owner"
+	// TokenVersion must equal owners.token_version for the token to be
+	// accepted. A signature alone cannot be revoked; this can — changing the
+	// password or signing out everywhere increments the column, and every
+	// token minted before that stops working. Tokens issued before the field
+	// existed decode as 0, which matches the column's default.
+	TokenVersion int `json:"tv"`
 	jwt.RegisteredClaims
 }
 
@@ -69,10 +75,11 @@ func (s *Service) CheckPassword(password, hash string) bool {
 	return err == nil
 }
 
-func (s *Service) GenerateToken(ownerID int64) (string, error) {
+func (s *Service) GenerateToken(ownerID int64, tokenVersion int) (string, error) {
 	claims := Claims{
-		OwnerID: ownerID,
-		Role:    "owner",
+		OwnerID:      ownerID,
+		Role:         "owner",
+		TokenVersion: tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

@@ -11,6 +11,18 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => void;
+  /**
+   * Swap in a token the server has just reissued. Changing the password
+   * revokes every older token, this device's included, so the new one has to
+   * replace it or the next request signs the owner out.
+   */
+  replaceToken: (token: string) => void;
+  /**
+   * Forget the token and load `url` from scratch. For when the destination
+   * has something to say: logout() flips the signed-in layout, whose own
+   * redirect to plain /login races any router.replace and drops the query.
+   */
+  logoutTo: (url: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -63,6 +75,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOwner(null);
   }, []);
 
+  const replaceToken = useCallback((tok: string) => {
+    localStorage.setItem(TOKEN_KEY, tok);
+    setToken(tok);
+  }, []);
+
+  const logoutTo = useCallback((url: string) => {
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.replace(url);
+  }, []);
+
   return (
     <AuthContext.Provider value={{
       owner,
@@ -72,6 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       signup,
       logout,
+      replaceToken,
+      logoutTo,
     }}>
       {children}
     </AuthContext.Provider>
