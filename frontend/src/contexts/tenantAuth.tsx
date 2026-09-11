@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { tenantAuthApi, Tenant } from "@/lib/api";
+import { TENANT_TOKEN_KEY, forgetAllSessions } from "@/lib/session";
 
 interface TenantAuthContextValue {
   tenant: Tenant | null;
@@ -14,7 +15,7 @@ interface TenantAuthContextValue {
 
 const TenantAuthContext = createContext<TenantAuthContextValue | null>(null);
 
-const TOKEN_KEY = "hostel_tenant_token";
+const TOKEN_KEY = TENANT_TOKEN_KEY;
 
 export function TenantAuthProvider({ children }: { children: React.ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
@@ -47,8 +48,9 @@ export function TenantAuthProvider({ children }: { children: React.ReactNode }) 
     persist(res.token, res.tenant);
   }, [persist]);
 
+  // Both sessions, not just this one — see lib/session.ts.
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    forgetAllSessions();
     setToken(null);
     setTenant(null);
   }, []);

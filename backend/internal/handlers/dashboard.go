@@ -156,6 +156,23 @@ func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time
 	return summary
 }
 
+// collectedWindow is the span "Collected this month" counts: from the 1st up
+// to and including today, as a half-open [from, until).
+//
+// Bounding by the month alone counted payments dated later in it. The UX audit
+// measured ₹69,900 here against Insights' ₹53,600 on 9 Sep — the gap exactly
+// two payments dated the 13th and the 17th. Insights clamps its current month
+// to tomorrow (monthWindows); this is the same rule, so the two figures agree.
+func collectedWindow(today time.Time) (from, until time.Time) {
+	from = time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
+	until = from.AddDate(0, 1, 0)
+	tomorrow := time.Date(today.Year(), today.Month(), today.Day()+1, 0, 0, 0, 0, today.Location())
+	if tomorrow.Before(until) {
+		until = tomorrow
+	}
+	return from, until
+}
+
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 func (h *DashboardHandler) GetDashboard(c echo.Context) error {
@@ -211,8 +228,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	// 2. Collected this month — rent only. A deposit is held, not earned, and
 	// counting it here would put a ₹16,000 spike in the month someone moved in.
 	var collectedThisMonth int64
-	firstOfMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
-	nextMonth := firstOfMonth.AddDate(0, 1, 0)
+	firstOfMonth, collectedUntil := collectedWindow(today)
 	err = h.db.Get(&collectedThisMonth, `
 		SELECT COALESCE(SUM(p.amount), 0)
 		FROM payments p
@@ -223,12 +239,18 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		  AND p.kind = 'rent'
 		  AND p.payment_date >= $2
 		  AND p.payment_date <  $3
-	`, ownerID, firstOfMonth.Format("2006-01-02"), nextMonth.Format("2006-01-02"))
+	`, ownerID, firstOfMonth.Format("2006-01-02"), collectedUntil.Format("2006-01-02"))
 	if err != nil {
 		return serverError(c, err, "failed to fetch revenue")
 	}
 
-	// 3. Active stays for expected/overdue calculation
+	// 3. Active stays for expected/overdue calculation.
+	//
+	// Every open stay, with or without a bed. This used to require a bed, so a
+	// tenant approved before being given one — who is billed from day one —
+	// owed money in Collections and nothing here: ₹40,400 on the tile against
+	// ₹47,900 on the screen its own link says to "chase it from" (UX audit M4).
+	// A bed is about occupancy; money owed does not depend on one.
 	var stayRows []stayRevenueRow
 	err = h.db.Select(&stayRows, `
 		SELECT
@@ -241,7 +263,6 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		LEFT JOIN payments p ON p.stay_id = s.id
 		WHERE t.owner_id = $1
 		  AND s.end_date IS NULL
-		  AND s.bed_id IS NOT NULL
 		GROUP BY s.id, s.rent_amount, s.rent_cycle, s.start_date
 	`, ownerID)
 	if err != nil {

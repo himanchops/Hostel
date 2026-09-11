@@ -232,7 +232,7 @@ function ReviewDrawer({
           disabled={mode === "assign_bed" && (!siteId || !selectedBed)}
           onClick={handleApprove}
         >
-          {loading ? "Approving…" : mode === "assign_bed" ? "Approve & assign" : mode === "collect_deposit" ? "Approve & record deposit" : "Approve"}
+          {loading ? "Approving…" : mode === "assign_bed" ? "Approve & assign" : mode === "collect_deposit" ? "Approve & save terms" : "Approve"}
         </Button>
       </div>
     );
@@ -305,12 +305,17 @@ function ReviewDrawer({
                     <p className="text-sm font-medium text-stone-800">
                       {m === "approve_only" && "Approve only"}
                       {m === "assign_bed" && "Approve & assign bed"}
-                      {m === "collect_deposit" && "Approve & collect deposit (assign bed later)"}
+                      {/* "Collect" and "record" both promised money, and this
+                          option has never recorded a rupee — it saves the terms
+                          you agreed. Since a settlement refunds only deposit
+                          money actually received, the old words would have left
+                          an owner thinking a deposit was on the books. */}
+                      {m === "collect_deposit" && "Approve & agree terms (assign bed later)"}
                     </p>
                     <p className="text-xs text-stone-500">
                       {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
                       {m === "assign_bed" && "Approve and assign to a specific bed now."}
-                      {m === "collect_deposit" && "Collect a deposit/advance now. Bed assigned when tenant moves in."}
+                      {m === "collect_deposit" && "Save the rent and deposit you agreed. Record the deposit as a payment once it is paid; assign the bed when they move in."}
                     </p>
                   </div>
                 </label>

@@ -61,7 +61,11 @@ deposits are their own payment kind and only money received is refunded
 (migration 007), hover-only controls are reachable by touch and keyboard, owners
 have `/account` with change-password and sign-out-everywhere backed by token
 revocation (migration 008), the tenant ledger has a real button, and Insights
-charts fit a phone. The rest of that list is open.
+charts fit a phone. A second pass (`audit-majors-round-two`) made the
+dashboard's "Collected" stop at today and its "Overdue" count tenants without a
+bed, so both agree with Insights and Collections; either sign-out now forgets
+both the owner and tenant sessions; and the pending queue stopped promising to
+"collect" a deposit it never records. The rest of that list is open.
 
 **The primary device is probably an iPad**, in either orientation — which puts
 it on both sides of the 1024px sidebar breakpoint. Test layout and interaction

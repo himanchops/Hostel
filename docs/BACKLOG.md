@@ -111,6 +111,12 @@ summaries do not:
 Insights footnotes its methods and is the one nobody questioned; the dashboard
 footnotes nothing.
 
+**Two of three fixed (Sep 2026, `audit-majors-round-two`):** "Collected this
+month" now stops at today, the same rule as Insights, and owner payments dated
+more than a day ahead are refused; "Overdue" now counts tenants without a bed,
+so it equals Collections to the paisa. Still open: the two occupancy figures,
+and a sentence under each tile saying how it was computed.
+
 ### ~~Insights charts are drawn off-screen at 375px and cannot be reached~~ ✅ fixed
 **Fixed (Sep 2026)** with `min-w-0` on the card. `insights.test.ts` now seeds a
 year and asserts the scroller sits inside the screen and scrolls to the latest
@@ -148,7 +154,10 @@ needs a mail sender, and there is none, so it was scoped out rather than
 half-built. Still open here: edit a payment, undo a settlement, un-approve a
 proof, a tenant withdrawing a notice, and a confirm step on settling.
 
-### Owner sign-out leaves the tenant session signed in — S
+### ~~Owner sign-out leaves the tenant session signed in~~ ✅ fixed (Sep 2026)
+Either sign-out now forgets both sessions — `lib/session.ts` owns the two keys.
+The original report:
+
 `auth.tsx:61` clears only `hostel_token`. A tester signed the owner out, opened
 `/my`, and landed in a tenant's ledger. Front-desk machines are shared. Clear
 both keys on either sign-out.
@@ -217,11 +226,9 @@ eras. `/my/page.tsx` was untouched by Phase 16.
 - `BASE_URL` does not follow `PORT`, so a local backend on a non-default port
   silently breaks every upload with no warning. (This cost the audit two false
   Blockers — see `docs/UX_REVIEW.md` → retractions.)
-- The pending queue's "Approve & collect deposit" option and its "Approve &
-  record deposit" button still promise to record money. Approving only saves
-  the agreed terms. The explanatory line under it was corrected with B1 (it
-  claimed "will be recorded as a payment"); the option and button labels were
-  not. Found while fixing B1.
+- ~~The pending queue's "Approve & collect deposit" option and its "Approve &
+  record deposit" button still promise to record money.~~ ✅ Now "Approve &
+  agree terms" and "Approve & save terms" (Sep 2026). Found while fixing B1.
 
 ---
 
@@ -658,7 +665,10 @@ under the limit by any rune count, over it by the only measure bcrypt uses.
 
 ## Correctness / consistency
 
-### Collections and the dashboard disagree about bed-less stays — S
+### ~~Collections and the dashboard disagree about bed-less stays~~ ✅ fixed (Sep 2026)
+The dashboard's filter was dropped, as guessed below, in its own change with a
+test asserting the tile equals Collections to the paisa.
+
 
 **Rediscovered independently by two testers in the Sep 2026 UX audit**, on a link
 whose own subtitle reads "chase it from Collections →". Measured: ₹40,400 vs
