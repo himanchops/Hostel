@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/auth";
 import {
   gridApi, sitesApi, tenantsApi, staysApi, paymentsApi,
   GridRoom, GridBed, BedStatus, Site, Tenant, Payment, PaymentKind,
-  formatCurrency, today,
+  formatCurrency, today, latestPaymentDate,
   ApiError,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
@@ -672,7 +672,13 @@ function OccupiedPanel({
               <option value="cash">Cash</option>
               <option value="online">Online</option>
             </Select>
-            <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            <Input
+              type="date"
+              value={payDate}
+              max={latestPaymentDate()}
+              onChange={(e) => setPayDate(e.target.value)}
+              aria-label="Payment date"
+            />
             <Input placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
             <Button type="submit" className="w-full" loading={payLoading}>
               {payLoading ? "Saving…" : "Save payment"}

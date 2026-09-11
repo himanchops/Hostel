@@ -1920,6 +1920,67 @@ trusting that pane for any fixed-position overlay at tablet widths.
 
 ---
 
+## Audit round two — M3, M4, M8, and the deposit labels ✅ (Sep 2026)
+
+Branch `audit-majors-round-two`, started straight after #34 merged, in the same
+conversation. No migration.
+
+### M3 — "Collected this month" stops at today
+
+`collectedWindow(today)` is `[1st of the month, tomorrow)` — the rule Insights'
+`monthWindows` already used, so the two figures now agree. Its unit test is the
+audit's own ledger: payments on the 2nd and 9th count, the 13th and 17th do not,
+₹69,900 becomes ₹53,600.
+
+Owner-recorded payments dated more than a day ahead are now refused
+(`validatePaymentDate`), and both payment forms' date inputs carry a `max`. One
+day of slack, not zero: the server's "today" is UTC and the owner is in IST, so
+just after midnight in Pune their today is the server's tomorrow. Tenant-portal
+submissions are always dated now and need no check.
+
+### M4 — "Overdue" counts tenants without a bed
+
+The dashboard summed only stays with a bed, so a tenant approved before being
+given one — billed from day one — owed money in Collections and nothing on the
+tile. The filter is gone; a bed is about occupancy, and what someone owes does
+not depend on one. "Expected this month" now includes those stays too, which
+Insights already did. The e2e test puts one tenant in a bed and one without and
+asserts the tile equals the sum of Collections to the paisa.
+
+### M8 — either sign-out forgets both sessions
+
+`lib/session.ts` owns both localStorage keys and `forgetAllSessions()`; owner
+sign-out, sign-out-everywhere and tenant sign-out all call it. The e2e test
+holds both sessions, signs out of one side, and checks the other side asks who
+you are — on desktop, from the portal, and from the avatar menu on an iPad.
+
+**A test-harness lesson on the way.** The first version planted both tokens with
+`goto` then `evaluate` and failed two runs in three. A logged repro showed the
+app was fine — both sessions restored with 200s — but the dev server reloaded
+the freshly compiled route by itself just after the plant, and the test's own
+navigation raced it. Tokens are now planted by an init script that runs once
+per tab (guarded by a sessionStorage flag), so there is nothing to race.
+
+### The pending queue stops promising money
+
+"Approve & collect deposit" / "Collect a deposit now" / "Approve & record
+deposit" became "Approve & agree terms", a description that says to record the
+deposit as a payment once it is paid, and "Approve & save terms". That option
+has never recorded a rupee, and since #34 a settlement refunds only deposit
+money received. The e2e approves through it and then finds "₹16,000 agreed · ₹0
+received" and an empty ledger on the tenant page.
+
+### Verification
+
+`go test ./...` passes, with four new cases on `collectedWindow` and
+`validatePaymentDate`. Frontend unit 43/43. Full e2e **94/94** (three new files:
+`dashboard-rollups`, `session`, `pending-terms`); the session tests were also
+run three times over, 9/9, after the harness fix. Lint is unchanged from master:
+the `tenantAuth.tsx` setState-in-effect error is the same pre-existing pattern
+as `auth.tsx`'s, and the two `<img>` warnings on the pending page predate it.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

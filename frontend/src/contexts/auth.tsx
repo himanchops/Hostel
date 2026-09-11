@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { authApi, ApiError, Owner } from "@/lib/api";
+import { OWNER_TOKEN_KEY, forgetAllSessions } from "@/lib/session";
 
 interface AuthContextValue {
   owner: Owner | null;
@@ -27,7 +28,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const TOKEN_KEY = "hostel_token";
+const TOKEN_KEY = OWNER_TOKEN_KEY;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [owner, setOwner] = useState<Owner | null>(null);
@@ -69,8 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persist(res.token, res.owner);
   }, [persist]);
 
+  // Both sessions, not just this one — see lib/session.ts.
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    forgetAllSessions();
     setToken(null);
     setOwner(null);
   }, []);
@@ -81,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logoutTo = useCallback((url: string) => {
-    localStorage.removeItem(TOKEN_KEY);
+    forgetAllSessions();
     window.location.replace(url);
   }, []);
 

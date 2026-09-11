@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth";
 import {
   tenantsApi, staysApi, paymentsApi, settlementsApi,
   Tenant, Stay, Payment, PaymentKind, TenantSummary, TenantUpdateData, Settlement,
-  formatCurrency, today, maskAadhaar, ApiError, uploadApi,
+  formatCurrency, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
 import {
@@ -785,7 +785,9 @@ export default function TenantDetailPage() {
                             <Input
                               type="date"
                               value={payDate}
+                              max={latestPaymentDate()}
                               onChange={(e) => setPayDate(e.target.value)}
+                              aria-label="Payment date"
                               className="w-auto"
                             />
                             <Input

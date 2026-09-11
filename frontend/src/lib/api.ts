@@ -645,6 +645,17 @@ export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * The latest date a payment may carry — tomorrow, in UTC — mirroring the
+ * server's validatePaymentDate. One day of slack because today() is UTC and
+ * the owner is in IST: just after midnight in Pune, their today is tomorrow.
+ */
+export function latestPaymentDate(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Mask aadhaar to show only last 4 digits: XXXX-XXXX-1234 */
 export function maskAadhaar(aadhaar: string): string {
   const digits = aadhaar.replace(/\D/g, "");

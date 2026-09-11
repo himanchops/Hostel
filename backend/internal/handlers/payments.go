@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -28,6 +29,23 @@ type createPaymentRequest struct {
 	Kind        string `json:"kind"`
 	PaymentDate string `json:"payment_date"` // YYYY-MM-DD
 	Notes       string `json:"notes"`
+}
+
+// validatePaymentDate refuses a payment dated more than a day ahead.
+//
+// Money that has not arrived is not a payment. The UX audit found two dated
+// the 13th and 17th sitting in "Collected this month" on the 9th — almost
+// certainly a mistyped day. One day of slack, not zero, because "today" on the
+// server is UTC while the owner is in IST, five and a half hours ahead: just
+// after midnight in Pune, their today is the server's tomorrow.
+func validatePaymentDate(paymentDate, now time.Time) error {
+	y, m, d := now.UTC().Date()
+	latest := time.Date(y, m, d+1, 0, 0, 0, 0, time.UTC)
+	py, pm, pd := paymentDate.Date()
+	if time.Date(py, pm, pd, 0, 0, 0, 0, time.UTC).After(latest) {
+		return errors.New("payment date is in the future — record a payment on the day the money arrives")
+	}
+	return nil
 }
 
 // paymentColumns is every column models.Payment scans, in one place so the
@@ -119,6 +137,9 @@ func (h *PaymentHandler) Create(c echo.Context) error {
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, errorResponse("invalid payment_date format, use YYYY-MM-DD"))
 		}
+	}
+	if err := validatePaymentDate(paymentDate, time.Now()); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 	}
 
 	var payment models.Payment
