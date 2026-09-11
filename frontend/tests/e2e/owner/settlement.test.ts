@@ -33,7 +33,8 @@ const DEPOSIT = 1700000; // ₹17,000
 async function seedStayForSettlement(
   request: APIRequestContext,
   token: string,
-  opts: { name: string; phone: string; paid: number }
+  /** depositPaid: how much of the deposit actually arrived. Defaults to all. */
+  opts: { name: string; phone: string; paid: number; depositPaid?: number }
 ) {
   const auth = { Authorization: `Bearer ${token}` };
   const { bedId } = await createSiteRoomBed(request, token, `${RUN_ID}-${opts.phone.slice(-4)}`);
@@ -65,6 +66,18 @@ async function seedStayForSettlement(
       data: { amount: opts.paid / 3, payment_type: "cash", payment_date: isoDate(when) },
     });
     if (!payRes.ok()) throw new Error(`addPayment failed: ${await payRes.text()}`);
+  }
+
+  // The deposit as money received, not only the term on the stay. Until
+  // migration 007 this line did not exist and every test here was settling a
+  // ₹17,000 deposit nobody had paid — the audit's first blocker, in the suite.
+  const depositPaid = opts.depositPaid ?? DEPOSIT;
+  if (depositPaid > 0) {
+    const depRes = await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
+      headers: auth,
+      data: { amount: depositPaid, payment_type: "cash", kind: "deposit", payment_date: isoDate(start) },
+    });
+    if (!depRes.ok()) throw new Error(`addDeposit failed: ${await depRes.text()}`);
   }
 
   return { tenant, stay, start, today, bedId };
@@ -380,9 +393,69 @@ test.describe("Settlement", () => {
     await expect(page.getByText("Ended", { exact: true })).toBeVisible();
     await expect(page.getByText("₹7,300 refunded")).toBeVisible();
 
-    // Expanding shows what the refund was made of, deduction included.
-    await page.getByText("Ended", { exact: true }).click();
+    // A tenant with one stay has its ledger open already — that is where the
+    // breakdown of the refund lives, deduction included.
+    await expect(page.getByRole("button", { name: /Hide ledger/ })).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByText("Unpaid electricity")).toBeVisible();
     await expect(page.getByText("−₹1,200")).toBeVisible();
+  });
+
+  // The UX audit's first blocker: the deposit agreed at intake was refunded as
+  // if it had been received. Here none of it arrives, then part of it does.
+  test("only the deposit actually received is refunded", async ({ page, request }) => {
+    const { token } = await createOwner(request, `settle-held-${RUN_ID}`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const name = `Settle Held ${RUN_ID}`;
+    const { tenant, stay, start } = await seedStayForSettlement(request, token, {
+      name,
+      phone: `2${RUN_ID.slice(-9)}`,
+      paid: 2550000, // one month behind
+      depositPaid: 0,
+    });
+    const preview = async () =>
+      (await request.get(`${BASE}/api/stays/${stay.id}/settlement-preview`, { headers: auth })).json();
+
+    // ₹17,000 agreed, nothing received, ₹8,500 of rent owed: the tenant owes.
+    let p = await preview();
+    expect(p.deposit_agreed_paise).toBe(DEPOSIT);
+    expect(p.deposit_paise).toBe(0);
+    expect(p.dues_paise).toBe(850000);
+    expect(p.refund_paise).toBe(-850000); // the old code offered +₹8,500 back
+
+    // ₹10,000 of it arrives. A deposit is held, not rent: dues do not move.
+    const dep = await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
+      headers: auth,
+      data: { amount: 1000000, payment_type: "online", kind: "deposit", payment_date: isoDate(start) },
+    });
+    expect(dep.status()).toBe(201);
+    expect((await dep.json()).kind).toBe("deposit");
+
+    p = await preview();
+    expect(p.deposit_paise).toBe(1000000);
+    expect(p.total_paid).toBe(2550000);
+    expect(p.dues_paise).toBe(850000);
+    expect(p.refund_paise).toBe(150000); // ₹10,000 held − ₹8,500 owed
+
+    // Nor does any other figure count it as rent.
+    const summary = await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth })).json();
+    expect(summary.total_paid).toBe(2550000);
+    expect(summary.balance).toBe(850000);
+    const collections = await (await request.get(`${BASE}/api/collections`, { headers: auth })).json();
+    expect(collections.find((r: { stay_id: number }) => r.stay_id === stay.id).balance_paise).toBe(850000);
+
+    // A kind that is neither is refused rather than quietly filed as rent.
+    const bad = await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
+      headers: auth,
+      data: { amount: 100, kind: "advance" },
+    });
+    expect(bad.status()).toBe(400);
+
+    // The drawer says both figures out loud, and refunds only the one received.
+    await loginAs(page, token);
+    await page.goto(`/tenants/${tenant.id}`);
+    await page.getByRole("button", { name: "Settle & vacate" }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer.getByText(/₹17,000 agreed · ₹10,000 received/)).toBeVisible();
+    await expect(drawer.getByText("Refund to tenant").locator("..").locator("p").nth(1)).toHaveText("₹1,500");
   });
 });

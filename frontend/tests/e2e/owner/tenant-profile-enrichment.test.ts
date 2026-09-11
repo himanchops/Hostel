@@ -271,8 +271,12 @@ test.describe("Tenant profile enrichment", () => {
     await expect(page.getByText("UI Corp")).toBeVisible();
     await expect(page.getByText(/XXXX-XXXX-3333/)).toBeVisible(); // masked aadhaar
 
-    // Summary bar should show paid amount
-    await expect(page.getByText("₹2,500", { exact: true })).toBeVisible(); // total paid exact
+    // Summary bar should show paid amount. Scoped to its card: a single stay's
+    // ledger now opens by default (UX audit M1), so the payment's own row reads
+    // ₹2,500 as well.
+    await expect(
+      page.getByText("Total paid").locator("..").getByText("₹2,500", { exact: true })
+    ).toBeVisible();
 
     // Stay should be visible
     await expect(page.getByText("Active")).toBeVisible();

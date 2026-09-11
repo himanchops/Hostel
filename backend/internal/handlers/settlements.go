@@ -30,16 +30,23 @@ const maxAdjustments = 30
 const maxAdjustmentLabel = 120
 
 // settlementStayRow is everything the settlement math needs about a stay.
+//
+// Two deposit figures, and only one of them is money. DepositAgreed is the
+// rent term typed at intake; DepositHeld is what arrived as deposit payments.
+// The calculator refunds DepositHeld. It used to refund the agreed figure,
+// which offered a tenant who had paid nothing their "deposit" back — the UX
+// audit's first blocker.
 type settlementStayRow struct {
 	StayID        int64      `db:"stay_id"`
 	TenantID      int64      `db:"tenant_id"`
 	TenantName    string     `db:"tenant_name"`
 	RentAmount    int64      `db:"rent_amount"`
-	DepositAmount int64      `db:"deposit_amount"`
+	DepositAgreed int64      `db:"deposit_agreed"`
+	DepositHeld   int64      `db:"deposit_held"`
 	RentCycle     string     `db:"rent_cycle"`
 	StartDate     time.Time  `db:"start_date"`
 	EndDate       *time.Time `db:"end_date"`
-	TotalPaid     int64      `db:"total_paid"`
+	TotalPaid     int64      `db:"total_paid"` // rent payments only
 }
 
 // SettlementPreview is the calculator's opening position: what the owner owes
@@ -51,20 +58,25 @@ type settlementStayRow struct {
 // thought had been waived, and "₹7,500 outstanding" alone gives them nothing
 // to check it against.
 type SettlementPreview struct {
-	StayID        int64  `json:"stay_id"`
-	TenantName    string `json:"tenant_name"`
-	DepositPaise  int64  `json:"deposit_paise"`
-	DuesPaise     int64  `json:"dues_paise"`    // signed: negative = tenant paid ahead
-	AdvancePaise  int64  `json:"advance_paise"` // rent paid beyond what was billed; 0 if they owe
-	RefundPaise   int64  `json:"refund_paise"`  // the opening position, before adjustments
-	EndDate       string `json:"end_date"`      // the date dues are billed up to
-	AlreadyEnded  bool   `json:"already_ended"` // end_date came from the stay, not the request
-	RentAmount    int64  `json:"rent_amount"`
-	RentCycle     string `json:"rent_cycle"`
-	StartDate     string `json:"start_date"`
-	CyclesBilled  int    `json:"cycles_billed"`
-	TotalExpected int64  `json:"total_expected"`
-	TotalPaid     int64  `json:"total_paid"`
+	StayID     int64  `json:"stay_id"`
+	TenantName string `json:"tenant_name"`
+	// DepositPaise is the deposit actually received — approved deposit
+	// payments — and is the figure the refund is built on. DepositAgreedPaise
+	// is the intake term, returned so the drawer can say "₹16,000 agreed ·
+	// ₹0 received" instead of letting the owner assume the two are the same.
+	DepositPaise       int64  `json:"deposit_paise"`
+	DepositAgreedPaise int64  `json:"deposit_agreed_paise"`
+	DuesPaise          int64  `json:"dues_paise"`    // signed: negative = tenant paid ahead
+	AdvancePaise       int64  `json:"advance_paise"` // rent paid beyond what was billed; 0 if they owe
+	RefundPaise        int64  `json:"refund_paise"`  // the opening position, before adjustments
+	EndDate            string `json:"end_date"`      // the date dues are billed up to
+	AlreadyEnded       bool   `json:"already_ended"` // end_date came from the stay, not the request
+	RentAmount         int64  `json:"rent_amount"`
+	RentCycle          string `json:"rent_cycle"`
+	StartDate          string `json:"start_date"`
+	CyclesBilled       int    `json:"cycles_billed"`
+	TotalExpected      int64  `json:"total_expected"`
+	TotalPaid          int64  `json:"total_paid"`
 }
 
 type createSettlementRequest struct {
@@ -100,6 +112,10 @@ func advanceHeld(dues int64) int64 {
 // refundFor is the whole calculator: deposit back, outstanding rent withheld,
 // whatever share of a rent advance the owner decided to return, adjustments
 // applied. Negative means the tenant owes the owner.
+//
+// `deposit` is the deposit HELD — money received as deposit payments — never
+// the figure agreed at intake. Passing the agreed term here is how a tenant
+// who paid nothing was once offered a refund.
 //
 // The advance is a separate term rather than falling out of a signed `dues`.
 // Subtracting a negative would hand the whole advance back automatically, which
@@ -154,8 +170,11 @@ func validateAdjustments(adjustments []models.Adjustment) error {
 }
 
 // loadSettlementStay fetches one stay scoped to the owner. Payment totals come
-// from a correlated subquery, not a JOIN — joining to payments returns one row
+// from correlated subqueries, not a JOIN — joining to payments returns one row
 // per payment and multiplies the per-stay figures (see docs/PROGRESS.md).
+//
+// Rent and deposit are summed separately. A deposit payment that counted as
+// rent would show up again as an "advance" and be refunded twice.
 func (h *SettlementHandler) loadSettlementStay(stayID, ownerID int64) (settlementStayRow, error) {
 	var row settlementStayRow
 	err := h.db.Get(&row, `
@@ -164,14 +183,18 @@ func (h *SettlementHandler) loadSettlementStay(stayID, ownerID int64) (settlemen
 			s.tenant_id,
 			t.name           AS tenant_name,
 			s.rent_amount,
-			s.deposit_amount,
+			s.deposit_amount AS deposit_agreed,
 			s.rent_cycle,
 			s.start_date,
 			s.end_date,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
-				WHERE p.stay_id = s.id AND p.is_approved = true
-			), 0) AS total_paid
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
+			), 0) AS total_paid,
+			COALESCE((
+				SELECT SUM(p.amount) FROM payments p
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'deposit'
+			), 0) AS deposit_held
 		FROM stays s
 		JOIN tenants t ON t.id = s.tenant_id
 		WHERE s.id = $1 AND t.owner_id = $2`,
@@ -221,15 +244,16 @@ func (h *SettlementHandler) previewFor(stay settlementStayRow, endDate time.Time
 	dues, cycles := duesFor(stay.RentAmount, stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
 	advance := advanceHeld(dues)
 	return SettlementPreview{
-		StayID:       stay.StayID,
-		TenantName:   stay.TenantName,
-		DepositPaise: stay.DepositAmount,
-		DuesPaise:    dues,
-		AdvancePaise: advance,
+		StayID:             stay.StayID,
+		TenantName:         stay.TenantName,
+		DepositPaise:       stay.DepositHeld,
+		DepositAgreedPaise: stay.DepositAgreed,
+		DuesPaise:          dues,
+		AdvancePaise:       advance,
 		// The opening position returns the advance in full — the same figure
 		// this endpoint gave before the choice existed, and the safer default
 		// to show an owner who never touches the control.
-		RefundPaise:   refundFor(stay.DepositAmount, dues, advance, nil),
+		RefundPaise:   refundFor(stay.DepositHeld, dues, advance, nil),
 		EndDate:       endDate.Format("2006-01-02"),
 		AlreadyEnded:  stay.EndDate != nil,
 		RentAmount:    stay.RentAmount,
@@ -315,7 +339,7 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 	// another tab between opening the calculator and confirming it moves dues,
 	// and the owner would otherwise hand over a refund computed from numbers
 	// that are no longer true.
-	refund := refundFor(stay.DepositAmount, dues, advanceReturned, req.Adjustments)
+	refund := refundFor(stay.DepositHeld, dues, advanceReturned, req.Adjustments)
 	if refund != req.RefundPaise {
 		return c.JSON(http.StatusBadRequest, errorResponse(fmt.Sprintf(
 			"refund does not match: you sent %d paise, the figures give %d. Reopen the settlement to pick up the latest payments.",
@@ -344,7 +368,7 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 		`INSERT INTO settlements (stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, notes)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id, stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, notes, created_at`,
-		stayID, stay.DepositAmount, dues, advanceReturned, adjustments, refund, notes,
+		stayID, stay.DepositHeld, dues, advanceReturned, adjustments, refund, notes,
 	).StructScan(&settlement)
 	if err != nil {
 		return serverError(c, err, "failed to record the settlement")

@@ -121,7 +121,7 @@ func (h *GridHandler) GetGrid(c echo.Context) error {
 			t.id        AS tenant_id,
 			t.name      AS tenant_name,
 			t.phone     AS tenant_phone,
-			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true), 0) AS total_paid
+			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true AND p.kind = 'rent'), 0) AS total_paid
 		FROM rooms r
 		LEFT JOIN beds b ON b.room_id = r.id
 		LEFT JOIN stays s ON s.bed_id = b.id AND s.end_date IS NULL

@@ -238,6 +238,9 @@ export default function DashboardPage() {
                         <Badge tone={p.payment_type === "cash" ? "neutral" : "success"}>
                           {p.payment_type}
                         </Badge>
+                        {/* Listed, because the money arrived — but labelled,
+                            because "Collected this month" leaves it out. */}
+                        {p.kind === "deposit" && <Badge tone="info" className="ml-1">Deposit</Badge>}
                       </div>
                     </Link>
                   ))

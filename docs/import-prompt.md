@@ -61,6 +61,7 @@ After you receive the JSON:
 >           "date": "YYYY-MM-DD",
 >           "amount_paise": 800000,
 >           "type": "cash",
+>           "kind": "rent",
 >           "note": "string or null"
 >         }
 >       ]
@@ -76,6 +77,7 @@ After you receive the JSON:
 > - **Unreadable fields use `null`**, not made-up values. Do not invent phone numbers, Aadhaar numbers, or amounts.
 > - **`rent_cycle`** is one of: `"daily"`, `"weekly"`, `"monthly"`. Default to `"monthly"` if not stated.
 > - **`type`** for a payment is `"cash"` or `"online"`. Default to `"cash"` if not stated.
+> - **`kind`** for a payment is `"rent"` or `"deposit"`. Use `"deposit"` only when the book says so (a line marked "deposit", "security" or "advance deposit"); everything else is `"rent"`. This matters: a deposit imported as rent clears arrears it should not, and is never refunded at move-out. If you cannot tell, ASK me.
 > - **`stay`** is optional — omit it (or set to `null`) if the page only lists payments and not the original tenancy details. The CLI will attach payments to the tenant's existing stay.
 > - **`payments`** is optional — omit it if the page only lists new tenants without any payment history.
 > - **Phone is required** — if a tenant has no phone in the book, flag it to me; the CLI will reject that row.

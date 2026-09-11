@@ -598,18 +598,20 @@ live database.
 `HOSTEL_PASSWORD`. It is **gitignored, and must stay that way** — the GitHub
 repo is public. The environment overrides the file if both are set.
 
-The app has no change-password feature and no password reset (see "Password
-recovery" below, which is the same procedure). Worth knowing before you decide
-the password needs rotating.
+To rotate the password, sign in and use **Account & password** (`/account`,
+from the name at the foot of the sidebar or the avatar menu). Changing it signs
+out every other device; **Sign out everywhere** on the same screen ends every
+session without changing it. Both arrived with migration 008 (Sep 2026) —
+before that, a copied token kept working for 24 hours after sign-out.
 
-### Password recovery — the only way back in (Sep 2026)
+### Password recovery — the only way back in when it is forgotten (Sep 2026)
 
-**There is no password reset.** `/auth/login` and `/auth/signup` are the only
-owner auth endpoints there are; nothing emails a link, and there is no
-change-password form. If the owner password is lost, this is the whole recovery
-path, and it needs database access — so it is written out here rather than left
-as "do an UPDATE with a bcrypt hash", which is not a procedure anyone can follow
-under pressure at 11pm.
+**There is no emailed reset.** Changing a password you know is `/account`;
+recovering one you have forgotten is this procedure, and it needs database
+access — so it is written out here rather than left as "do an UPDATE with a
+bcrypt hash", which is not a procedure anyone can follow under pressure at 11pm.
+Reset-by-email was scoped out of the account screen deliberately: nothing in
+the backend can send mail.
 
 **Rehearsed against a local backend, Sep 2026** — every step below was run, not
 reasoned about.
@@ -622,8 +624,10 @@ htpasswd -bnBC 10 "" 'the-new-password' | tr -d ':\n'
 # → $2y$10$....
 
 # 2. Write it. Use the Neon connection string, and mind the shell: single
-#    quotes, because a bcrypt hash is full of $ signs.
-psql "$NEON_URL" -c "UPDATE owners SET password_hash = '<hash>' WHERE email = '<owner email>';"
+#    quotes, because a bcrypt hash is full of $ signs. Bumping token_version
+#    signs out every existing session, which is the point if the password is
+#    being reset because someone else may know it (migration 008).
+psql "$NEON_URL" -c "UPDATE owners SET password_hash = '<hash>', token_version = token_version + 1 WHERE email = '<owner email>';"
 ```
 
 Then log in with the new password. Two things that look wrong and are not:

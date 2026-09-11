@@ -51,6 +51,18 @@ export const authApi = {
     request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(data) }),
 
   me: (token: string) => request<Owner>("/api/me", {}, token),
+
+  /**
+   * Returns a fresh token. The change revokes every token issued before it,
+   * this device's included, so the caller must swap the new one in or be
+   * signed out on its next request.
+   */
+  changePassword: (token: string, data: { current_password: string; new_password: string }) =>
+    request<{ token: string }>("/api/me/password", { method: "PUT", body: JSON.stringify(data) }, token),
+
+  /** Revokes every token this owner holds — the caller's too. */
+  signOutEverywhere: (token: string) =>
+    request<void>("/api/me/sign-out-everywhere", { method: "POST" }, token),
 };
 
 // ─── Sites ───────────────────────────────────────────────────────────────────
@@ -425,6 +437,8 @@ export const staysApi = {
   addPayment: (token: string, stayId: number, data: {
     amount: number;
     payment_type: string;
+    /** Omitted means rent. */
+    kind?: PaymentKind;
     payment_date: string;
     notes?: string;
   }) => request<Payment>(`/api/stays/${stayId}/payments`, { method: "POST", body: JSON.stringify(data) }, token),
@@ -432,11 +446,19 @@ export const staysApi = {
 
 // ─── Payments ────────────────────────────────────────────────────────────────
 
+/**
+ * What a payment is FOR — `payment_type` is how it arrived. Rent counts
+ * against what the tenant owes; a deposit is held, counts against nothing, and
+ * is the only money a settlement refunds as a deposit.
+ */
+export type PaymentKind = "rent" | "deposit";
+
 export interface Payment {
   id: number;
   stay_id: number;
   amount: number; // paise
   payment_type: "cash" | "online";
+  kind: PaymentKind;
   payment_date: string;
   proof_url?: string;
   notes?: string;
@@ -501,6 +523,8 @@ export interface RecentPayment {
   tenant_id: number;
   amount: number;
   payment_type: "cash" | "online";
+  /** Deposits are listed here but left out of "collected this month". */
+  kind: PaymentKind;
   payment_date: string;
   tenant_name: string;
   bed_name: string;
@@ -646,7 +670,10 @@ export interface Adjustment {
 export interface SettlementPreview {
   stay_id: number;
   tenant_name: string;
+  /** The deposit RECEIVED — approved deposit payments. The refund uses this. */
   deposit_paise: number;
+  /** The deposit agreed at intake. A label, never money; shown when it differs. */
+  deposit_agreed_paise: number;
   dues_paise: number;    // signed: negative = tenant paid ahead
   advance_paise: number; // rent paid beyond what was billed; 0 if they owe
   refund_paise: number;  // the opening position, before adjustments

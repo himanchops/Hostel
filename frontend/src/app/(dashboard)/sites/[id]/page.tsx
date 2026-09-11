@@ -16,6 +16,7 @@ import {
   Skeleton,
   useConfirm,
   useToast,
+  HOVER_REVEAL,
 } from "@/components/ui";
 
 /**
@@ -547,7 +548,7 @@ function BedChip({
       {bed.name}
       <button
         onClick={() => { setDraft(bed.name); setEditing(true); }}
-        className="ml-1 text-stone-400 transition duration-150 ease-out hover:text-indigo-600 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+        className={`ml-1 text-stone-400 transition duration-150 ease-out hover:text-indigo-600 ${HOVER_REVEAL}`}
         aria-label={`Rename bed ${bed.name}`}
         title={`Rename bed ${bed.name}`}
       >
@@ -555,7 +556,7 @@ function BedChip({
       </button>
       <button
         onClick={onDelete}
-        className={`transition duration-150 ease-out focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 ${
+        className={`transition duration-150 ease-out ${HOVER_REVEAL} ${
           locked ? "text-stone-300 hover:text-stone-400" : "text-stone-400 hover:text-red-500"
         }`}
         /* aria-label, not title: the "×" text content wins the accessible name

@@ -152,10 +152,16 @@ func main() {
 
 	// Protected routes
 	api := e.Group("/api")
-	api.Use(appMiddleware.AuthMiddleware(authService))
+	api.Use(appMiddleware.AuthMiddleware(authService, func(ownerID int64) (int, error) {
+		var version int
+		err := db.Get(&version, `SELECT token_version FROM owners WHERE id = $1`, ownerID)
+		return version, err
+	}))
 
 	// Owner
 	api.GET("/me", authHandler.Me)
+	api.PUT("/me/password", authHandler.ChangePassword)
+	api.POST("/me/sign-out-everywhere", authHandler.SignOutEverywhere)
 
 	// Sites
 	api.GET("/sites", siteHandler.List)

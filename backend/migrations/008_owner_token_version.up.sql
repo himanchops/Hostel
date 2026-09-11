@@ -1,0 +1,14 @@
+-- A counter every owner token carries, so tokens can be revoked.
+--
+-- JWTs are stateless: before this, signing out only deleted the browser's copy,
+-- and a token captured before sign-out kept working for its full 24 hours.
+-- Changing the password did not help either — nothing checked it.
+--
+-- Now the auth middleware compares the token's version with this column.
+-- Changing the password or pressing "Sign out everywhere" increments it, and
+-- every token issued before that moment stops working on its next request.
+--
+-- A counter rather than a timestamp because JWT iat has one-second resolution:
+-- a token issued in the same second as a password change would survive a
+-- "issued before" comparison.
+ALTER TABLE owners ADD COLUMN token_version INT NOT NULL DEFAULT 0;

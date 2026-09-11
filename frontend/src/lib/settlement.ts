@@ -1,4 +1,33 @@
-import type { Adjustment } from "./api";
+import { formatCurrency, type Adjustment } from "./api";
+
+/**
+ * "₹16,000 agreed · ₹0 received" — or null when the two are the same.
+ *
+ * The settlement refunds the deposit RECEIVED. The agreed figure is a rent
+ * term typed at intake and used to be refunded as if it were money in the
+ * drawer (the UX audit's first blocker). When they differ, the owner has to
+ * see both, because the most likely explanation is a deposit that was paid and
+ * never written down — which the owner can fix before settling, and nobody
+ * else can.
+ */
+export function depositLine(agreedPaise: number, receivedPaise: number): string | null {
+  if (agreedPaise === receivedPaise) return null;
+  return `${formatCurrency(agreedPaise)} agreed · ${formatCurrency(receivedPaise)} received`;
+}
+
+/**
+ * The deposit line on a tenant's stay card, where the audit found the deposit
+ * "appears nowhere". `receivedPaise` is undefined while the ledger is loading,
+ * so the card never claims ₹0 received before it knows.
+ */
+export function depositSummary(agreedPaise: number, receivedPaise: number | undefined): string | null {
+  if (receivedPaise === undefined) {
+    return agreedPaise > 0 ? `Deposit ${formatCurrency(agreedPaise)} agreed` : null;
+  }
+  if (agreedPaise === 0 && receivedPaise === 0) return null;
+  const differs = depositLine(agreedPaise, receivedPaise);
+  return differs ? `Deposit ${differs}` : `Deposit ${formatCurrency(receivedPaise)} received`;
+}
 
 /**
  * How much rent the tenant paid beyond what was billed. Zero when they owe.

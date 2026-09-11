@@ -140,24 +140,96 @@ test.describe("Insights", () => {
     await expect(page.getByText(/^\d{4}-\d{2}-\d{2} to /)).not.toHaveText(twelve ?? "");
   });
 
-  test("works at 375px with the charts scrolling, not the page", async ({ page, request }) => {
-    const { token } = await createOwner(request, `${RUN_ID}-mobile`);
-    await loginAs(page, token);
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/insights");
+  /**
+   * This used to be one test at 375px asserting only that the PAGE never
+   * scrolled sideways — which <main>'s overflow-x-hidden guarantees by
+   * clipping, so it passed for exactly the reason the bug existed (UX audit
+   * M2). It also ran against an owner with no data and never drew a chart.
+   *
+   * Now: a year of data, so the chart takes its natural 12 × 56 = 672px, and
+   * the assertion is the one the owner cares about — the chart sits inside the
+   * screen, and scrolling it brings the most recent month into view.
+   */
+  for (const vp of [
+    { name: "a 375px phone", width: 375, height: 812 },
+    { name: "an iPad in portrait", width: 768, height: 1024 },
+    { name: "an iPad in landscape", width: 1024, height: 768 },
+  ]) {
+    test(`every month of the chart can be reached on ${vp.name}`, async ({ page, request }) => {
+      const { token } = await seedYear(request, `${RUN_ID}-vp${vp.width}`);
+      await loginAs(page, token);
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.goto("/insights");
 
-    await expect(page.getByRole("heading", { name: "Insights", level: 1 })).toBeVisible();
+      const chart = page.getByRole("img", { name: /Collected against Billed by month/i });
+      await expect(chart).toBeVisible();
+      const scroller = chart.locator("xpath=ancestor::div[contains(@class,'overflow-x-auto')][1]");
 
-    // Insights is reachable from the bottom tab bar, not buried in a menu.
-    await expect(
-      page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Insights" }),
-    ).toBeVisible();
+      const box = await scroller.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
+      });
+      // The scroller is inside the screen, not drawn past its edge.
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(vp.width);
 
-    // The page itself must never scroll sideways — wide charts scroll inside
-    // their own container.
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(1);
-  });
+      if (vp.width < 672) {
+        // Too narrow for twelve months, so it must actually scroll. Before the
+        // fix the scroller grew to fit the chart and had nothing to scroll.
+        expect(box.scrollWidth).toBeGreaterThan(box.clientWidth);
+      }
+
+      // Scrolled to the end, this month's bar is on screen.
+      await scroller.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+      const last = await chart.locator("rect[fill='transparent']").last().boundingBox();
+      expect(last!.x).toBeGreaterThanOrEqual(box.left - 1);
+      expect(last!.x + last!.width).toBeLessThanOrEqual(box.right + 1);
+
+      // Still true, still worth keeping — just no longer the only check.
+      expect(await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )).toBeLessThanOrEqual(1);
+
+      if (vp.width < 1024) {
+        // Reachable from the bottom tab bar, not buried in a menu.
+        await expect(
+          page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Insights" }),
+        ).toBeVisible();
+      }
+    });
+  }
 });
+
+/** A tenant in since the 1st, eleven months back, paying ₹8,000 on every 1st since — twelve months with a bar. */
+async function seedYear(request: import("@playwright/test").APIRequestContext, runId: string) {
+  const { token } = await createOwner(request, runId);
+  const auth = { Authorization: `Bearer ${token}` };
+  const { bedId } = await createSiteRoomBed(request, token, runId);
+  const tenant = await createTenantViaApi(request, token, {
+    name: "Year Tenant",
+    phone: `97${runId.replace(/\D/g, "").slice(-8)}`,
+  });
+
+  const today = utcToday();
+  const monthStart = (offset: number) =>
+    new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + offset, 1));
+
+  const stayRes = await request.post(`${BASE}/api/stays`, {
+    headers: auth,
+    data: {
+      tenant_id: tenant.id, bed_id: bedId, rent_amount: 800000, deposit_amount: 0,
+      rent_cycle: "monthly", start_date: isoDate(monthStart(-11)),
+    },
+  });
+  expect(stayRes.ok()).toBeTruthy();
+  const stay = await stayRes.json();
+
+  for (let m = -11; m <= 0; m++) {
+    const pay = await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
+      headers: auth,
+      data: { amount: 800000, payment_type: "online", payment_date: isoDate(monthStart(m)) },
+    });
+    expect(pay.ok()).toBeTruthy();
+  }
+  return { token };
+}

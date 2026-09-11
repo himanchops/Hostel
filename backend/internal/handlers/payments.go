@@ -21,10 +21,18 @@ func NewPaymentHandler(db *sqlx.DB) *PaymentHandler {
 
 type createPaymentRequest struct {
 	Amount      int64  `json:"amount"`       // in paise
-	PaymentType string `json:"payment_type"` // "cash"|"online"
+	PaymentType string `json:"payment_type"` // "cash"|"online" — how it arrived
+	// "rent"|"deposit" — what it is for. Absent means rent, which is what every
+	// payment was before the distinction existed, so an older client (or the
+	// bulk importer) keeps recording exactly what it always did.
+	Kind        string `json:"kind"`
 	PaymentDate string `json:"payment_date"` // YYYY-MM-DD
 	Notes       string `json:"notes"`
 }
+
+// paymentColumns is every column models.Payment scans, in one place so the
+// four queries that read a payment cannot drift apart again.
+const paymentColumns = `id, stay_id, amount, payment_type, kind, payment_date, proof_url, notes, is_approved, created_at`
 
 // stayOwnerCheck reports whether a stay belongs to the calling owner.
 //
@@ -59,7 +67,7 @@ func (h *PaymentHandler) List(c echo.Context) error {
 
 	var payments []models.Payment
 	err = h.db.Select(&payments,
-		`SELECT id, stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at
+		`SELECT `+paymentColumns+`
 		 FROM payments WHERE stay_id = $1 ORDER BY payment_date DESC`,
 		stayID,
 	)
@@ -97,6 +105,13 @@ func (h *PaymentHandler) Create(c echo.Context) error {
 	if req.PaymentType == "" {
 		req.PaymentType = "cash"
 	}
+	switch req.Kind {
+	case "":
+		req.Kind = string(models.PaymentKindRent)
+	case string(models.PaymentKindRent), string(models.PaymentKindDeposit):
+	default:
+		return c.JSON(http.StatusBadRequest, errorResponse(`kind must be "rent" or "deposit"`))
+	}
 
 	paymentDate := time.Now().Truncate(24 * time.Hour)
 	if req.PaymentDate != "" {
@@ -108,10 +123,10 @@ func (h *PaymentHandler) Create(c echo.Context) error {
 
 	var payment models.Payment
 	err = h.db.QueryRowx(
-		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, notes, is_approved, created_at)
-		 VALUES ($1, $2, $3, $4, $5, true, $6)
-		 RETURNING id, stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at`,
-		stayID, req.Amount, req.PaymentType, paymentDate, req.Notes, time.Now(),
+		`INSERT INTO payments (stay_id, amount, payment_type, kind, payment_date, notes, is_approved, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, true, $7)
+		 RETURNING `+paymentColumns,
+		stayID, req.Amount, req.PaymentType, req.Kind, paymentDate, req.Notes, time.Now(),
 	).StructScan(&payment)
 	if err != nil {
 		return serverError(c, err, "failed to create payment")
@@ -132,7 +147,7 @@ func (h *PaymentHandler) ListPending(c echo.Context) error {
 
 	var payments []pendingPayment
 	err := h.db.Select(&payments,
-		`SELECT p.id, p.stay_id, p.amount, p.payment_type, p.payment_date,
+		`SELECT p.id, p.stay_id, p.amount, p.payment_type, p.kind, p.payment_date,
 		        p.proof_url, p.notes, p.is_approved, p.created_at,
 		        t.name AS tenant_name,
 		        COALESCE(b.name, 'Unassigned') AS bed_name,

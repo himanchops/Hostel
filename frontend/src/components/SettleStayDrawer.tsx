@@ -5,7 +5,7 @@ import {
   settlementsApi, ApiError, formatCurrency, today,
   Adjustment, Settlement, SettlementPreview,
 } from "@/lib/api";
-import { refundFor, parseRupees, cycleCountLabel, advanceHeld } from "@/lib/settlement";
+import { refundFor, parseRupees, cycleCountLabel, advanceHeld, depositLine } from "@/lib/settlement";
 import {
   Button, Drawer, Field, FormError, Input, Select, Skeleton, Textarea, useToast,
 } from "@/components/ui";
@@ -229,11 +229,26 @@ export function SettleStayDrawer({
 
           {/* The two computed lines, with their working */}
           <div className="space-y-2 rounded-xl bg-stone-50 p-4">
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-stone-600">Deposit held</span>
-              <span className="text-sm font-semibold tabular-nums text-stone-900">
-                {formatCurrency(preview.deposit_paise)}
-              </span>
+            <div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-stone-600">Deposit held</span>
+                <span className="text-sm font-semibold tabular-nums text-stone-900">
+                  {formatCurrency(preview.deposit_paise)}
+                </span>
+              </div>
+              {/* Held is what arrived as deposit payments; agreed is the term
+                  typed at intake. This drawer used to refund the agreed figure
+                  as if it were money in hand, and offered a tenant who had paid
+                  nothing their "deposit" back. When the two differ the owner
+                  sees both — the likeliest reason is a deposit that was paid
+                  and never written down, which only they can fix. */}
+              {depositLine(preview.deposit_agreed_paise, preview.deposit_paise) && (
+                <p className="mt-0.5 text-xs tabular-nums text-stone-500">
+                  {depositLine(preview.deposit_agreed_paise, preview.deposit_paise)}
+                  {preview.deposit_paise < preview.deposit_agreed_paise &&
+                    ". Only money received is refunded — if more was paid, record it as a deposit payment first."}
+                </p>
+              )}
             </div>
 
             {/* Every line here is a term of the sum, so the block always adds

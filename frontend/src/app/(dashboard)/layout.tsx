@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { collectionsApi, tenantsApi } from "@/lib/api";
 import {
-  BuildingIcon, Button, Card, ChartIcon, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
+  BuildingIcon, Button, buttonClasses, Card, ChartIcon, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
   RupeeIcon, ToastProvider, UsersIcon,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
@@ -115,8 +115,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="border-t border-stone-100 p-4">
-          <p className="truncate text-sm font-medium text-stone-800">{owner?.name}</p>
-          <p className="truncate text-xs text-stone-500">{owner?.email}</p>
+          {/* The name is the way in to the account screen — it is where
+              people look for "my account", and it keeps the six-tab nav at
+              six. */}
+          <Link
+            href="/account"
+            aria-current={isActive("/account") ? "page" : undefined}
+            className={`-m-2 block rounded-lg p-2 transition duration-150 ease-out ${
+              isActive("/account") ? "bg-indigo-50" : "hover:bg-stone-100"
+            }`}
+          >
+            <p className="truncate text-sm font-medium text-stone-800">{owner?.name}</p>
+            <p className="truncate text-xs text-stone-500">{owner?.email}</p>
+            <p className="mt-1 text-xs font-medium text-indigo-600">Account &amp; password</p>
+          </Link>
           <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={signOut}>
             Sign out
           </Button>
@@ -151,7 +163,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Card className="absolute right-0 z-20 mt-2 w-56 shadow-xl">
                   <p className="truncate text-sm font-medium text-stone-800">{owner?.name}</p>
                   <p className="truncate text-xs text-stone-500">{owner?.email}</p>
-                  <Button variant="ghost" size="sm" className="mt-3 w-full" onClick={signOut}>
+                  <Link
+                    href="/account"
+                    className={buttonClasses({ variant: "secondary", size: "sm", className: "mt-3 w-full" })}
+                  >
+                    Account &amp; password
+                  </Link>
+                  <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={signOut}>
                     Sign out
                   </Button>
                 </Card>

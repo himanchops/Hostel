@@ -167,13 +167,15 @@ func (h *CollectionsHandler) GetCollections(c echo.Context) error {
 			COALESCE(hs.name, '') AS site_name,
 			COALESCE(r.name, '')  AS room_name,
 			b.name         AS bed_name,
+			-- Rent only, both of them: a deposit paid last week is not a rent
+			-- payment last week, and must not make an arrears case look fresh.
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
-				WHERE p.stay_id = s.id AND p.is_approved = true
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
 			), 0) AS total_paid,
 			(
 				SELECT TO_CHAR(MAX(p.payment_date), 'YYYY-MM-DD') FROM payments p
-				WHERE p.stay_id = s.id AND p.is_approved = true
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
 			) AS last_payment_date
 		FROM stays s
 		JOIN tenants t            ON t.id = s.tenant_id

@@ -22,8 +22,8 @@ func NewInsightsHandler(db *sqlx.DB) *InsightsHandler {
 
 // RevenuePoint is one month on the collected-vs-expected chart.
 type RevenuePoint struct {
-	Month          string `json:"month"`           // "2026-09", sortable
-	Label          string `json:"label"`           // "Sep 26", for the axis
+	Month          string `json:"month"` // "2026-09", sortable
+	Label          string `json:"label"` // "Sep 26", for the axis
 	ExpectedPaise  int64  `json:"expected_paise"`
 	CollectedPaise int64  `json:"collected_paise"`
 }
@@ -367,6 +367,7 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 		JOIN tenants t ON t.id = s.tenant_id
 		WHERE t.owner_id = $1
 		  AND p.is_approved = true
+		  AND p.kind = 'rent' -- "collected" is set against rent billed; a deposit would read as >100%
 		  AND p.payment_date >= $2
 		  AND p.payment_date <  $3
 		GROUP BY 1
@@ -418,6 +419,7 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 		LEFT JOIN rooms r ON r.id = b.room_id
 		WHERE t.owner_id = $1
 		  AND p.is_approved = true
+		  AND p.kind = 'rent'
 		  AND p.payment_date >= $2
 		  AND p.payment_date <  $3
 		GROUP BY 1

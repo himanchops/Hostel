@@ -80,6 +80,10 @@ type RecentPayment struct {
 	TenantID    int64  `json:"tenant_id"    db:"tenant_id"`
 	Amount      int64  `json:"amount"       db:"amount"`
 	PaymentType string `json:"payment_type" db:"payment_type"`
+	// Kind is listed, not filtered: a deposit is money that arrived and the
+	// owner should see it land, but labelled, because it sits beside a
+	// "collected" tile that deliberately leaves it out.
+	Kind        string `json:"kind"         db:"kind"`
 	PaymentDate string `json:"payment_date" db:"payment_date"`
 	TenantName  string `json:"tenant_name"  db:"tenant_name"`
 	BedName     string `json:"bed_name"     db:"bed_name"`
@@ -204,7 +208,8 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		occupancy.Percentage = float64(occupancy.OccupiedBeds) / float64(occupancy.TotalBeds) * 100
 	}
 
-	// 2. Collected this month
+	// 2. Collected this month — rent only. A deposit is held, not earned, and
+	// counting it here would put a ₹16,000 spike in the month someone moved in.
 	var collectedThisMonth int64
 	firstOfMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
 	nextMonth := firstOfMonth.AddDate(0, 1, 0)
@@ -215,6 +220,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		JOIN tenants t ON t.id = s.tenant_id
 		WHERE t.owner_id = $1
 		  AND p.is_approved = true
+		  AND p.kind = 'rent'
 		  AND p.payment_date >= $2
 		  AND p.payment_date <  $3
 	`, ownerID, firstOfMonth.Format("2006-01-02"), nextMonth.Format("2006-01-02"))
@@ -229,7 +235,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			s.rent_amount,
 			s.rent_cycle,
 			s.start_date,
-			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true), 0) AS total_paid
+			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true AND p.kind = 'rent'), 0) AS total_paid
 		FROM stays s
 		JOIN tenants t ON t.id = s.tenant_id
 		LEFT JOIN payments p ON p.stay_id = s.id
@@ -350,6 +356,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		TenantID    int64  `db:"tenant_id"`
 		Amount      int64  `db:"amount"`
 		PaymentType string `db:"payment_type"`
+		Kind        string `db:"kind"`
 		PaymentDate string `db:"payment_date"`
 		TenantName  string `db:"tenant_name"`
 		BedName     string `db:"bed_name"`
@@ -363,6 +370,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			t.id                       AS tenant_id,
 			p.amount,
 			p.payment_type::text AS payment_type,
+			p.kind::text         AS kind,
 			TO_CHAR(p.payment_date, 'YYYY-MM-DD') AS payment_date,
 			t.name                     AS tenant_name,
 			COALESCE(b.name, 'Unassigned') AS bed_name,
@@ -395,6 +403,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			TenantID:    r.TenantID,
 			Amount:      r.Amount,
 			PaymentType: r.PaymentType,
+			Kind:        r.Kind,
 			PaymentDate: r.PaymentDate,
 			TenantName:  r.TenantName,
 			BedName:     r.BedName,
