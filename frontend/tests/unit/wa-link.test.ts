@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { normalizePhone, waLink, duePhrase, roomLabel, nudgeMessage } from "../../src/lib/wa";
+import { normalizePhone, waLink, duePhrase, roomLabel, nudgeMessage, settledPhrase } from "../../src/lib/wa";
 
 // wa.me wants a bare country-code-prefixed number: no +, no spaces, no dashes.
 // Phone numbers in this app are typed by hand into a form, so every one of
@@ -106,4 +106,28 @@ test("nudgeMessage drops the location when there is no bed or room", () => {
     "Hi Vikram, this is a reminder that rent of ₹12,000 is pending (due today). Please pay at your convenience. Thank you!"
   );
   expect(message).not.toContain("  ");
+});
+
+// Someone who has moved out owes a settlement balance, not rent on a room they
+// no longer live in (UX audit M12). The message says so, and drops the room.
+test("nudgeMessage for a tenant who moved out talks about what is outstanding, not rent due", () => {
+  const message = nudgeMessage({
+    tenant_name: "Asha Rao",
+    room_name: "101",
+    bed_name: "A",
+    balance_paise: 550000,
+    days_since_due: 21,
+    moved_out: true,
+  });
+  expect(message).toBe(
+    "Hi Asha, this is a reminder that ₹5,500 is still outstanding from when you moved out. Please pay at your convenience. Thank you!"
+  );
+  expect(message).not.toContain("rent");
+  expect(message).not.toContain("101");
+});
+
+test("settledPhrase counts from the settlement", () => {
+  expect(settledPhrase(0)).toBe("settled today");
+  expect(settledPhrase(1)).toBe("settled 1 day ago");
+  expect(settledPhrase(21)).toBe("settled 21 days ago");
 });

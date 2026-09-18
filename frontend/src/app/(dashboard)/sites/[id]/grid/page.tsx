@@ -32,7 +32,10 @@ import {
   useConfirm,
   useToast,
   HOVER_REVEAL,
+  TOUCH_TARGET,
+  TOUCH_LINK,
 } from "@/components/ui";
+import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { EndStayDialog } from "@/components/EndStayDialog";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
@@ -155,7 +158,7 @@ export default function GridPage() {
         actions={
           <Link
             href={`/sites/${siteId}`}
-            className="text-sm text-indigo-600 transition duration-150 ease-out hover:text-indigo-500"
+            className={buttonClasses({ variant: "secondary", size: "sm" })}
           >
             ← Manage rooms
           </Link>
@@ -170,7 +173,7 @@ export default function GridPage() {
             type="button"
             onClick={() => setFilter("all")}
             aria-pressed={filter === "all"}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition duration-150 ease-out ${
+            className={`${TOUCH_TARGET} inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition duration-150 ease-out ${
               filter === "all"
                 ? "border-stone-400 bg-white text-stone-800 ring-2 ring-stone-400 ring-offset-1"
                 : "border-stone-200 bg-white text-stone-500 hover:text-stone-700"
@@ -194,7 +197,7 @@ export default function GridPage() {
             type="button"
             onClick={() => setFilter(filter === "owes" ? "all" : "owes")}
             aria-pressed={filter === "owes"}
-            className={`inline-flex items-center gap-1.5 rounded-full border border-overdue-200 bg-white px-3 py-1 text-xs font-medium text-overdue-800 transition duration-150 ease-out ${
+            className={`${TOUCH_TARGET} inline-flex items-center gap-1.5 rounded-full border border-overdue-200 bg-white px-3 py-1 text-xs font-medium text-overdue-800 transition duration-150 ease-out ${
               filter === "owes" ? "ring-2 ring-stone-400 ring-offset-1" : "hover:bg-overdue-50"
             }`}
           >
@@ -640,7 +643,7 @@ function OccupiedPanel({
           {bed.tenant.id && (
             <Link
               href={`/tenants/${bed.tenant.id}`}
-              className="mt-1 inline-block text-xs text-indigo-600 hover:text-indigo-500"
+              className={`${TOUCH_LINK} mt-1 text-xs text-indigo-600 hover:text-indigo-500`}
             >
               View profile →
             </Link>
@@ -742,18 +745,20 @@ function OccupiedPanel({
                   <p className="text-sm font-medium tabular-nums text-stone-800">
                     {formatCurrency(p.amount)}
                     {p.kind === "deposit" && <Badge tone="info" className="ml-2">Deposit</Badge>}
+                    <span className="ml-2"><PaymentStatus payment={p} audience="owner" /></span>
                   </p>
                   <p className="text-xs tabular-nums text-stone-400">
                     {p.payment_type} · {p.payment_date.slice(0, 10)}
                     {p.notes ? ` · ${p.notes}` : ""}
                   </p>
+                  <RejectionReason payment={p} />
                 </div>
                 {/* Delete-and-re-add is the only correction a payment has, so
                     this must be reachable without a mouse — see HOVER_REVEAL. */}
                 <button
                   onClick={() => handleDeletePayment(p.id)}
                   aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${p.payment_date.slice(0, 10)}`}
-                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
+                  className={`inline-flex h-9 w-9 shrink-0 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
                 >
                   ✕
                 </button>

@@ -166,12 +166,30 @@ The original report:
 `/my`, and landed in a tenant's ledger. Front-desk machines are shared. Clear
 both keys on either sign-out.
 
-### A rejected payment proof is deleted and the tenant is never told — M
+### ~~A rejected payment proof is deleted and the tenant is never told~~ ✅ fixed — migration 009
+**Fixed (Sep 2026, `audit-round-four`).** `payments.rejected_at` and
+`rejection_reason`; `POST /api/payments/:id/reject` keeps the row and records an
+optional reason, which both ledgers show beside a "Not accepted" badge. Pending
+now means `is_approved = false AND rejected_at IS NULL` — the queue and the
+dashboard count both ask that. Only a waiting proof can be rejected (409
+otherwise); approving clears a rejection, so a changed mind is one API call,
+though no screen offers it yet. The original report:
+
 The confirm says "Reject and delete" and means it: the row vanishes from the
 tenant's history with no status, no reason, no evidence they ever submitted it.
 Soft-reject with a "Not accepted" status instead.
 
-### Settling a tenant erases what they still owe from Collections — M
+### ~~Settling a tenant erases what they still owe from Collections~~ ✅ fixed (Sep 2026)
+Settled stays whose refund was negative stay on Collections under "Moved out —
+still owes", with their own nudge wording, and inside the dashboard's Overdue
+(with an "incl. ₹X from tenants who moved out" note so the tile still agrees
+with the page it links to). What they owe is the settlement's shortfall less
+anything paid on the stay **after** the settlement was recorded
+(`settledOwed`), which also fixed the tenant page reading a paid-off shortfall
+as still owed. Only settled stays: a stay ended without settling has no agreed
+figure yet, and a data import of past tenants would otherwise flood the list
+with guesses. The original report:
+
 A settlement that leaves the tenant ₹5,500 down removes them from the chase list
 and the dashboard total. The tenant who has already left is the one most likely
 to skip. Keep settled stays with a balance under "Moved out — still owes".
@@ -183,11 +201,29 @@ instead of reading as "no sites". The original report:
 Three seconds of confident, actionable, wrong instruction on `/tenants/new`,
 shown to an owner who has two sites. Render loading before empty.
 
-### Touch targets are under 44px almost everywhere — M, 5 hits
+### ~~Touch targets are under 44px almost everywhere~~ ✅ fixed (Sep 2026)
+`TOUCH_TARGET` / `TOUCH_LINK` (`components/ui/touch.ts`), keyed on
+`pointer-coarse:` rather than width, are in Button, Input, Select, FileInput,
+SegmentedControl, the drawer and modal Close, breadcrumbs and the status chips;
+the rest were hand-rolled and fixed in place. The three stay actions are now a
+row of real buttons with settling set apart on the right. A mouse keeps the
+compact layout. `tests/e2e/owner/touch-targets.test.ts` measures every control
+on every screen at 768×1024, 1024×768 and 375×812 with touch, so a new screen
+that forgets fails the build. The original report:
+
 Nudge 32px, inputs 38px, room rename/delete 24px with **zero** gap between them,
 portal Sign out 20px, the three stay actions 16px text links 12px apart — one of
 which irreversibly settles a deposit. Best fixed once as a minimum height on the
 shared `Button` / `Input` / chip components below `lg:`.
+
+### ~~A session that ends mid-form says "invalid token" and strands you~~ ✅ fixed (Sep 2026)
+UX audit M10. Any owner 401 now fires `OWNER_SESSION_ENDED`; the form's error
+says "You were signed out … what you typed is still here", and the signed-in
+layout opens a sign-in-again dialog over the page, so the form underneath is
+never unmounted. A cold load with no session goes to `/login?next=…`, which
+returns there after sign-in (`safeNext` refuses anything that is not a path on
+this site). Tenant-portal sessions do not get this yet — the portal's forms are
+short, and it is a copy of the same pattern when wanted.
 
 ### ~~"Vacating Soon" shows two different dates under one heading~~ ✅ fixed (Sep 2026)
 Each row now reads "Gave notice 1 Aug 2026 · leaving 8 Oct 2026" (or "no
@@ -505,6 +541,13 @@ Still needs a human to create the account and paste the two DSNs.
 
 ### Tenant ID scans live at permanent public URLs — M, and gets worse with time
 
+> **Parked by the owner (18 Sep 2026) — raise it again, do not drop it.** Asked
+> before the real data import, the owner was not yet convinced the presigned-URL
+> work is worth it and wants to discuss it separately. The cost argument below
+> still holds: the stored-URL → stored-key migration grows with every tenant row
+> imported. Bring this up when the import is planned or finished.
+
+
 **Found cold by the Sep 2026 UX audit**, by a tester who then read the form's own
 promise — "stored securely and only visible to the property owner" — and called
 it untrue. They added a detail worth carrying: the pending-queue API ships
@@ -529,6 +572,16 @@ Related: a custom domain on the bucket is wanted regardless — Cloudflare treat
 `pub-*.r2.dev` as a development subdomain and rate-limits it.
 
 ### The app collects full Aadhaar numbers and card images — M, and it is a product question first
+
+> **Decided (18 Sep 2026): store the last four digits only.** The owner does not
+> need the full number — the ID images already identify the person. That answers
+> question 3 below. **Not built yet.** It needs: the registration and
+> new-tenant forms to take (or keep) only four digits, the pending queue to stop
+> shipping the full number to the browser, and a migration truncating existing
+> values to their last four. Cheapest done *before* the real import, so no full
+> numbers ever land in production. The image-storage question above is
+> separate and parked.
+
 Registration asks for a 12-digit Aadhaar number (`page.tsx:312`, optional) plus
 front and back ID images. The number is stored as `aadhaar_number VARCHAR(20)`
 in plaintext — `grep` finds no encryption anywhere in the backend — and the
@@ -623,7 +676,12 @@ and the `route` tags on the three issues were *different* endpoints —
 it: this was never a collections bug. Whatever two requests happened to be in
 flight at the same moment were the ones that broke.
 
-**Remaining work is one env var**, and it is not something Claude can do — the
+**Done by the owner (18 Sep 2026):** `DATABASE_URL` on Render now points at the
+direct endpoint, without `-pooler`. Not yet verified from this side — confirm
+the next Render boot log no longer prints the pooled-endpoint warning, and that
+`HOSTEL-BACKEND-1/2/3` stop recurring in Sentry, before calling this closed.
+
+**Remaining work was one env var**, and it is not something Claude can do — the
 connection string is a secret held in Render. `database.IsPooledEndpoint` now
 warns loudly at boot while it is still wrong, so this cannot go quiet again.
 

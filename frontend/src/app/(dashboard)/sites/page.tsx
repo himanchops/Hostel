@@ -16,6 +16,7 @@ import {
   useConfirm,
   useToast,
   HOVER_REVEAL,
+  TOUCH_TARGET,
 } from "@/components/ui";
 
 export default function SitesPage() {
@@ -152,7 +153,7 @@ export default function SitesPage() {
                 onClick={() => handleDelete(site.id)}
                 aria-label={`Delete site ${site.name}`}
                 title="Delete site"
-                className={`absolute right-2 top-2 rounded-lg p-2 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
+                className={`${TOUCH_TARGET} absolute right-2 top-2 inline-flex items-center justify-center rounded-lg p-2 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
               >
                 <TrashIcon className="h-4 w-4" />
               </button>

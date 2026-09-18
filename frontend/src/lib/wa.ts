@@ -48,6 +48,13 @@ export function duePhrase(daysSinceDue: number): string {
   return `due ${daysSinceDue} days ago`;
 }
 
+/** "settled today" / "settled 1 day ago" / "settled 12 days ago" */
+export function settledPhrase(daysSinceSettled: number): string {
+  if (daysSinceSettled <= 0) return "settled today";
+  if (daysSinceSettled === 1) return "settled 1 day ago";
+  return `settled ${daysSinceSettled} days ago`;
+}
+
 /** Room 101 · Bed A, or just the room when no bed is assigned yet. */
 export function roomLabel(row: Pick<CollectionRow, "room_name" | "bed_name">): string {
   if (!row.room_name) return row.bed_name ?? "";
@@ -62,9 +69,19 @@ export function nudgeMessage(
   row: Pick<
     CollectionRow,
     "tenant_name" | "room_name" | "bed_name" | "balance_paise" | "days_since_due"
-  >
+  > & Partial<Pick<CollectionRow, "moved_out">>
 ): string {
   const firstName = row.tenant_name.trim().split(/\s+/)[0] || row.tenant_name;
+  // Someone who has left owes a balance from settling up, not "rent" that is
+  // "due" — and telling them rent is due for a room they no longer live in
+  // reads as a mistake, which is the easiest kind of message to ignore.
+  if (row.moved_out) {
+    return (
+      `Hi ${firstName}, this is a reminder that ${formatCurrency(row.balance_paise)} ` +
+      `is still outstanding from when you moved out. ` +
+      `Please pay at your convenience. Thank you!`
+    );
+  }
   const where = roomLabel(row);
   const place = where ? ` for ${where}` : "";
   return (

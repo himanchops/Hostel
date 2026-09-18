@@ -30,3 +30,4 @@ export type { BarPair, LinePoint } from "./Chart";
 export { SegmentedControl } from "./SegmentedControl";
 export { Collapsible } from "./Collapsible";
 export { HOVER_REVEAL } from "./reveal";
+export { TOUCH_TARGET, TOUCH_LINK } from "./touch";

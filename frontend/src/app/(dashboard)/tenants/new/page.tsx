@@ -15,6 +15,7 @@ import {
   PageHeader,
   Textarea,
   useToast,
+  TOUCH_TARGET,
 } from "@/components/ui";
 import {
   BedPicker, VacantBed,
@@ -178,7 +179,7 @@ export default function NewTenantPage() {
         </Card>
 
         <Card title="Place them in a bed">
-          <label className="flex cursor-pointer items-start gap-3">
+          <label className={`${TOUCH_TARGET} flex cursor-pointer items-start gap-3`}>
             <input
               type="checkbox"
               checked={placing}

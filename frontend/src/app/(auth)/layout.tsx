@@ -3,14 +3,18 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
+import { safeNext } from "@/lib/session";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    // The same destination the login form picks — this effect fires the
+    // moment the session exists, and would otherwise win the race and drop
+    // `next` on the floor.
     if (!isLoading && isAuthenticated) {
-      router.replace("/dashboard");
+      router.replace(safeNext(new URLSearchParams(window.location.search).get("next")) ?? "/dashboard");
     }
   }, [isAuthenticated, isLoading, router]);
 

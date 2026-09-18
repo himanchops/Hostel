@@ -4,10 +4,25 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
-import { collectionsApi, tenantsApi } from "@/lib/api";
+import { ApiError, collectionsApi, tenantsApi } from "@/lib/api";
 import {
-  BuildingIcon, Button, buttonClasses, Card, ChartIcon, ClockIcon, ConfirmProvider, CountBadge, GridIcon,
-  RupeeIcon, ToastProvider, UsersIcon,
+  BuildingIcon,
+  Button,
+  buttonClasses,
+  Card,
+  ChartIcon,
+  ClockIcon,
+  ConfirmProvider,
+  CountBadge,
+  GridIcon,
+  RupeeIcon,
+  ToastProvider,
+  UsersIcon,
+  Modal,
+  Field,
+  Input,
+  FormError,
+  useToast,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 
@@ -31,7 +46,7 @@ type NavItem = {
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, owner, logout, token } = useAuth();
+  const { isAuthenticated, isLoading, owner, logout, token, signedOutByChoice } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
@@ -52,9 +67,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace("/login");
+      // Say where they were going, so signing in takes them back there — a
+      // bookmarked tenant, or a tab left open overnight, should not land on
+      // the dashboard (UX audit M10). Not after choosing to sign out.
+      const here = window.location.pathname + window.location.search;
+      // The dashboard is where signing in lands anyway, so it needs no `next`.
+      const plain = signedOutByChoice || here === "/" || here === "/dashboard";
+      router.replace(plain ? "/login" : `/login?next=${encodeURIComponent(here)}`);
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, signedOutByChoice]);
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -97,7 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition duration-150 ease-out ${
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 pointer-coarse:min-h-11 text-sm font-medium transition duration-150 ease-out ${
                 isActive(href)
                   ? "bg-indigo-50 text-indigo-700"
                   : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
@@ -152,7 +173,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setMenuOpenOn(menuOpen ? null : pathname)}
               aria-label="Account menu"
               aria-expanded={menuOpen}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700 transition duration-150 ease-out hover:bg-indigo-200"
+              className="flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700 transition duration-150 ease-out hover:bg-indigo-200"
             >
               {owner?.name?.[0]?.toUpperCase() ?? "?"}
             </button>
@@ -210,8 +231,77 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           );
         })}
       </nav>
+      <SessionEndedDialog />
     </div>
     </ToastProvider>
     </ConfirmProvider>
+  );
+}
+
+/**
+ * Sign in again without leaving the page. The page underneath stays mounted,
+ * so a half-typed form survives — which is the point: the only way out of an
+ * expired session used to be a reload that threw the form away (UX audit M10).
+ */
+function SessionEndedDialog() {
+  const { sessionEnded, owner, reauthenticate, logoutTo } = useAuth();
+  const toast = useToast();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      await reauthenticate(password);
+      setPassword("");
+      toast.success("Signed in again — carry on where you were");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not sign in");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function elsewhere() {
+    const here = window.location.pathname + window.location.search;
+    logoutTo(`/login?next=${encodeURIComponent(here)}`);
+  }
+
+  return (
+    <Modal
+      open={sessionEnded}
+      onClose={elsewhere}
+      title="You were signed out"
+      footer={
+        <>
+          <Button variant="ghost" onClick={elsewhere}>Use another account</Button>
+          <Button type="submit" form="session-ended" loading={saving}>Sign in</Button>
+        </>
+      }
+    >
+      <form id="session-ended" onSubmit={submit} className="space-y-3">
+        <p className="text-sm text-stone-600">
+          Your session ended — it timed out, or someone signed this account out
+          everywhere. Sign in again and nothing on this page is lost.
+        </p>
+        <Field label="Email">
+          <Input value={owner?.email ?? ""} readOnly disabled autoComplete="username" />
+        </Field>
+        <Field label="Password">
+          <Input
+            required
+            autoFocus
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        {error && <FormError>{error}</FormError>}
+      </form>
+    </Modal>
   );
 }

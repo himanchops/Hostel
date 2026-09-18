@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TOUCH_TARGET } from "./touch";
 
 /**
  * Shared plumbing for Drawer and Modal: ESC to close, background scroll lock,
@@ -59,7 +60,7 @@ export function CloseButton({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label="Close"
-      className="rounded-lg p-1.5 text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600"
+      className={`${TOUCH_TARGET} inline-flex items-center justify-center rounded-lg p-1.5 text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600`}
     >
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

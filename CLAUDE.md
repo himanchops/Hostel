@@ -68,8 +68,14 @@ both the owner and tenant sessions; and the pending queue stopped promising to
 "collect" a deposit it never records. A third (`audit-majors-round-three`) named
 the bed on the tenant profile instead of printing its id, made the bed picker
 say "loading" before "no sites", labelled each date in Vacating Soon, and gave
-the grid an "Owes money" filter that ignores bed status. The rest of that list
-is open.
+the grid an "Owes money" filter that ignores bed status. A fourth
+(`audit-round-four`, migration 009) made every control 44px under touch
+(`TOUCH_TARGET`, `components/ui/touch.ts`), kept rejected payment proofs with a
+reason instead of deleting them, kept tenants who settled short on Collections
+under "Moved out — still owes", and let an owner whose session ended sign in
+again without losing a half-typed form. The rest of that list is open; two
+decisions wait on it before the real data import — Aadhaar to last four digits
+(decided, not built) and ID images at public URLs (parked).
 
 **The primary device is probably an iPad**, in either orientation — which puts
 it on both sides of the 1024px sidebar breakpoint. Test layout and interaction
@@ -112,6 +118,14 @@ Key conventions to carry forward:
   commit and nobody could see why, because the only trace was a generic
   "failed to submit payment". Same rule on the frontend: every catch either
   shows the user something or reports it.
+- **Controls are 44px under a finger.** Anything tappable uses `TOUCH_TARGET`
+  (or `TOUCH_LINK` for a standalone text link) from `components/ui/touch.ts`,
+  keyed on `pointer-coarse:` — the shared Button/Input/Select already do.
+  `tests/e2e/owner/touch-targets.test.ts` measures every control on every
+  screen and fails on anything smaller.
+- **A rejected payment is kept, never deleted** (migration 009). "Pending" is
+  `is_approved = false AND rejected_at IS NULL`; any new query for the pending
+  queue must say both.
 - **Three dates end a stay, and they are not the same date.** `notice_date` is
   when they told you, `expected_end_date` is when they say they are going,
   `end_date` is when they actually went. Only the last one ends a stay, and

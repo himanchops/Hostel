@@ -1,10 +1,12 @@
 "use client";
 
+import { TOUCH_TARGET } from "./touch";
+
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md";
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 " + TOUCH_TARGET;
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-indigo-600 text-white hover:bg-indigo-500",

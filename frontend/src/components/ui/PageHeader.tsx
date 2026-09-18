@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { TOUCH_LINK } from "./touch";
 
 export type Crumb = { label: string; href?: string };
 
@@ -26,7 +27,7 @@ export function PageHeader({
             <span key={i} className="flex items-center gap-2">
               {i > 0 && <span aria-hidden>/</span>}
               {crumb.href ? (
-                <Link href={crumb.href} className="transition duration-150 ease-out hover:text-indigo-600">
+                <Link href={crumb.href} className={`${TOUCH_LINK} transition duration-150 ease-out hover:text-indigo-600`}>
                   {crumb.label}
                 </Link>
               ) : (

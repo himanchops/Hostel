@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { Backdrop, CloseButton, useOverlay } from "./Overlay";
 
 /** Centered overlay for short, focused tasks — assign a bed, confirm an action. */
@@ -17,6 +18,9 @@ export function Modal({
   children: React.ReactNode;
 }) {
   const entered = useOverlay(open, onClose);
+  // Named by its title, so a screen reader announces what the dialog is for
+  // rather than just "dialog".
+  const titleId = useId();
   if (!open) return null;
 
   return (
@@ -26,13 +30,14 @@ export function Modal({
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby={title ? titleId : undefined}
           className={`flex max-h-full w-full max-w-md flex-col rounded-xl bg-white shadow-xl transition duration-150 ease-out ${
             entered ? "scale-100 opacity-100" : "scale-95 opacity-0"
           }`}
         >
           {title && (
             <div className="flex items-start justify-between gap-3 border-b border-stone-100 p-4">
-              <h2 className="text-base font-semibold text-stone-900">{title}</h2>
+              <h2 id={titleId} className="text-base font-semibold text-stone-900">{title}</h2>
               <CloseButton onClick={onClose} />
             </div>
           )}

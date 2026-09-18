@@ -12,7 +12,8 @@ import {
   formatCurrency,
   today,
 } from "@/lib/api";
-import { Badge, Button, Card, Field, FormError, Input, useConfirm, useToast } from "@/components/ui";
+import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
+import { Badge, Button, Card, Field, FormError, Input, useConfirm, useToast, FileInput } from "@/components/ui";
 
 export default function TenantPortalPage() {
   const { token, isAuthenticated, isLoading } = useTenantAuth();
@@ -194,64 +195,48 @@ function StayCard({ stay, token, onUpdate }: {
         <div className="border-t border-stone-100 px-5 py-4 space-y-3">
           {/* Submit payment */}
           {!showPaymentForm ? (
-            <button
-              onClick={() => setShowPaymentForm(true)}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-            >
-              Submit payment
-            </button>
+            <Button onClick={() => setShowPaymentForm(true)}>Submit payment</Button>
           ) : (
             <form onSubmit={handleSubmitPayment} className="space-y-3">
-              {paymentError && (
-                <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{paymentError}</div>
-              )}
-              <div className="flex gap-2">
-                <input
+              {paymentError && <FormError>{paymentError}</FormError>}
+              <div className="flex flex-wrap gap-2">
+                <Input
                   required
                   type="number"
                   min="1"
                   placeholder="Amount (₹)"
+                  aria-label="Amount in rupees"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-36 rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="w-36"
                 />
-                <input
+                <Input
                   type="text"
                   placeholder="Notes / UTR / reference (optional)"
+                  aria-label="Notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  className="min-w-0 flex-1"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-stone-600">
-                  Payment screenshot <span className="font-normal text-stone-400">(optional)</span>
-                </label>
-                <input
-                  type="file"
+              <Field label={<>Payment screenshot <span className="font-normal text-stone-400">(optional)</span></>}>
+                <FileInput
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
-                  className="w-full rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-500 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-2 file:py-0.5 file:text-xs file:font-semibold file:text-indigo-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                 />
-                {screenshot && (
-                  <p className="mt-0.5 text-xs text-stone-400">{screenshot.name}</p>
-                )}
-              </div>
+              </Field>
+              {screenshot && <p className="-mt-2 text-xs text-stone-400">{screenshot.name}</p>}
               <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={paymentLoading}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
-                >
+                <Button type="submit" loading={paymentLoading}>
                   {paymentLoading ? "Submitting…" : "Submit"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => { setShowPaymentForm(false); setPaymentError(""); setScreenshot(null); }}
-                  className="rounded-lg px-4 py-2 text-sm text-stone-500 hover:bg-stone-100"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
               <p className="text-xs text-stone-400">Your payment will be visible once the owner approves it.</p>
             </form>
@@ -259,12 +244,9 @@ function StayCard({ stay, token, onUpdate }: {
 
           {/* Give notice */}
           {!hasNotice && !noticeOpen && (
-            <button
-              onClick={() => setNoticeOpen(true)}
-              className="block text-sm text-red-500 hover:text-red-700"
-            >
+            <Button variant="ghost" className="text-red-600! hover:text-red-700!" onClick={() => setNoticeOpen(true)}>
               Give notice to vacate →
-            </button>
+            </Button>
           )}
 
           {!hasNotice && noticeOpen && (
@@ -293,13 +275,14 @@ function StayCard({ stay, token, onUpdate }: {
                 <Button type="submit" variant="danger" size="sm" loading={noticeLoading}>
                   {noticeLoading ? "Submitting…" : "Submit notice"}
                 </Button>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => { setNoticeOpen(false); setNoticeError(""); }}
-                  className="text-sm text-stone-500 hover:text-stone-700"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           )}
@@ -311,8 +294,8 @@ function StayCard({ stay, token, onUpdate }: {
 
 function PaymentRow({ payment }: { payment: Payment }) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2">
-      <div>
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-stone-50 px-3 py-2">
+      <div className="min-w-0">
         <span className="text-sm font-medium text-stone-900">{formatCurrency(payment.amount)}</span>
         {/* A deposit is held, not rent — the tenant should see it filed as
             what it is, since it comes back to them at move-out. */}
@@ -320,20 +303,15 @@ function PaymentRow({ payment }: { payment: Payment }) {
         {payment.notes && (
           <span className="ml-2 text-xs text-stone-500">{payment.notes}</span>
         )}
+        <RejectionReason payment={payment} className="mt-0.5" />
       </div>
-      <div className="flex items-center gap-2 text-right">
-        <span className="text-xs text-stone-400">
+      <div className="flex shrink-0 items-center gap-2 text-right">
+        <span className="whitespace-nowrap text-xs text-stone-400">
           {new Date(payment.payment_date).toLocaleDateString("en-IN", {
             day: "numeric", month: "short",
           })}
         </span>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-          payment.is_approved
-            ? "bg-green-100 text-green-700"
-            : "bg-amber-100 text-amber-700"
-        }`}>
-          {payment.is_approved ? "Confirmed" : "Pending"}
-        </span>
+        <PaymentStatus payment={payment} audience="tenant" />
       </div>
     </div>
   );

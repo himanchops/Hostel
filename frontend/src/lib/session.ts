@@ -15,3 +15,15 @@ export function forgetAllSessions(): void {
   localStorage.removeItem(OWNER_TOKEN_KEY);
   localStorage.removeItem(TENANT_TOKEN_KEY);
 }
+
+/**
+ * Where to go after signing in. Only a path on this site: `next` arrives in a
+ * URL anyone can craft, and following "//evil.example" or "https://…" would
+ * make the login page an open redirect — a phishing link that starts on the
+ * real domain.
+ */
+export function safeNext(next: string | null): string | null {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return null;
+  if (next.startsWith("/login") || next.startsWith("/signup")) return null;
+  return next;
+}

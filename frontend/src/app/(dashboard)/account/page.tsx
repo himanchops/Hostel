@@ -4,7 +4,15 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/auth";
 import { authApi, ApiError } from "@/lib/api";
 import {
-  Button, Card, Field, FormError, Input, PageHeader, useConfirm, useToast,
+  Button,
+  Card,
+  Field,
+  FormError,
+  Input,
+  PageHeader,
+  useConfirm,
+  useToast,
+  TOUCH_TARGET,
 } from "@/components/ui";
 
 /** The server's error strings are lowercase fragments; show them as sentences. */
@@ -130,7 +138,7 @@ export default function AccountPage() {
               />
             </Field>
 
-            <label className="flex cursor-pointer items-center gap-2 text-[13px] text-stone-500">
+            <label className={`${TOUCH_TARGET} flex cursor-pointer items-center gap-2 text-[13px] text-stone-500`}>
               <input
                 type="checkbox"
                 checked={reveal}

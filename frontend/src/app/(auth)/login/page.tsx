@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/contexts/auth";
 import { Banner, Button, Card, Field, FormError, Input } from "@/components/ui";
+import { safeNext } from "@/lib/session";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -19,8 +20,11 @@ export default function LoginPage() {
   // location in an effect rather than useSearchParams, which would force a
   // Suspense boundary around the whole page for one line of text.
   const [signedOutEverywhere, setSignedOutEverywhere] = useState(false);
+  const [next, setNext] = useState<string | null>(null);
   useEffect(() => {
-    setSignedOutEverywhere(new URLSearchParams(window.location.search).get("signed_out") === "everywhere");
+    const params = new URLSearchParams(window.location.search);
+    setSignedOutEverywhere(params.get("signed_out") === "everywhere");
+    setNext(safeNext(params.get("next")));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -29,7 +33,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace("/dashboard");
+      router.replace(next ?? "/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
@@ -44,6 +48,12 @@ export default function LoginPage() {
       {signedOutEverywhere && !error && (
         <Banner tone="success" className="mb-4">
           Signed out on every device. Sign in again to carry on.
+        </Banner>
+      )}
+
+      {next && !signedOutEverywhere && !error && (
+        <Banner tone="info" className="mb-4">
+          Sign in to carry on where you were.
         </Banner>
       )}
 

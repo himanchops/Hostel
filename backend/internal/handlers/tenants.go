@@ -529,6 +529,9 @@ type staySummaryRow struct {
 	EndDate          *time.Time `db:"end_date"`
 	TotalPaid        int64      `db:"total_paid"`
 	SettlementRefund *int64     `db:"settlement_refund"`
+	// PaidAfterSettlement is money received on the stay since it was settled,
+	// which goes against a shortfall — see settledOwed.
+	PaidAfterSettlement int64 `db:"paid_after_settlement"`
 }
 
 // computeTenantSummary rolls a tenant's stays into the figures on their page.
@@ -545,7 +548,9 @@ type staySummaryRow struct {
 //
 // The settled case is deliberately asymmetric:
 //
-//   - refund < 0 — the tenant owed money at the counter, so it counts.
+//   - refund < 0 — the tenant owed money at the counter, so it counts, less
+//     anything they have paid since (settledOwed — the same rule Collections
+//     uses, so the tenant page and the chase list agree).
 //   - refund > 0 — the OWNER owed the tenant, and recording a settlement is
 //     recording that handover. It is not a tenant credit, so it counts as zero
 //     rather than making them look "ahead" forever.
@@ -572,9 +577,7 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 		}
 
 		if s.SettlementRefund != nil {
-			if owed := -*s.SettlementRefund; owed > 0 {
-				summary.Balance += owed
-			}
+			summary.Balance += settledOwed(*s.SettlementRefund, s.PaidAfterSettlement)
 			continue
 		}
 		summary.Balance += expected - s.TotalPaid
@@ -614,6 +617,10 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 			s.start_date,
 			s.end_date,
 			st.refund_paise AS settlement_refund,
+			COALESCE((
+				SELECT SUM(p.amount) FROM payments p
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.created_at > st.created_at
+			), 0) AS paid_after_settlement,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
