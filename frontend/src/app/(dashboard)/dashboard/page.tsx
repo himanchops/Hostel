@@ -23,6 +23,7 @@ import {
   SkeletonCard,
   UsersIcon,
   buttonClasses,
+  TOUCH_TARGET,
 } from "@/components/ui";
 
 /**
@@ -160,7 +161,13 @@ export default function DashboardPage() {
             valueClassName={(rev?.overdue_amount ?? 0) > 0 ? "text-overdue-700" : undefined}
             stripe={(rev?.overdue_amount ?? 0) > 0}
             note={
-              (rev?.overdue_amount ?? 0) > 0 ? "chase it from Collections →" : undefined
+              (rev?.overdue_amount ?? 0) > 0
+                ? (rev?.moved_out_owed ?? 0) > 0
+                  // Named, because it is money from people who no longer
+                  // live here and an owner reading "overdue" expects rooms.
+                  ? `incl. ${formatCurrency(rev!.moved_out_owed)} from tenants who moved out · chase it from Collections →`
+                  : "chase it from Collections →"
+                : undefined
             }
             href={(rev?.overdue_amount ?? 0) > 0 ? "/collections" : undefined}
           />
@@ -294,7 +301,7 @@ export default function DashboardPage() {
               <Link
                 key={site.site_id}
                 href={`/sites/${site.site_id}/grid`}
-                className="flex items-center gap-4 py-3 transition duration-150 ease-out first:pt-0 last:pb-0 hover:opacity-75"
+                className={`${TOUCH_TARGET} flex items-center gap-4 py-3 transition duration-150 ease-out first:pt-0 last:pb-0 hover:opacity-75`}
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-stone-900">{site.site_name}</p>
@@ -489,7 +496,7 @@ function AttentionRow({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 py-3 text-sm transition duration-150 ease-out first:pt-0 last:pb-0 hover:opacity-75"
+      className={`${TOUCH_TARGET} flex items-center gap-3 py-3 text-sm transition duration-150 ease-out first:pt-0 last:pb-0 hover:opacity-75`}
     >
       <CountBadge tone={tone}>{count}</CountBadge>
       <span className="text-stone-700">{label}</span>

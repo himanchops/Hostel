@@ -1,5 +1,7 @@
 "use client";
 
+import { TOUCH_TARGET } from "./touch";
+
 /**
  * A small run of mutually exclusive options — the Insights range picker.
  *
@@ -29,7 +31,7 @@ export function SegmentedControl<T extends string | number>({
             type="button"
             aria-pressed={selected}
             onClick={() => onChange(opt.value)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition duration-150 ease-out ${
+            className={`${TOUCH_TARGET} rounded-md px-2.5 py-1 text-xs font-medium transition duration-150 ease-out ${
               selected
                 ? "bg-white text-stone-900 ring-1 ring-stone-200"
                 : "text-stone-500 hover:text-stone-800"

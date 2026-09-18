@@ -1,6 +1,7 @@
 "use client";
 
 import { BedStatus } from "@/lib/api";
+import { TOUCH_TARGET } from "./touch";
 
 /**
  * The six bed states, styled from the status tokens in globals.css. This
@@ -75,7 +76,7 @@ export function StatusPill({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`${base} transition duration-150 ease-out hover:opacity-80 ${
+      className={`${base} ${TOUCH_TARGET} transition duration-150 ease-out hover:opacity-80 ${
         active ? "ring-2 ring-stone-400 ring-offset-1" : ""
       } ${className}`.trim()}
     >

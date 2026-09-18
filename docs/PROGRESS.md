@@ -2038,6 +2038,106 @@ ninth is the guard that "No sites yet" still shows when there are none. Full e2e
 
 ---
 
+## Audit round four — touch targets, M6, M10, M12 ✅ (Sep 2026)
+
+Branch `audit-round-four`. **Migration 009** (`payments.rejected_at`,
+`rejection_reason`) — run it on production before merging. The last round
+before the real data import; what is left in the audit list can land after it.
+
+### Touch targets — 44px under a finger, compact under a mouse
+
+`components/ui/touch.ts` holds two recipes, both keyed on `pointer-coarse:` —
+never width, for the reason `HOVER_REVEAL` gives. `TOUCH_TARGET` (min 44×44) is
+in Button, Input, Select, SegmentedControl, the overlay Close button and the
+clickable status pills; `TOUCH_LINK` makes a standalone text link 44px tall and
+takes the growth back out with a negative margin, so a breadcrumb's line does
+not move. The rest were hand-rolled in one place each and fixed there: the
+grid's All / Owes money chips, the Pending tabs, room rename/delete (now with a
+gap between them), bed-chip icons, the site delete, the account menu, sidebar
+links, dashboard rows, checkbox labels, and the portal's header and forms (the
+portal's raw `<input>`s and buttons moved onto the shared components).
+
+The three stay actions on the tenant page were 16px text links in the header's
+corner. They are a row of buttons now — Record notice on the left, "End without
+settling" and "Settle & vacate" apart on the right.
+
+`touch-targets.test.ts` walks every owner screen plus the portal at 768×1024,
+1024×768 and 375×812 with touch, opening a room, a bed drawer, a ledger and the
+payment forms, and lists every control under 44px. Its first run listed 120.
+Inline links inside a sentence are exempt (WCAG 2.5.8); checkboxes are measured
+by their label.
+
+### M6 — rejecting a proof keeps it
+
+`POST /api/payments/:id/reject {reason}` sets `rejected_at` and an optional
+reason (300 characters) instead of deleting. Pending is now
+`is_approved = false AND rejected_at IS NULL`, in `ListPending` and the
+dashboard count; every money sum already asked `is_approved = true`, so nothing
+else moved. Only a waiting proof can be rejected — an approved payment is 409,
+because turning counted money into a rejection would change balances with
+nothing on the record; that is what delete is for. Approve clears a rejection,
+so a changed mind is possible from the API (no screen yet).
+
+The Pending page asks for the reason in a dialog. `components/PaymentStatus.tsx`
+gives both sides the same words: "Not accepted" with the reason, "Awaiting
+approval" (owner) / "Pending" (tenant), and "Confirmed" on the tenant's side.
+The owner's ledgers used to show a waiting proof exactly like counted money.
+
+### M12 — moved out, still owes
+
+`settledOwed(refund, paidAfter)` is the rule: a settlement's shortfall, less
+anything approved on the stay whose `created_at` is after the settlement's.
+Created-at rather than payment date, because a late-entered receipt is still
+money that arrived after the agreement; the settlement row itself is never
+rewritten. `loadMovedOut` feeds Collections (rows with `moved_out: true`, after
+the active ones) and the dashboard (`moved_out_owed`, inside `overdue_amount`,
+so the tile still equals Collections — it adds "incl. ₹X from tenants who moved
+out"). The tenant summary uses the same rule, which fixed a quieter bug: it read
+the refund alone, so a tenant who paid off their shortfall still showed it owed.
+
+Only **settled** stays. An ended, unsettled stay has no agreed figure — its
+deposit may cover the rent — and importing past tenants would otherwise fill
+the list with guesses. Collections shows the group as "Moved out — still owes",
+with "was in Room · Bed", "left 18 Sept 2026", "settled N days ago", and a
+nudge about what is outstanding rather than rent on a room they left.
+
+### M10 — a session that ends mid-form
+
+`request()` turns any owner 401 under `/api/` into `OWNER_SESSION_ENDED` on
+`window` and a message that says what happened ("You were signed out … what you
+typed is still here"). Safe to treat every such 401 as the session: a wrong
+current password on change-password is a 400, and login lives under `/auth/`.
+The signed-in layout opens a sign-in-again dialog (same email, password only)
+over the page, so the form underneath is never unmounted; "Use another account"
+goes to `/login?next=`. A cold load with no session also goes to
+`/login?next=<path>` (not for `/dashboard`, and not after a chosen sign-out),
+and both the login form and the auth layout's own redirect follow it through
+`safeNext`, which accepts only a path on this site. Modal and Drawer now name
+their dialog by its title (`aria-labelledby`) — they were announced as a bare
+"dialog".
+
+### Verification
+
+New: `touch-targets` (three sizes), `reject-proof`, `moved-out-owes`,
+`session-ended` (4 cases, including `next=//evil.example`); Go unit tests for
+`settledOwed`, `buildMovedOut`, `movedOutTotal` and the summary's paid-after
+case; unit tests for the moved-out nudge. Full e2e, `go test ./...` and the
+unit suite — figures in the PR. Screens checked at 375×812, 768×1024 and
+1024×768 with touch, and 1280×800 with a mouse to confirm the compact layout.
+
+### Decided, not built — before the import
+
+- **Aadhaar: last four digits only** (owner, 18 Sep 2026). The images already
+  identify the person. Needs the forms, the pending queue and a truncating
+  migration — `docs/BACKLOG.md` → "The app collects full Aadhaar numbers".
+- **ID images at permanent public URLs: parked** for a separate discussion.
+  Raise it again when the import is planned; the migration it needs grows with
+  every row.
+- **`DATABASE_URL` → direct endpoint:** done by the owner, not yet verified —
+  check the Render boot log and Sentry.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

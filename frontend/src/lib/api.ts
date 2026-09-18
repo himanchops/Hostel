@@ -6,6 +6,21 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Fired on window when an owner request comes back 401: the token expired,
+ * or was revoked by a password change or "sign out everywhere" elsewhere.
+ * The signed-in layout listens and offers to sign in again in place.
+ */
+export const OWNER_SESSION_ENDED = "hostel:owner-session-ended";
+
+/**
+ * What a form shows when its save failed for that reason. The server's own
+ * words were "invalid token", which is true and useless — and the audit's
+ * tester reloaded to escape it, losing a half-typed tenant profile (M10).
+ */
+export const SESSION_ENDED_MESSAGE =
+  "You were signed out. Sign in again and save once more — what you typed is still here.";
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -21,6 +36,13 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Request failed" }));
+    // Every 401 under /api/ is the session, never the request: a wrong
+    // current password on change-password is a 400. Login itself lives under
+    // /auth/, so a mistyped password there still reads as one.
+    if (res.status === 401 && token && path.startsWith("/api/")) {
+      if (typeof window !== "undefined") window.dispatchEvent(new Event(OWNER_SESSION_ENDED));
+      throw new ApiError(401, SESSION_ENDED_MESSAGE);
+    }
     throw new ApiError(res.status, body.error || "Request failed");
   }
   if (res.status === 204) return undefined as T;
@@ -380,8 +402,9 @@ export const pendingPaymentsApi = {
   list: (token: string) => request<PendingPayment[]>("/api/payments/pending", {}, token),
   approve: (token: string, id: number) =>
     request<void>(`/api/payments/${id}/approve`, { method: "POST", body: JSON.stringify({}) }, token),
-  reject: (token: string, id: number) =>
-    request<void>(`/api/payments/${id}`, { method: "DELETE" }, token),
+  /** Marks a proof "not accepted", with a reason the tenant can read. Never deletes. */
+  reject: (token: string, id: number, reason: string) =>
+    request<Payment>(`/api/payments/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }, token),
 };
 
 // ─── Stays ───────────────────────────────────────────────────────────────────
@@ -484,6 +507,12 @@ export interface Payment {
   proof_url?: string;
   notes?: string;
   is_approved: boolean;
+  /**
+   * Set when the owner did not accept a tenant's proof. The row is kept so
+   * the tenant sees the answer; it is never money (migration 009).
+   */
+  rejected_at?: string;
+  rejection_reason?: string;
   created_at: string;
 }
 
@@ -512,7 +541,9 @@ export interface OccupancySummary {
 export interface RevenueSummary {
   expected_this_month: number;  // paise
   collected_this_month: number; // paise
-  overdue_amount: number;       // paise
+  overdue_amount: number;       // paise, including moved_out_owed
+  /** The part of overdue_amount owed by tenants who moved out and settled short. */
+  moved_out_owed: number;       // paise
 }
 
 export interface AlertsSummary {
@@ -586,8 +617,16 @@ export interface CollectionRow {
   rent_amount: number;   // paise
   rent_cycle: "monthly" | "weekly" | "daily";
   balance_paise: number; // paise owed, always > 0
+  /** For a moved-out row, days since the settlement that left them owing. */
   days_since_due: number;
   last_payment_date: string | null;
+  /**
+   * They have left, settled, and still owe (UX audit M12). Settling used to
+   * drop them off this list. The server sends these after the active rows.
+   */
+  moved_out: boolean;
+  /** When a moved-out tenant left. Absent on active rows. */
+  end_date?: string;
 }
 
 export const collectionsApi = {

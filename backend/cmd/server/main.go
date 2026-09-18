@@ -223,6 +223,7 @@ func main() {
 	api.DELETE("/payments/:id", paymentHandler.Delete)
 	api.GET("/payments/pending", paymentHandler.ListPending)
 	api.POST("/payments/:id/approve", paymentHandler.Approve)
+	api.POST("/payments/:id/reject", paymentHandler.Reject)
 
 	port := getEnv("PORT", "8080")
 	log.Printf("Starting server on :%s", port)

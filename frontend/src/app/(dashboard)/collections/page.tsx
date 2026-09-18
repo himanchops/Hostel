@@ -9,9 +9,10 @@ import {
   CollectionRow,
   ApiError,
   formatCurrency,
+  formatDay,
   today,
 } from "@/lib/api";
-import { duePhrase, nudgeMessage, roomLabel, waLink } from "@/lib/wa";
+import { duePhrase, nudgeMessage, roomLabel, settledPhrase, waLink } from "@/lib/wa";
 import {
   Badge,
   buttonClasses,
@@ -27,6 +28,7 @@ import {
   Skeleton,
   Textarea,
   useToast,
+  TOUCH_LINK,
 } from "@/components/ui";
 
 export default function CollectionsPage() {
@@ -35,19 +37,34 @@ export default function CollectionsPage() {
   const [rows, setRows] = useState<CollectionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(() => {
     if (!token) return;
     return collectionsApi
       .list(token)
-      .then(setRows)
-      .catch(() => {})
+      .then((r) => { setRows(r); setLoadError(false); })
+      // An empty list here reads as "everyone is paid up", which is the one
+      // thing a failed request must never say.
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
 
   const totalOwed = rows.reduce((sum, r) => sum + r.balance_paise, 0);
+  const current = rows.filter((r) => !r.moved_out);
+  const movedOut = rows.filter((r) => r.moved_out);
+  const card = (row: CollectionRow) => (
+    <CollectionCard
+      key={row.stay_id}
+      row={row}
+      token={token!}
+      expanded={expanded === row.stay_id}
+      onToggle={() => setExpanded(expanded === row.stay_id ? null : row.stay_id)}
+      onRecorded={(amount) => handleRecorded(row, amount)}
+    />
+  );
 
   async function handleRecorded(row: CollectionRow, amount: number) {
     setExpanded(null);
@@ -60,7 +77,7 @@ export default function CollectionsPage() {
       <PageHeader
         title="Collections"
         subtitle={
-          loading
+          loading || loadError
             ? "Who owes you money, and how to chase it"
             : rows.length === 0
               ? "Nothing outstanding"
@@ -74,6 +91,8 @@ export default function CollectionsPage() {
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
         </div>
+      ) : loadError ? (
+        <FormError>Could not load who owes money. Reload the page to try again.</FormError>
       ) : rows.length === 0 ? (
         <EmptyState
           icon={<RupeeIcon className="h-8 w-8" />}
@@ -81,17 +100,25 @@ export default function CollectionsPage() {
           message="No outstanding balances across any of your sites."
         />
       ) : (
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <CollectionCard
-              key={row.stay_id}
-              row={row}
-              token={token!}
-              expanded={expanded === row.stay_id}
-              onToggle={() => setExpanded(expanded === row.stay_id ? null : row.stay_id)}
-              onRecorded={(amount) => handleRecorded(row, amount)}
-            />
-          ))}
+        <div className="space-y-6">
+          {current.length > 0 && <div className="space-y-3">{current.map(card)}</div>}
+          {/* Settling used to drop these off the list, and the tenant who has
+              already left is the one most likely not to pay (UX audit M12). */}
+          {movedOut.length > 0 && (
+            <section aria-labelledby="moved-out-heading" className="space-y-3">
+              <div>
+                <h2 id="moved-out-heading" className="text-base font-semibold text-stone-900">
+                  Moved out — still owes
+                </h2>
+                <p className="text-[13px] text-stone-500">
+                  Settled short when they left.{" "}
+                  {formatCurrency(movedOut.reduce((s, r) => s + r.balance_paise, 0))} across{" "}
+                  {movedOut.length} {movedOut.length === 1 ? "tenant" : "tenants"}.
+                </p>
+              </div>
+              {movedOut.map(card)}
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -118,15 +145,21 @@ function CollectionCard({
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/tenants/${row.tenant_id}`}
-              className="font-medium text-stone-900 hover:text-indigo-600"
+              className={`${TOUCH_LINK} font-medium text-stone-900 hover:text-indigo-600`}
             >
               {row.tenant_name}
             </Link>
-            <Badge tone="neutral">{roomLabel(row) || "No bed assigned"}</Badge>
+            <Badge tone="neutral">
+              {row.moved_out
+                ? `was in ${roomLabel(row) || "no bed"}`
+                : roomLabel(row) || "No bed assigned"}
+            </Badge>
           </div>
           <p className="mt-1 text-xs tabular-nums text-stone-500">
             {row.site_name && `${row.site_name} · `}
-            {formatCurrency(row.rent_amount)}/{row.rent_cycle}
+            {row.moved_out && row.end_date
+              ? `left ${formatDay(row.end_date)}`
+              : `${formatCurrency(row.rent_amount)}/${row.rent_cycle}`}
             {" · "}
             {row.last_payment_date
               ? `last paid ${row.last_payment_date}`
@@ -139,7 +172,9 @@ function CollectionCard({
             <p className="text-lg font-bold tabular-nums text-red-600">
               {formatCurrency(row.balance_paise)}
             </p>
-            <p className="text-xs tabular-nums text-stone-400">{duePhrase(row.days_since_due)}</p>
+            <p className="text-xs tabular-nums text-stone-400">
+              {row.moved_out ? settledPhrase(row.days_since_due) : duePhrase(row.days_since_due)}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -157,7 +192,7 @@ function CollectionCard({
             ) : (
               <Link
                 href={`/tenants/${row.tenant_id}`}
-                className="text-[13px] font-medium text-amber-700 hover:underline"
+                className={`${TOUCH_LINK} text-[13px] font-medium text-amber-700 hover:underline`}
                 title={`"${row.phone}" is not a number WhatsApp can open`}
               >
                 Fix phone
@@ -206,12 +241,9 @@ function CollectionCard({
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => setEditingMessage(true)}
-                  className="text-[13px] text-stone-400 transition duration-150 ease-out hover:text-stone-600"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setEditingMessage(true)}>
                   Edit nudge message →
-                </button>
+                </Button>
               )}
             </div>
           )}

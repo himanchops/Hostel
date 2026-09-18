@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { Backdrop, CloseButton, useOverlay } from "./Overlay";
 
 /**
@@ -26,6 +27,7 @@ export function Drawer({
   children: React.ReactNode;
 }) {
   const entered = useOverlay(open, onClose);
+  const titleId = useId();
   if (!open) return null;
 
   const maxWidth = width === "lg" ? "max-w-lg" : "max-w-md";
@@ -36,13 +38,16 @@ export function Drawer({
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby={header || title ? titleId : undefined}
         className={`absolute inset-y-0 right-0 flex w-full ${maxWidth} flex-col bg-white shadow-xl transition-transform duration-150 ease-out ${
           entered ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {(header || title) && (
           <div className="flex items-start justify-between gap-3 border-b border-stone-100 p-4">
-            {header ?? <h2 className="text-base font-semibold text-stone-900">{title}</h2>}
+            <div id={titleId} className="min-w-0">
+              {header ?? <h2 className="text-base font-semibold text-stone-900">{title}</h2>}
+            </div>
             <CloseButton onClick={onClose} />
           </div>
         )}

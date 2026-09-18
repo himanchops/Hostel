@@ -17,6 +17,7 @@ import {
   useConfirm,
   useToast,
   HOVER_REVEAL,
+  TOUCH_TARGET,
 } from "@/components/ui";
 
 /**
@@ -223,7 +224,7 @@ export default function SiteDetailPage() {
 
       <Link
         href={`/sites/${siteId}/grid`}
-        className="mb-6 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition duration-150 ease-out hover:bg-indigo-100"
+        className="mb-6 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 pointer-coarse:min-h-11 text-sm font-medium text-indigo-700 transition duration-150 ease-out hover:bg-indigo-100"
       >
         <GridIcon className="h-4 w-4" />
         View occupancy grid
@@ -386,9 +387,9 @@ function RoomCard({
           </Button>
         </form>
       ) : (
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between gap-1 px-4 py-3">
           <button
-            className="flex flex-1 items-center gap-3 text-left"
+            className={`${TOUCH_TARGET} flex flex-1 items-center gap-3 text-left`}
             onClick={onToggle}
           >
             <ChevronIcon expanded={expanded} />
@@ -401,7 +402,7 @@ function RoomCard({
           </button>
           <button
             onClick={startRename}
-            className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600"
+            className={`${TOUCH_TARGET} inline-flex items-center justify-center rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600`}
             aria-label={`Rename room ${room.name}`}
             title="Rename room"
           >
@@ -412,7 +413,7 @@ function RoomCard({
               to reveal a tooltip. It just stops looking like an action. */}
           <button
             onClick={onDelete}
-            className={`rounded-lg p-1 transition duration-150 ease-out ${
+            className={`${TOUCH_TARGET} inline-flex items-center justify-center rounded-lg p-1 transition duration-150 ease-out ${
               locked
                 ? "text-stone-300 hover:bg-stone-100 hover:text-stone-400"
                 : "text-stone-400 hover:bg-red-50 hover:text-red-500"
@@ -543,12 +544,12 @@ function BedChip({
   return (
     <div
       data-testid="bed-chip"
-      className="group flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-700"
+      className="group flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-700 pointer-coarse:py-0 pointer-coarse:pr-1"
     >
       {bed.name}
       <button
         onClick={() => { setDraft(bed.name); setEditing(true); }}
-        className={`ml-1 text-stone-400 transition duration-150 ease-out hover:text-indigo-600 ${HOVER_REVEAL}`}
+        className={`${TOUCH_TARGET} ml-1 inline-flex items-center justify-center rounded-full text-stone-400 transition duration-150 ease-out hover:text-indigo-600 ${HOVER_REVEAL}`}
         aria-label={`Rename bed ${bed.name}`}
         title={`Rename bed ${bed.name}`}
       >
@@ -556,7 +557,7 @@ function BedChip({
       </button>
       <button
         onClick={onDelete}
-        className={`transition duration-150 ease-out ${HOVER_REVEAL} ${
+        className={`${TOUCH_TARGET} inline-flex items-center justify-center rounded-full transition duration-150 ease-out ${HOVER_REVEAL} ${
           locked ? "text-stone-300 hover:text-stone-400" : "text-stone-400 hover:text-red-500"
         }`}
         /* aria-label, not title: the "×" text content wins the accessible name

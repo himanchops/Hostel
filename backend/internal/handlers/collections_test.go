@@ -267,3 +267,72 @@ func TestBuildCollections_NullableFieldsPassThrough(t *testing.T) {
 		t.Errorf("row lost its identifying fields: %+v", got[0])
 	}
 }
+
+// ── Moved out, still owes (UX audit M12) ─────────────────────────────────────
+
+func TestSettledOwed(t *testing.T) {
+	tests := []struct {
+		name         string
+		refund, paid int64
+		want         int64
+	}{
+		{"short at the counter, nothing since", -550000, 0, 550000},
+		{"part paid since", -550000, 200000, 350000},
+		{"paid off exactly", -550000, 550000, 0},
+		{"overpaid is square, not a credit", -550000, 600000, 0},
+		{"deposit went back to the tenant", 300000, 0, 0},
+		{"settled square", 0, 0, 0},
+	}
+	for _, tt := range tests {
+		if got := settledOwed(tt.refund, tt.paid); got != tt.want {
+			t.Errorf("%s: settledOwed(%d, %d) = %d, want %d", tt.name, tt.refund, tt.paid, got, tt.want)
+		}
+	}
+}
+
+func movedOut(id int64, name string, refund, paidAfter int64, settled time.Time) movedOutRow {
+	return movedOutRow{
+		StayID: id, TenantID: id, TenantName: name, Phone: "9812345601",
+		SiteName: "Sunrise PG", RoomName: "101", BedName: nullStr("A"),
+		RentAmount: 500000, RentCycle: "monthly", EndDate: "2026-07-31",
+		RefundPaise: refund, SettledAt: settled, PaidAfter: paidAfter,
+	}
+}
+
+// The list keeps who still owes, drops who has paid up, puts the biggest debt
+// first, and counts days from the settlement — the day the debt was agreed.
+func TestBuildMovedOut(t *testing.T) {
+	rows := buildMovedOut([]movedOutRow{
+		movedOut(1, "Paid Up", -300000, 300000, date(2026, time.July, 31)),
+		movedOut(2, "Small", -150000, 0, date(2026, time.August, 1)),
+		movedOut(3, "Large", -700000, 150000, date(2026, time.July, 21)),
+	}, collectionsToday)
+
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2 — a paid-off shortfall is not a debt", len(rows))
+	}
+	if rows[0].TenantName != "Large" || rows[0].BalancePaise != 550000 {
+		t.Errorf("first row = %s %d, want Large 550000 (₹7,000 short less ₹1,500 paid)", rows[0].TenantName, rows[0].BalancePaise)
+	}
+	if rows[0].DaysSinceDue != 21 {
+		t.Errorf("Large DaysSinceDue = %d, want 21 (settled 21 Jul, today 11 Aug)", rows[0].DaysSinceDue)
+	}
+	if rows[1].TenantName != "Small" || rows[1].BalancePaise != 150000 || rows[1].DaysSinceDue != 10 {
+		t.Errorf("second row = %+v, want Small 150000 settled 10 days ago", rows[1])
+	}
+	for _, r := range rows {
+		if !r.MovedOut || r.EndDate == nil || *r.EndDate != "2026-07-31" {
+			t.Errorf("%s: MovedOut=%v EndDate=%v, want true and 2026-07-31", r.TenantName, r.MovedOut, r.EndDate)
+		}
+	}
+
+	// The dashboard's figure is the same money as the list's.
+	total := movedOutTotal([]movedOutRow{
+		movedOut(1, "Paid Up", -300000, 300000, date(2026, time.July, 31)),
+		movedOut(2, "Small", -150000, 0, date(2026, time.August, 1)),
+		movedOut(3, "Large", -700000, 150000, date(2026, time.July, 21)),
+	})
+	if total != 700000 {
+		t.Errorf("movedOutTotal = %d, want 700000 (550000 + 150000)", total)
+	}
+}

@@ -149,7 +149,13 @@ type Payment struct {
 	ProofURL    *string     `db:"proof_url" json:"proof_url,omitempty"`
 	Notes       *string     `db:"notes" json:"notes,omitempty"`
 	IsApproved  bool        `db:"is_approved" json:"is_approved"` // For tenant-submitted proofs
-	CreatedAt   time.Time   `db:"created_at" json:"created_at"`
+	// RejectedAt is set when the owner did not accept a tenant's proof. The
+	// row is kept, never deleted, so the tenant sees what happened and why
+	// (migration 009). A rejected payment is never approved, so it is never
+	// money: pending means is_approved = false AND rejected_at IS NULL.
+	RejectedAt      *time.Time `db:"rejected_at" json:"rejected_at,omitempty"`
+	RejectionReason *string    `db:"rejection_reason" json:"rejection_reason,omitempty"`
+	CreatedAt       time.Time  `db:"created_at" json:"created_at"`
 }
 
 // Adjustment is one manual line on a settlement — something the arithmetic

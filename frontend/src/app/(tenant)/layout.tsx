@@ -3,7 +3,7 @@
 import { useTenantAuth } from "@/contexts/tenantAuth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ConfirmProvider, ToastProvider } from "@/components/ui";
+import { ConfirmProvider, ToastProvider, TOUCH_LINK, TOUCH_TARGET } from "@/components/ui";
 
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, tenant, logout } = useTenantAuth();
@@ -17,7 +17,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     <div className="min-h-screen bg-stone-50">
       <header className="border-b border-stone-200 bg-white">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <Link href="/my" className="text-base font-bold text-indigo-600">
+          <Link href="/my" className={`${TOUCH_LINK} text-base font-bold text-indigo-600`}>
             My Portal
           </Link>
           {isAuthenticated && (
@@ -25,7 +25,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
               <span className="text-sm text-stone-600">{tenant?.name}</span>
               <button
                 onClick={() => { logout(); router.replace("/my/login"); }}
-                className="text-sm text-stone-400 hover:text-stone-600"
+                className={`${TOUCH_TARGET} rounded-lg px-2 text-sm text-stone-500 hover:text-stone-700`}
               >
                 Sign out
               </button>

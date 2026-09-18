@@ -31,6 +31,9 @@ import {
   Skeleton,
   useConfirm,
   useToast,
+  TOUCH_TARGET,
+  Modal,
+  Textarea,
 } from "@/components/ui";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
@@ -384,18 +387,25 @@ export default function PendingPage() {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [payLoading, setPayLoading] = useState(true);
   const [actioningPayId, setActioningPayId] = useState<number | null>(null);
+  const [rejectingProof, setRejectingProof] = useState<PendingPayment | null>(null);
 
   const registrationUrl = typeof window !== "undefined" ? `${window.location.origin}/register/${owner?.id}` : "";
 
   const loadRegistrations = useCallback(() => {
     if (!token) return;
-    tenantsApi.list(token, true).then(setPending).finally(() => setRegLoading(false));
+    tenantsApi.list(token, true)
+      .then(setPending)
+      .catch(() => toast.error("Could not load registrations — reload the page"))
+      .finally(() => setRegLoading(false));
   }, [token]);
 
   const loadPayments = useCallback(() => {
     if (!token) return;
-    pendingPaymentsApi.list(token).then(setPendingPayments).finally(() => setPayLoading(false));
-  }, [token]);
+    pendingPaymentsApi.list(token)
+      .then(setPendingPayments)
+      .catch(() => toast.error("Could not load payment proofs — reload the page"))
+      .finally(() => setPayLoading(false));
+  }, [token, toast]);
 
   useEffect(() => { loadRegistrations(); loadPayments(); }, [loadRegistrations, loadPayments]);
 
@@ -436,22 +446,13 @@ export default function PendingPage() {
     } finally { setActioningPayId(null); }
   }
 
-  async function handleRejectPayment(id: number) {
-    if (!token) return;
-    const ok = await confirm({
-      title: "Reject and delete this payment submission?",
-      confirmLabel: "Reject",
-      tone: "danger",
-    });
-    if (!ok) return;
-    setActioningPayId(id);
-    try {
-      await pendingPaymentsApi.reject(token, id);
-      setPendingPayments((prev) => prev.filter((p) => p.id !== id));
-      toast.success("Payment rejected");
-    } catch {
-      toast.error("Failed to reject the payment");
-    } finally { setActioningPayId(null); }
+  // Rejecting keeps the submission and tells the tenant why (UX audit M6).
+  // It used to delete the row, and the tenant's claim to have paid vanished
+  // from their ledger without a word.
+  function handleRejected(id: number) {
+    setPendingPayments((prev) => prev.filter((p) => p.id !== id));
+    setRejectingProof(null);
+    toast.success("Marked not accepted — the tenant will see it on their ledger");
   }
 
   return (
@@ -463,7 +464,7 @@ export default function PendingPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition duration-150 ease-out ${
+            className={`${TOUCH_TARGET} flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition duration-150 ease-out ${
               tab === t ? "bg-white text-stone-900" : "text-stone-500 hover:text-stone-700"
             }`}
           >
@@ -603,7 +604,7 @@ export default function PendingPage() {
                         variant="danger"
                         size="sm"
                         disabled={actioningPayId === p.id}
-                        onClick={() => handleRejectPayment(p.id)}
+                        onClick={() => setRejectingProof(p)}
                       >
                         Reject
                       </Button>
@@ -634,6 +635,91 @@ export default function PendingPage() {
           rejectingId={rejectingId}
         />
       )}
+
+      {token && (
+        <RejectProofDialog
+          proof={rejectingProof}
+          token={token}
+          onRejected={handleRejected}
+          onClose={() => setRejectingProof(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * "Not accepted", with a reason the tenant reads on their own ledger. The
+ * reason is optional because "I never received this" is sometimes the whole
+ * story — but a blank rejection is what the audit's testers found hardest to
+ * act on, so the box asks for one.
+ */
+function RejectProofDialog({
+  proof, token, onRejected, onClose,
+}: {
+  proof: PendingPayment | null;
+  token: string;
+  onRejected: (id: number) => void;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setReason("");
+    setError("");
+  }, [proof]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!proof) return;
+    setError("");
+    setSaving(true);
+    try {
+      await pendingPaymentsApi.reject(token, proof.id, reason.trim());
+      onRejected(proof.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not reject the payment");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={proof !== null}
+      onClose={onClose}
+      title="Not accepting this payment?"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" type="submit" form="reject-proof" loading={saving}>
+            Mark not accepted
+          </Button>
+        </>
+      }
+    >
+      {proof && (
+        <form id="reject-proof" onSubmit={submit} className="space-y-3">
+          <p className="text-sm text-stone-600">
+            {proof.tenant_name}&apos;s {formatCurrency(proof.amount)} stays on their ledger as
+            {" "}<span className="font-medium text-stone-800">Not accepted</span>, with your reason.
+            It is not counted as paid. They can submit it again.
+          </p>
+          <Field label="Reason" hint="Shown to the tenant. Optional, but it saves a phone call.">
+            <Textarea
+              rows={2}
+              maxLength={300}
+              placeholder="e.g. No UPI payment of this amount arrived on that day"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="resize-none"
+            />
+          </Field>
+          {error && <FormError>{error}</FormError>}
+        </form>
+      )}
+    </Modal>
   );
 }

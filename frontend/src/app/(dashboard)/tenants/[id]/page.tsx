@@ -28,6 +28,7 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { BedPicker, VacantBed } from "@/components/StayForm";
 import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
 import { EndStayDialog } from "@/components/EndStayDialog";
@@ -594,60 +595,43 @@ export default function TenantDetailPage() {
                           : `${formatCurrency(Math.abs(settlement.refund_paise))} recovered`}
                       </p>
                     )}
-                    {active && (
-                      <div className="mt-1 flex flex-wrap items-center justify-end gap-3">
-                        {unassigned && !isEndingThis && (
-                          <button
-                            onClick={() => setAssigningStay(stay.id)}
-                            className="text-xs font-medium text-indigo-600 hover:underline"
-                          >
-                            Assign bed
-                          </button>
-                        )}
-                        {!isEndingThis && (
-                          <>
-                            <button
-                              onClick={() => setNoticeStay(stay)}
-                              className="text-xs font-medium text-indigo-600 hover:underline"
-                            >
-                              {stay.notice_date || stay.expected_end_date
-                                ? "Update notice"
-                                : "Record notice"}
-                            </button>
-                            <button
-                              onClick={() => setSettlingStay(stay.id)}
-                              className="text-xs font-medium text-indigo-600 hover:underline"
-                            >
-                              Settle &amp; vacate
-                            </button>
-                            {/* Kept alongside: not every move-out needs the
-                                money ceremony, and forcing one would push
-                                owners back to ending stays from the grid. */}
-                            <button
-                              onClick={() => setEndingStay(stay.id)}
-                              className="text-xs text-stone-400 transition duration-150 ease-out hover:text-red-500"
-                            >
-                              End without settling
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    {/* A stay ended from the grid, or with "End without
-                        settling", still has a deposit to account for. Without
-                        this the money conversation has nowhere to happen. */}
-                    {!active && !settlement && (
-                      <div className="mt-1 flex justify-end">
-                        <button
-                          onClick={() => setSettlingStay(stay.id)}
-                          className="text-xs font-medium text-indigo-600 hover:underline"
-                        >
-                          Settle deposit
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
+
+                {/* The stay's actions, as buttons in a row of their own. They
+                    were 16px text links 12px apart in the header's corner, and
+                    one of them settles a deposit, which cannot be undone (UX
+                    audit, touch targets). Everyday actions sit on the left;
+                    the two that end the stay sit apart on the right. */}
+                {(active ? !isEndingThis : !settlement) && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-4 py-2">
+                    {active && unassigned && (
+                      <Button variant="secondary" size="sm" onClick={() => setAssigningStay(stay.id)}>
+                        Assign bed
+                      </Button>
+                    )}
+                    {active && (
+                      <Button variant="secondary" size="sm" onClick={() => setNoticeStay(stay)}>
+                        {stay.notice_date || stay.expected_end_date ? "Update notice" : "Record notice"}
+                      </Button>
+                    )}
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                      {/* Kept alongside settling: not every move-out needs the
+                          money ceremony, and forcing one would push owners
+                          back to ending stays from the grid. */}
+                      {active && (
+                        <Button variant="ghost" size="sm" onClick={() => setEndingStay(stay.id)}>
+                          End without settling
+                        </Button>
+                      )}
+                      {/* A stay ended from the grid, or with "End without
+                          settling", still has a deposit to account for. */}
+                      <Button variant="secondary" size="sm" onClick={() => setSettlingStay(stay.id)}>
+                        {active ? "Settle & vacate" : "Settle deposit"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* The ledger's own control: a real button, full width, a
                     chevron, and the payment count, so a closed ledger still
@@ -849,9 +833,13 @@ export default function TenantDetailPage() {
                               <td className="py-2 font-medium tabular-nums text-stone-800">
                                 {formatCurrency(p.amount)}
                                 {p.kind === "deposit" && <Badge tone="info" className="ml-2">Deposit</Badge>}
+                                <span className="ml-2"><PaymentStatus payment={p} audience="owner" /></span>
                               </td>
                               <td className="py-2 capitalize text-stone-500">{p.payment_type}</td>
-                              <td className="py-2 text-stone-400">{p.notes || "—"}</td>
+                              <td className="py-2 text-stone-400">
+                                {p.notes || "—"}
+                                <RejectionReason payment={p} />
+                              </td>
                               <td className="py-2 text-right">
                                 {/* Delete-and-re-add is the only way to correct
                                     a payment, so this must be reachable on a
@@ -860,7 +848,7 @@ export default function TenantDetailPage() {
                                 <button
                                   onClick={() => handleDeletePayment(stay.id, p.id)}
                                   aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${p.payment_date.slice(0, 10)}`}
-                                  className={`-my-1.5 inline-flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
+                                  className={`-my-1.5 inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
                                 >
                                   ✕
                                 </button>

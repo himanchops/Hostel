@@ -1,8 +1,10 @@
 "use client";
 
+import { TOUCH_TARGET } from "./touch";
+
 /** Shared control surface, so every input on every page focuses identically. */
 const CONTROL =
-  "block w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition duration-150 ease-out placeholder:text-stone-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:bg-stone-50 disabled:text-stone-400";
+  "block w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition duration-150 ease-out placeholder:text-stone-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:bg-stone-50 disabled:text-stone-400 " + TOUCH_TARGET;
 
 /**
  * Merges a caller's className over the base.
@@ -54,7 +56,7 @@ export function FileInput({
     <input
       {...props}
       type="file"
-      className={`block w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-500 outline-none transition duration-150 ease-out file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 ${className}`.trim()}
+      className={`block w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-500 outline-none transition duration-150 ease-out file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-indigo-700 pointer-coarse:py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 ${className}`.trim()}
     />
   );
 }

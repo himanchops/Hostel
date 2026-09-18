@@ -39,6 +39,10 @@ type RevenueSummary struct {
 	ExpectedThisMonth  int64 `json:"expected_this_month"`
 	CollectedThisMonth int64 `json:"collected_this_month"`
 	OverdueAmount      int64 `json:"overdue_amount"`
+	// MovedOutOwed is the part of OverdueAmount owed by tenants who have left
+	// and settled short. Included in the total so the tile agrees with the
+	// Collections page it links to; reported apart so the tile can say so.
+	MovedOutOwed int64 `json:"moved_out_owed"`
 }
 
 type AlertsSummary struct {
@@ -271,6 +275,13 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 
 	revenue := computeRevenue(stayRows, collectedThisMonth, today)
 
+	movedOut, err := loadMovedOut(h.db, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to fetch moved-out balances")
+	}
+	revenue.MovedOutOwed = movedOutTotal(movedOut)
+	revenue.OverdueAmount += revenue.MovedOutOwed
+
 	// 4. Pending counts
 	var pendingTenants, pendingPayments, departuresDue int
 	err = h.db.QueryRowx(`
@@ -279,7 +290,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			(SELECT COUNT(*) FROM payments p
 			 JOIN stays s  ON s.id = p.stay_id
 			 JOIN tenants t ON t.id = s.tenant_id
-			 WHERE t.owner_id = $1 AND p.is_approved = false) AS pending_payments,
+			 WHERE t.owner_id = $1 AND p.is_approved = false AND p.rejected_at IS NULL) AS pending_payments,
 			-- Still open, and the day they said they were leaving has gone by.
 			-- Nobody has said whether they went.
 			(SELECT COUNT(*) FROM stays s

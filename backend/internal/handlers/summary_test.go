@@ -202,3 +202,24 @@ func TestSummary_SettledStayDoesNotMaskAnActiveOne(t *testing.T) {
 			got.Balance, 750000*3)
 	}
 }
+
+// Paying off a settled shortfall has to show. The balance used to read the
+// settlement's refund alone, so a tenant who came back and paid the ₹4,000
+// they owed still read as owing ₹4,000 forever.
+func TestSummary_PaymentAfterSettlementReducesWhatIsOwed(t *testing.T) {
+	ended := date(2026, time.September, 8)
+	row := staySummaryRow{
+		RentAmount: 500000, RentCycle: "monthly",
+		StartDate: date(2026, time.September, 7), EndDate: &ended,
+		TotalPaid: 150000, SettlementRefund: money(-400000),
+		PaidAfterSettlement: 150000, // ₹1,500 of the ₹4,000, a week later
+	}
+	if got := summarize([]staySummaryRow{row}, date(2026, time.September, 15)); got.Balance != 250000 {
+		t.Errorf("Balance = %d, want 250000 — ₹4,000 short less ₹1,500 paid since", got.Balance)
+	}
+
+	row.PaidAfterSettlement = 450000 // overpaid by ₹500: square, not in credit
+	if got := summarize([]staySummaryRow{row}, date(2026, time.September, 15)); got.Balance != 0 {
+		t.Errorf("Balance = %d, want 0 — paying more than was owed does not make a credit", got.Balance)
+	}
+}

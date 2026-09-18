@@ -14,6 +14,7 @@ import {
   Skeleton,
   UsersIcon,
   buttonClasses,
+  TOUCH_LINK,
 } from "@/components/ui";
 
 export default function TenantsPage() {
@@ -140,7 +141,7 @@ export default function TenantsPage() {
                   <td className="px-5 py-3 text-right">
                     <Link
                       href={`/tenants/${t.id}`}
-                      className="text-indigo-600 transition duration-150 ease-out hover:text-indigo-500"
+                      className={`${TOUCH_LINK} justify-end text-indigo-600 transition duration-150 ease-out hover:text-indigo-500`}
                     >
                       View →
                     </Link>
