@@ -96,8 +96,9 @@ the profile was broken. Reuse the drawer's ledger component.
 **Partly fixed (Sep 2026).** The expander is a real `<button>` with a chevron
 and a payment count, open by default for a single stay (M1); every ledger loads
 with the page, so `Paid —` lasts only as long as the request; and the stay card
-now shows the deposit, agreed against received. Still open: `Bed #31` instead
-of the room label (M7), and converging on one ledger component with the drawer.
+now shows the deposit, agreed against received. The bed is named "Room 202 ·
+1L" rather than `Bed #31` (M7, round three). Still open: converging on one
+ledger component with the drawer.
 
 ### Three roll-ups disagree, and no tile says how it was computed — S each
 The per-tenant engine is correct (Insights reconciles exactly three ways). The
@@ -130,7 +131,10 @@ ends up 680 wide with 680 of content, i.e. nothing to scroll; `<main>`'s
 that recipe is already twice in this layout's ancestor chain. The recent months
 — the whole story in the data — are the part cut off.
 
-### The grid's "Overdue" filter hides the largest debt in the building — M
+### ~~The grid's "Overdue" filter hides the largest debt in the building~~ ✅ fixed (Sep 2026)
+An "Owes money" chip filters on balance, whatever the bed's status, with the
+total beside it. The original report:
+
 A tenant 70 days in arrears who has given notice is filed under `Vacating`, so
 HSR's chip reads `Overdue 0` while she owes ₹17,000. The precedence is
 deliberate (`grid.go:31-35`) and right for a bed's *colour*; inheriting it for
@@ -172,7 +176,10 @@ A settlement that leaves the tenant ₹5,500 down removes them from the chase li
 and the dashboard total. The tenant who has already left is the one most likely
 to skip. Keep settled stays with a balance under "Moved out — still owes".
 
-### An empty state claims "No sites yet" while sites are loading — S
+### ~~An empty state claims "No sites yet" while sites are loading~~ ✅ fixed (Sep 2026)
+`BedPicker` says "Loading your sites…" first, and a failed load now says so
+instead of reading as "no sites". The original report:
+
 Three seconds of confident, actionable, wrong instruction on `/tenants/new`,
 shown to an owner who has two sites. Render loading before empty.
 
@@ -182,7 +189,12 @@ portal Sign out 20px, the three stay actions 16px text links 12px apart — one 
 which irreversibly settles a deposit. Best fixed once as a minimum height on the
 shared `Button` / `Input` / chip components below `lg:`.
 
-### "Vacating Soon" shows two different dates under one heading — S, 3 hits
+### ~~"Vacating Soon" shows two different dates under one heading~~ ✅ fixed (Sep 2026)
+Each row now reads "Gave notice 1 Aug 2026 · leaving 8 Oct 2026" (or "no
+leaving date yet", or "was due to leave …" with Confirm departure). The
+tenant page's own stay badge still says "Notice 2026-08-01" — labelled, but in
+the old date format. The original report:
+
 `Notice: 2026-08-31` beside `Leaving 2026-09-30`, unlabelled. Three testers read
 the first as "he left nine days ago" and one said he would have re-let the bed.
 The `RecordNoticeDialog` explains this distinction better than anything else in

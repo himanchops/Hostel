@@ -419,16 +419,32 @@ func (h *StayHandler) ListByTenant(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
 
-	var stays []models.Stay
+	// The stay plus where it is. The tenant profile printed "Bed #31" — a
+	// database id — because this was the one stay list without the names every
+	// other surface shows (UX audit M7). LEFT JOINs because a stay can still be
+	// waiting for a bed, in which case all three are null.
+	type tenantStayRow struct {
+		models.Stay
+		SiteName *string `db:"site_name" json:"site_name"`
+		RoomName *string `db:"room_name" json:"room_name"`
+		BedName  *string `db:"bed_name" json:"bed_name"`
+	}
+	var stays []tenantStayRow
 	err = h.db.Select(&stays,
-		`SELECT `+stayCols+` FROM stays WHERE tenant_id = $1 ORDER BY start_date DESC`,
+		`SELECT `+stayColsQualified+`, hs.name AS site_name, r.name AS room_name, b.name AS bed_name
+		 FROM stays s
+		 LEFT JOIN beds b          ON b.id = s.bed_id
+		 LEFT JOIN rooms r         ON r.id = b.room_id
+		 LEFT JOIN hostel_sites hs ON hs.id = r.site_id
+		 WHERE s.tenant_id = $1
+		 ORDER BY s.start_date DESC`,
 		tenantID,
 	)
 	if err != nil {
 		return serverError(c, err, "failed to fetch stays")
 	}
 	if stays == nil {
-		stays = []models.Stay{}
+		stays = []tenantStayRow{}
 	}
 	return c.JSON(http.StatusOK, stays)
 }

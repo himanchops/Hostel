@@ -65,7 +65,11 @@ charts fit a phone. A second pass (`audit-majors-round-two`) made the
 dashboard's "Collected" stop at today and its "Overdue" count tenants without a
 bed, so both agree with Insights and Collections; either sign-out now forgets
 both the owner and tenant sessions; and the pending queue stopped promising to
-"collect" a deposit it never records. The rest of that list is open.
+"collect" a deposit it never records. A third (`audit-majors-round-three`) named
+the bed on the tenant profile instead of printing its id, made the bed picker
+say "loading" before "no sites", labelled each date in Vacating Soon, and gave
+the grid an "Owes money" filter that ignores bed status. The rest of that list
+is open.
 
 **The primary device is probably an iPad**, in either orientation — which puts
 it on both sides of the 1024px sidebar breakpoint. Test layout and interaction

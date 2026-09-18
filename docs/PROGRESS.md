@@ -1981,6 +1981,63 @@ as `auth.tsx`'s, and the two `<img>` warnings on the pending page predate it.
 
 ---
 
+## Audit round three — M5, M7, M11, and the Vacating Soon dates ✅ (Sep 2026)
+
+Branch `audit-majors-round-three`, in the same conversation as #34 and #35. No
+migration.
+
+### M7 — the tenant profile names the bed
+
+`GET /api/tenants/:id/stays` now returns `site_name`, `room_name` and
+`bed_name` beside each stay (LEFT JOINs, so all three are null for a stay
+waiting for a bed), and the stay card reads "Room 202 · 1L · HSR Layout" where
+it read `Bed #31`. Only that list carries the names — every other stay endpoint
+still returns the bare row — so the tenant page replaces a stay from those
+responses with `withPlace(updated, previous)` (`lib/api.ts`), and refetches
+after assigning a bed, because the bed just changed.
+
+**The bug the suite caught on the way.** The first version merged with
+`{ ...previous, ...updated }`. The stay endpoints omit empty dates from their
+JSON, so when "They're staying" cleared the expected date the key was simply
+absent, and the spread brought the old date back. `vacating-notice.test.ts`
+failed on it; `withPlace` copies the three names and nothing else.
+
+### M11 — the bed picker says it is loading
+
+`BedPicker` keeps `sites` null until the request answers, and says "Loading
+your sites…" instead of "No sites yet". Both of its requests also used to fail
+silently into an empty answer — "no sites", "no vacant beds" — and now show the
+error with "reload the page to try again". It is one component, so this covers
+`/tenants/new` and the tenant page's Assign bed modal.
+
+### Vacating Soon — each date says what it is
+
+The row printed `Notice: 2026-08-31` or `Leaving 2026-09-30`, and three testers
+read the first as a departure. It now reads "Gave notice 1 Aug 2026 · leaving
+8 Oct 2026", "… · no leaving date yet", or "… · was due to leave 15 Sept 2026, 3
+days ago" with a **Confirm departure** badge — the grid's name for that state.
+`formatDay()` in `lib/api.ts` is the portal's date format (`en-IN`, read in UTC);
+Chromium prints September as "Sept", which the portal already did.
+
+### M5 — the grid's "Owes money" filter
+
+A chip after the status chips — "Owes money 3 · ₹40,500" — filters to every bed
+with a negative balance, whatever its status. The status precedence stays as
+it is for the tile's colour; only the filter stops inheriting it. On the
+screenshot seed, Overdue reads 0 while Owes money finds three tenants, and its
+total equals the dashboard's Overdue tile.
+
+### Verification
+
+Four new e2e files — `bed-label`, `bed-picker-loading`, `vacating-dates` (375
+and 768×1024), `owes-money-filter` (1024×768) — all with touch emulation. Each
+was also run against the unfixed frontend first: 8 of 9 fail there, and the
+ninth is the guard that "No sites yet" still shows when there are none. Full e2e
+**103/103**, frontend unit 43/43, `go test ./...` passes. Screens checked at
+375×812, 768×1024 and 1024×768.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
