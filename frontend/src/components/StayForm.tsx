@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import {
   gridApi, sitesApi,
   GridRoom, Site,
-  today,
+  today, ApiError,
 } from "@/lib/api";
-import { Field, Input, Select } from "@/components/ui";
+import { Field, FormError, Input, Select } from "@/components/ui";
 
 /**
  * The two halves of "put this person in that bed", shared by every screen that
@@ -154,9 +154,16 @@ export function BedPicker({
   value: VacantBed | null;
   onChange: (bed: VacantBed | null) => void;
 }) {
-  const [sites, setSites] = useState<Site[]>([]);
+  // Null until the list arrives. An empty list is a real answer — "add a site
+  // first" — and it used to be the answer shown while the request was still in
+  // flight: three seconds of confident, wrong instruction to an owner with two
+  // sites (UX audit M11).
+  const [sites, setSites] = useState<Site[] | null>(null);
   const [siteId, setSiteId] = useState<number | null>(null);
   const [rooms, setRooms] = useState<GridRoom[] | null>(null);
+  // A failed load is said as one. Both requests used to fail silently into an
+  // empty answer, so a dropped connection read as "no sites" or "site full".
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -167,7 +174,9 @@ export function BedPicker({
         setSites(s);
         if (s.length > 0) setSiteId((prev) => prev ?? s[0].id);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Could not load your sites");
+      });
     return () => { cancelled = true; };
   }, [token]);
 
@@ -177,11 +186,14 @@ export function BedPicker({
     // Null means "still loading" — distinct from an empty list, which means
     // "this site is full" and deserves saying out loud.
     setRooms(null);
+    setLoadError("");
     onChange(null);
     gridApi
       .get(token, siteId)
       .then((g) => { if (!cancelled) setRooms(g); })
-      .catch(() => { if (!cancelled) setRooms([]); });
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof ApiError ? err.message : "Could not load this site's beds");
+      });
     return () => { cancelled = true; };
     // onChange is a caller's inline closure on every render; depending on it
     // would refetch the grid forever.
@@ -196,7 +208,7 @@ export function BedPicker({
 
   return (
     <div className="space-y-3">
-      {sites.length > 1 && (
+      {sites && sites.length > 1 && (
         <Field label="Site">
           <Select
             value={siteId ?? ""}
@@ -211,7 +223,11 @@ export function BedPicker({
 
       <div>
         <p className="mb-1 text-[13px] font-medium text-stone-600">Vacant beds</p>
-        {sites.length === 0 ? (
+        {loadError ? (
+          <FormError>{loadError} — reload the page to try again.</FormError>
+        ) : sites === null ? (
+          <p className="text-sm text-stone-400">Loading your sites…</p>
+        ) : sites.length === 0 ? (
           <p className="text-sm text-stone-400">
             No sites yet. Add a site with rooms and beds first.
           </p>

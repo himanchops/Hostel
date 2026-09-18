@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth";
 import {
   tenantsApi, staysApi, paymentsApi, settlementsApi,
   Tenant, Stay, Payment, PaymentKind, TenantSummary, TenantUpdateData, Settlement,
-  formatCurrency, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi,
+  formatCurrency, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi, withPlace,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
 import {
@@ -280,8 +280,10 @@ export default function TenantDetailPage() {
   // rather than the stay — so the card's dates come from a refetch.
   const reloadStays = useCallback(() => {
     if (!token) return;
-    tenantsApi.stays(token, tenantId).then(setStays).catch(() => {});
-  }, [token, tenantId]);
+    tenantsApi.stays(token, tenantId).then(setStays).catch(() => {
+      toast.error("Saved, but the stays did not refresh — reload the page");
+    });
+  }, [token, tenantId, toast]);
 
   const loadSummary = useCallback(() => {
     if (!token) return;
@@ -553,8 +555,16 @@ export default function TenantDetailPage() {
                       {unassigned ? (
                         <Badge tone="warning">Bed unassigned</Badge>
                       ) : (
+                        // The room and bed as the grid names them. This used
+                        // to print the database id ("Bed #31"), and five of
+                        // seven testers took the page for broken (UX audit M7).
                         <span className="text-sm font-medium text-stone-700">
-                          Bed #{stay.bed_id}
+                          {stay.room_name && stay.bed_name
+                            ? `${stay.room_name} · ${stay.bed_name}`
+                            : "Bed assigned"}
+                          {stay.site_name && (
+                            <span className="font-normal text-stone-400"> · {stay.site_name}</span>
+                          )}
                         </span>
                       )}
                     </div>
@@ -877,7 +887,7 @@ export default function TenantDetailPage() {
           token={token}
           tenantName={tenant?.name}
           onEnded={(updated) => {
-            setStays((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            setStays((prev) => prev.map((s) => (s.id === updated.id ? withPlace(updated, s) : s)));
             setEndingStay(null);
             loadSummary();
           }}
@@ -892,7 +902,7 @@ export default function TenantDetailPage() {
           token={token}
           tenantName={tenant?.name}
           onSaved={(updated) => {
-            setStays((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            setStays((prev) => prev.map((s) => (s.id === updated.id ? withPlace(updated, s) : s)));
             setNoticeStay(null);
           }}
           onClose={() => setNoticeStay(null)}
@@ -931,8 +941,10 @@ export default function TenantDetailPage() {
         <AssignBedModal
           stayId={assigningStay}
           token={token}
-          onAssigned={(updated) => {
-            setStays((prev) => prev.map((s) => (s.id === assigningStay ? updated : s)));
+          onAssigned={() => {
+            // Refetched rather than patched: the bed just changed, and its
+            // name comes only from the list.
+            reloadStays();
             setAssigningStay(null);
             toast.success("Bed assigned");
           }}

@@ -399,6 +399,27 @@ export interface Stay {
   expected_end_date?: string;
   created_at: string;
   updated_at: string;
+  /**
+   * Where the stay is. Only the tenant's stay list sends these — every other
+   * stay endpoint returns the bare row — and they are null while the stay is
+   * waiting for a bed. A screen that patches a stay from another endpoint's
+   * response keeps them with `withPlace`.
+   */
+  site_name?: string | null;
+  room_name?: string | null;
+  bed_name?: string | null;
+}
+
+/**
+ * `updated` with the place names carried over from `previous`, for replacing a
+ * listed stay with another endpoint's response.
+ *
+ * Not `{ ...previous, ...updated }`: the stay endpoints omit empty dates from
+ * their JSON, so a date that was just cleared is absent from `updated`, and the
+ * spread would bring the old one back. "They're staying" did exactly that.
+ */
+export function withPlace(updated: Stay, previous: Stay): Stay {
+  return { ...updated, site_name: previous.site_name, room_name: previous.room_name, bed_name: previous.bed_name };
 }
 
 export const staysApi = {
@@ -643,6 +664,18 @@ export function formatCurrency(paise: number): string {
 /** YYYY-MM-DD of today */
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * "31 Aug 2026" from a YYYY-MM-DD or ISO timestamp — the tenant portal's
+ * format, which the UX audit picked as the best of the app's four. Read in UTC,
+ * the zone the server writes dates in, so a browser west of Greenwich does not
+ * print the day before.
+ */
+export function formatDay(date: string): string {
+  return new Date(`${date.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+  });
 }
 
 /**

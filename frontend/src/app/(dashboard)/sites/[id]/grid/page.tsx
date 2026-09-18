@@ -58,7 +58,8 @@ export default function GridPage() {
 
   // Legend doubles as a filter: "who is overdue" is the question this page gets
   // asked most, and on a wall of beds that is faster than reading every tile.
-  const [filter, setFilter] = useState<BedStatus | "all">("all");
+  // "owes" is the one filter that is not a status — see owesMoney.
+  const [filter, setFilter] = useState<BedStatus | "all" | "owes">("all");
 
   // Which stay the end-stay dialog is for, if any.
   const [endingStay, setEndingStay] = useState<GridBed | null>(null);
@@ -117,13 +118,15 @@ export default function GridPage() {
     return acc;
   }, {} as Record<BedStatus, number>);
 
+  const owing = allBeds.filter(owesMoney);
+  const owedTotal = owing.reduce((sum, b) => sum - (b.balance ?? 0), 0);
+  const matches = (b: GridBed) =>
+    filter === "all" || (filter === "owes" ? owesMoney(b) : b.status === filter);
+
   // Rooms keep their place in the layout when filtering; only their beds are
   // narrowed, and a room with nothing left drops out entirely.
   const visibleRooms = grid
-    .map((room) => ({
-      room,
-      beds: filter === "all" ? room.beds : room.beds.filter((b) => b.status === filter),
-    }))
+    .map((room) => ({ room, beds: room.beds.filter(matches) }))
     .filter(({ beds }) => beds.length > 0 || filter === "all");
 
   if (loading) {
@@ -184,6 +187,22 @@ export default function GridPage() {
               onClick={() => setFilter(filter === status ? "all" : status)}
             />
           ))}
+          {/* The divider travels with the chip, so a wrap never strands it. */}
+          <span className="inline-flex items-center gap-2">
+          <span aria-hidden className="mx-1 h-4 w-px bg-stone-300" />
+          <button
+            type="button"
+            onClick={() => setFilter(filter === "owes" ? "all" : "owes")}
+            aria-pressed={filter === "owes"}
+            className={`inline-flex items-center gap-1.5 rounded-full border border-overdue-200 bg-white px-3 py-1 text-xs font-medium text-overdue-800 transition duration-150 ease-out ${
+              filter === "owes" ? "ring-2 ring-stone-400 ring-offset-1" : "hover:bg-overdue-50"
+            }`}
+          >
+            Owes money
+            <span className="tabular-nums opacity-70">{owing.length}</span>
+            {owedTotal > 0 && <span className="tabular-nums">· {formatCurrency(owedTotal)}</span>}
+          </button>
+          </span>
         </div>
       </div>
 
@@ -203,7 +222,11 @@ export default function GridPage() {
         <EmptyState
           icon={<FilterIcon className="h-8 w-8" />}
           title="Nothing matches that filter"
-          message={`No beds are ${STATUS_STYLES[filter as BedStatus]?.label.toLowerCase()}.`}
+          message={
+            filter === "owes"
+              ? "Nobody at this site owes money."
+              : `No beds are ${STATUS_STYLES[filter as BedStatus]?.label.toLowerCase()}.`
+          }
           action={
             <Button variant="secondary" size="sm" onClick={() => setFilter("all")}>
               Show all beds
@@ -306,6 +329,20 @@ export default function GridPage() {
       />
     </div>
   );
+}
+
+/**
+ * Anyone with a negative balance, whatever colour their bed is.
+ *
+ * A bed's status has a precedence (grid.go): a departure or a notice outranks
+ * arrears, which is right for the tile's colour — "did they go?" is the more
+ * urgent question. The status chips inherited that precedence as a filter, and
+ * a tenant 70 days behind who had given notice was filed under Vacating, so
+ * "Overdue 0" sat above ₹17,000 owed (UX audit M5). The person most likely to
+ * leave without paying was the one the debt filter hid.
+ */
+function owesMoney(bed: GridBed): boolean {
+  return bed.balance !== undefined && bed.balance < 0;
 }
 
 // ─── Room summary + bed tile ──────────────────────────────────────────────────
