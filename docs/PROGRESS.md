@@ -312,6 +312,10 @@ Infrequent Access was rejected deliberately: it bills per retrieval and imposes
 a 30-day minimum per object, and tenant photos are fetched every time an owner
 opens a profile — IA would charge for the app working normally.
 
+> **Superseded (Sep 2026):** the bucket is private now, and reads use
+> presigned links from the S3 endpoint. See "Pre-import hardening". The
+> reasoning below was right for a public bucket.
+
 Public read is served by the **R2.dev development subdomain**, because the app
 needs two hostnames for two jobs: the S3 API endpoint takes SigV4-signed writes
 from the Go backend, and an `<img src>` in the browser cannot sign anything. The
@@ -2141,7 +2145,7 @@ All three were settled on 23 Sep 2026; see "Pre-import hardening" below.
 
 ## Pre-import hardening — private uploads, required ID, login limits ✅ (Sep 2026)
 
-Branch `pre-import-hardening`, **migration 010**. The last session before the
+Branch `pre-import-hardening`, **migration 010**, merged as PR #38 on 23 Sep 2026. The last session before the
 real data import. The owner made the calls up front:
 - **Aadhaar number:** kept as typed. The card image shows all twelve digits, so
   truncating the number protects nothing while the image exists.
@@ -2181,9 +2185,18 @@ Decisions worth keeping:
   the signed link (expects 200), and with `--public-url` it fetches the plain
   address (expects a failure).
 
-**Over to the owner:** run migration 010 on Neon, turn off the bucket's public
-access, then run `storage-check --public-url`. Exact commands are in
-`docs/DEPLOYMENT.md` → "Private uploads — over to you".
+**Production, 23 Sep 2026 — done and verified.** The owner ran migration 010 on
+Neon after the merge and disabled the R2 Public Development URL. Then
+`storage-check --public-url` against production printed:
+
+```
+OK: signed link opens the file
+OK: plain link refused (401) — the bucket is private
+```
+
+The runbook is in `docs/DEPLOYMENT.md` → "Private uploads". The in-app check
+(open a tenant with a photo and see it load through a signed link) had not been
+reported when this was written.
 
 ### ID front required at registration
 

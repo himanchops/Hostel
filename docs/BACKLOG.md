@@ -566,14 +566,15 @@ Still needs a human to create the account and paste the two DSNs.
 
 ### ~~Tenant ID scans live at permanent public URLs~~ ✅ fixed (Sep 2026) — migration 010
 
-**Done on `pre-import-hardening`**, which the owner approved on 23 Sep 2026, before the
+**Done in PR #38** (`pre-import-hardening`), which the owner approved on 23 Sep 2026, before the
 import. The database stores object keys (`public/<32 hex>.jpg`), and every
 response that carries a file mints a presigned link valid for an hour
 (`handlers/files.go`, `storage.SignedURL`). Migration 010 rewrote the stored
 URLs. The code also reads old URLs, so the order of deploy and migration does
-not matter. **Two human steps remain:** turn off the bucket's public access, and
-prove it with `storage-check --public-url`. See `docs/DEPLOYMENT.md` → "Private
-uploads — over to you". The original write-up:
+not matter. **Verified in production on 23 Sep 2026:** migration 010 was run
+on Neon, the R2 Public Development URL was disabled, and `storage-check
+--public-url` reported the signed link opening and the plain link refused
+(401). See `docs/DEPLOYMENT.md` → "Private uploads". The original write-up:
 
 
 **Found cold by the Sep 2026 UX audit**, by a tester who then read the form's own
@@ -799,7 +800,7 @@ tested figure, so it wants its own change rather than riding along with
 something else. Flagged during Phase 10.
 
 ### ~~No rate limiting on the remaining public endpoints~~ ✅ done (Sep 2026)
-**Done on `pre-import-hardening`** (`middleware/login_limit.go`):
+**Done in PR #38** (`middleware/login_limit.go`):
 - **Owner login and tenant login** get ten *failed* attempts per client IP, then
   one more a minute. Only a 401 costs a token, so a hostel's worth of correct
   logins from one Wi-Fi never trips it. The two logins have separate budgets.

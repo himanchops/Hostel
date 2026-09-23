@@ -58,8 +58,9 @@ services:
         sync: false
       - key: S3_SECRET_KEY
         sync: false
-      - key: S3_PUBLIC_URL
-        sync: false
+      # S3_PUBLIC_URL is no longer read (Sep 2026): the bucket is private and
+      # every read is a presigned link. Left out on purpose; if it is still set
+      # on the Render service, it is harmless.
       - key: S3_REGION
         value: auto
 

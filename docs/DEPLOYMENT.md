@@ -35,7 +35,7 @@ of the guide is mostly copying values between dashboards.
 | # | Service | What for | What you leave with |
 |---|---|---|---|
 | 1 | [Neon](https://neon.tech) | Postgres | `DATABASE_URL` |
-| 2 | [Cloudflare](https://dash.cloudflare.com) (R2) | Tenant photos and ID documents | Account ID, access key + secret, bucket name, public bucket URL |
+| 2 | [Cloudflare](https://dash.cloudflare.com) (R2) | Tenant photos and ID documents | Account ID, access key + secret, bucket name (the bucket is private — no public URL) |
 | 3 | [Render](https://render.com) | The Go backend | — (reads `render.yaml`; you paste the secrets in) |
 | 4 | [Vercel](https://vercel.com) | The Next.js frontend | — (you set `NEXT_PUBLIC_API_URL`) |
 | 5 | [Sentry](https://sentry.io) (**EU region**) | Seeing errors after they happen | two DSNs — one backend, one frontend |
@@ -51,7 +51,7 @@ could reach the app. See "Where the logs go" below for what was built; the
 reasoning that settled Sentry-over-GlitchTip is in "Choosing a tracker".
 
 **R2 bucket: public.** ✅ **Superseded — private since Sep 2026** (migration
-010, "Private uploads — over to you" below). The database stores object keys,
+010, "Private uploads" below; verified in production 23 Sep 2026). The database stores object keys,
 and every read mints a presigned link that expires after an hour. The original
 reasoning, kept because the trade-off it describes is exactly what changed:
 
@@ -140,7 +140,8 @@ privacy". Presigned URLs are done; the upload token is not.
    ```
    https://<account-id>.r2.cloudflarestorage.com
    ```
-4. **Leave public access off** — no R2.dev subdomain, no custom domain. The
+4. **Leave public access off**: under Settings, leave "Public Development
+   URL" disabled and add no custom domain. The
    app reads files through presigned links from the S3 endpoint. (The first
    deploy turned public access on; that was reversed in Sep 2026.)
 5. Back in the R2 dashboard → **Manage R2 API Tokens** → "Create API token".
@@ -192,7 +193,8 @@ You now have the 4 values you need:
 5. Click "Apply". Render builds and deploys. First build takes ~5 min.
 6. Once deployed, Render shows the service URL, e.g. `https://hostel-backend.onrender.com`.
    Hit `/health` in a browser — should return `{"status":"ok"}`.
-7. Run the storage smoke test from your laptop (any small image will do):
+7. Run the storage smoke test from your laptop. Any small image will do; see
+   "Private uploads" below for a one-line way to make one.
    ```bash
    cd backend && STORAGE_BACKEND=s3 \
      S3_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com" \
@@ -538,7 +540,13 @@ duplicate.
 **Rule going forward:** a 500 that reaches a user and leaves no trace is a bug
 in its own right, separate from whatever caused it. See CLAUDE.md.
 
-## Private uploads — over to you (Sep 2026)
+## Private uploads (Sep 2026) — ✅ done and verified 23 Sep 2026
+
+**Status:** PR #38 merged, and the owner ran migration 010 on Neon. The R2
+"Public Development URL" is disabled. `storage-check --public-url` against
+production printed `OK: signed link opens the file` and `OK: plain link refused
+(401) — the bucket is private`. The steps below are kept as the runbook, and
+step 4 is the command to re-run whenever the bucket's settings are touched.
 
 Uploads used to be served from a public `pub-*.r2.dev` address that anyone
 holding a link could open for ever. Since the `pre-import-hardening` branch the
@@ -565,13 +573,23 @@ psql "$NEON_URL" -Atc "SELECT count(*) FROM tenants WHERE photo_url ~ '://' OR i
 ```
 
 **3. Turn public access off.** Cloudflare → R2 → the bucket → **Settings** →
-**Public access** → disable the R2.dev subdomain (and remove any custom domain).
+**Public Development URL** → **Disable**. Also remove any custom domain listed
+under **Custom Domains**.
 
-**4. Prove it.** Run this from `backend/`, with the same four S3 values as step
-3.7 plus the old public base:
+**4. Prove it.** Any image will do. To make a 1×1 test PNG:
 
 ```bash
-cd backend && STORAGE_BACKEND=s3 S3_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com" S3_BUCKET="hostel-uploads" S3_ACCESS_KEY="<access-key>" S3_SECRET_KEY="<secret-key>" go run ./cmd/storage-check --file ./some-image.png --public-url "https://pub-<hash>.r2.dev"
+echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' | base64 --decode > /tmp/check.png
+```
+
+Each run leaves one small file in the bucket under `smoke-test/`, apart from
+tenant uploads; delete it from the R2 dashboard or leave it.
+
+Then run this with the same four S3 values as step 3.7, plus the old public
+base:
+
+```bash
+cd backend && STORAGE_BACKEND=s3 S3_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com" S3_BUCKET="hostel-uploads" S3_ACCESS_KEY="<access-key>" S3_SECRET_KEY="<secret-key>" go run ./cmd/storage-check --file /tmp/check.png --public-url "https://pub-<hash>.r2.dev"
 ```
 
 You should see both `OK: signed link opens the file` and `OK: plain link

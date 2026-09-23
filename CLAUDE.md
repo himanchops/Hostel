@@ -74,8 +74,9 @@ the grid an "Owes money" filter that ignores bed status. A fourth
 reason instead of deleting them, kept tenants who settled short on Collections
 under "Moved out — still owes", and let an owner whose session ended sign in
 again without losing a half-typed form. The rest of that list is open.
-**Pre-import hardening** (`pre-import-hardening`, migration 010) made uploads
-private (keys in the database, presigned links on read), required the front of
+**Pre-import hardening** (PR #38, migration 010) made uploads private (keys
+in the database, presigned links on read; the bucket's public URL is disabled,
+verified in production 23 Sep 2026), required the front of
 an ID on public registration, and rate-limited logins and registration. The
 Aadhaar number stays as typed (decision reversed 23 Sep 2026). Corrections,
 write-offs and rent changes that do not reprice the past wait for a dedicated
