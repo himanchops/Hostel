@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -68,31 +67,17 @@ func (h *UploadHandler) handle(c echo.Context, prefix string) error {
 	defer src.Close()
 
 	key := fmt.Sprintf("%s/%s%s", prefix, randomHex(16), ext)
-	url, err := h.storage.Upload(context.Background(), key, ct, src)
-	if err != nil {
+	if err := h.storage.Upload(context.Background(), key, ct, src); err != nil {
 		return serverError(c, err, "failed to store file")
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"url": url})
+	// The key, not a link: the client sends it back in the registration or
+	// payment and never opens it. Reads mint their own expiring links.
+	return c.JSON(http.StatusOK, map[string]string{"key": key})
 }
 
 func randomHex(n int) string {
 	b := make([]byte, n)
 	rand.Read(b)
 	return hex.EncodeToString(b)
-}
-
-// ValidateUploadedURL checks that a URL ends with a known image/pdf extension.
-// Used to sanity-check client-supplied URLs before saving to DB.
-func ValidateUploadedURL(url string) bool {
-	if url == "" {
-		return true // optional field
-	}
-	ext := strings.ToLower(filepath.Ext(url))
-	for _, allowed := range allowedMIME {
-		if ext == allowed {
-			return true
-		}
-	}
-	return false
 }

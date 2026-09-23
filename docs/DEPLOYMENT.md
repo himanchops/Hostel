@@ -50,7 +50,12 @@ It was the right call for a deploy day and the wrong one the moment strangers
 could reach the app. See "Where the logs go" below for what was built; the
 reasoning that settled Sentry-over-GlitchTip is in "Choosing a tracker".
 
-**R2 bucket: public.** Object keys are `public/<32 hex chars>.ext` generated
+**R2 bucket: public.** ✅ **Superseded — private since Sep 2026** (migration
+010, "Private uploads — over to you" below). The database stores object keys,
+and every read mints a presigned link that expires after an hour. The original
+reasoning, kept because the trade-off it describes is exactly what changed:
+
+Object keys are `public/<32 hex chars>.ext` generated
 from `crypto/rand` (`backend/internal/handlers/upload.go`) and the r2.dev
 subdomain does not list directories, so the model is unguessable-link, not
 browsable — the same posture as a "anyone with the link" document share. What
@@ -65,8 +70,7 @@ minutes). Note that this raises the cost of abuse rather than removing it.
 
 Both of the follow-ups these imply — presigned URLs, and a registration token
 gating the upload — are written up in `docs/BACKLOG.md` under "Security /
-privacy". The presigned-URL one gets more expensive with every real tenant row,
-because the DB stores absolute URLs rather than keys.
+privacy". Presigned URLs are done; the upload token is not.
 
 ---
 
@@ -136,22 +140,20 @@ because the DB stores absolute URLs rather than keys.
    ```
    https://<account-id>.r2.cloudflarestorage.com
    ```
-4. Click into the bucket → **Settings** → **Public access** → enable
-   "R2.dev subdomain". This gives you a public URL like:
-   ```
-   https://pub-<hash>.r2.dev
-   ```
-   Objects you upload will be readable at `<that-URL>/<key>`.
+4. **Leave public access off** — no R2.dev subdomain, no custom domain. The
+   app reads files through presigned links from the S3 endpoint. (The first
+   deploy turned public access on; that was reversed in Sep 2026.)
 5. Back in the R2 dashboard → **Manage R2 API Tokens** → "Create API token".
    Permission: "Object Read & Write". Scope: the bucket you just created.
    Copy the **Access Key ID** and **Secret Access Key** — you only see them once.
 
-You now have the 5 values you need:
+You now have the 4 values you need:
 - `S3_ENDPOINT` = `https://<account-id>.r2.cloudflarestorage.com`
 - `S3_BUCKET` = `hostel-uploads`
 - `S3_ACCESS_KEY` = (from the API token)
 - `S3_SECRET_KEY` = (from the API token)
-- `S3_PUBLIC_URL` = `https://pub-<hash>.r2.dev`
+
+`S3_PUBLIC_URL` is no longer read. Leaving it set on Render is harmless.
 
 ---
 
@@ -174,7 +176,7 @@ You now have the 5 values you need:
      as `https://<account-id>.r2.cloudflarestorage.com/<bucket>`; the bucket is a
      separate variable and the SDK uses path-style addressing, so leaving the
      suffix on produces `.../<bucket>/<bucket>/key` and 404s.
-   - `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PUBLIC_URL` → from step 2.
+   - `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` → from step 2.
      The R2 token screen shows a prominent **"Token value"** — that is for
      Cloudflare's own API, not S3. You want the *Access Key ID* and *Secret
      Access Key* below it; the token value fails with a signature error that
@@ -197,14 +199,14 @@ You now have the 5 values you need:
      S3_BUCKET="hostel-uploads" \
      S3_ACCESS_KEY="<access-key>" \
      S3_SECRET_KEY="<secret-key>" \
-     S3_PUBLIC_URL="https://pub-<hash>.r2.dev" \
      go run ./cmd/storage-check --file ./some-image.png
    ```
-   It should print `Backend: *storage.S3Storage`, then "OK" and a URL. Check
+   It should print `Backend: *storage.S3Storage`, then "OK: signed link opens
+   the file". Check
    that backend line — the selector falls back to local storage on an
    unrecognised `STORAGE_BACKEND` rather than erroring, so `*storage.LocalStorage`
    means the variable did not reach the process and the test proved nothing.
-   Open the URL in a browser — if you see the image, R2 is wired correctly.
+   The check fetches the signed link itself, so there is nothing to open by hand.
 
    > The `cd` comes **first** on purpose. An earlier version of this doc put the
    > assignments before `cd backend && go run ...`; prefix assignments apply only
@@ -260,9 +262,11 @@ You now have the 5 values you need:
    - You can register a tenant through the public link (upload an ID proof — this
      is the end-to-end R2 test, and the only path that exercises the upload rate
      limiter in production).
-   - The image URL in the tenant profile should point at `pub-xxx.r2.dev`, not `localhost`.
-   - Open the uploaded image URL in a private window. It should load — that is
-     the public-bucket decision working as intended, not a bug.
+   - The image URL in the tenant profile should point at
+     `<account-id>.r2.cloudflarestorage.com/…?X-Amz-…`, not `localhost` and not
+     `pub-xxx.r2.dev`.
+   - Copy that link, strip everything from `?` onwards, and open it in a private
+     window. It must **fail** — that is the bucket being private.
 
 ---
 
@@ -270,7 +274,19 @@ You now have the 5 values you need:
 
 **CORS errors in the browser console.** `FRONTEND_URL` on Render doesn't match the actual Vercel URL exactly (including https/http and trailing slash). Update it and redeploy.
 
-**File uploads succeed but the URL 403s.** The R2 bucket's "Public access" subdomain isn't enabled, or `S3_PUBLIC_URL` doesn't match the `pub-xxx.r2.dev` URL.
+**Uploads succeed but images are broken.** Open the image link directly. An XML
+`SignatureDoesNotMatch` means the access key and secret on Render are not a
+matching pair (or are the Cloudflare "Token value" — see step 3.4). `AccessDenied`
+means the API token lacks Object **Read**. `Request has expired` means the page
+sat open for over an hour (`signedURLTTL` in `handlers/files.go`); reload it.
+`storage-check` reproduces each of these from your laptop without the UI.
+
+**Too many failed sign-ins.** Owner login and tenant login each allow ten
+*failed* attempts per network, then one more a minute
+(`middleware/login_limit.go`). Successful logins cost nothing. Public
+registration allows twenty per network per hostel, then one every three
+minutes. All three stores are in memory, so restarting the Render service
+clears them.
 
 **Uploads start failing with "too many uploads from this network".** The
 per-IP limiter on `/public/upload` (10 burst, one token back every three
@@ -521,6 +537,49 @@ duplicate.
 
 **Rule going forward:** a 500 that reaches a user and leaves no trace is a bug
 in its own right, separate from whatever caused it. See CLAUDE.md.
+
+## Private uploads — over to you (Sep 2026)
+
+Uploads used to be served from a public `pub-*.r2.dev` address that anyone
+holding a link could open for ever. Since the `pre-import-hardening` branch the
+database holds object keys, and the backend hands out a link that expires after
+an hour, only after checking who is asking. Order matters less than usual,
+because the code reads both old full URLs and new keys:
+
+**1. Merge the branch.** Render and Vercel deploy. Existing images keep
+working, because the old public address still works until step 3, and the new
+code signs the key it finds at the end of each old URL.
+
+**2. Run migration 010 on production.** It rewrites stored URLs to keys and
+touches nothing else. Run it in your own terminal, since the Neon URL never
+lives on this machine:
+
+```bash
+make migrate DATABASE_URL="$NEON_URL"
+```
+
+Then confirm that no full URLs are left. This should print `0`:
+
+```bash
+psql "$NEON_URL" -Atc "SELECT count(*) FROM tenants WHERE photo_url ~ '://' OR id_proof_url ~ '://' OR id_proof_front_url ~ '://' OR id_proof_back_url ~ '://'"
+```
+
+**3. Turn public access off.** Cloudflare → R2 → the bucket → **Settings** →
+**Public access** → disable the R2.dev subdomain (and remove any custom domain).
+
+**4. Prove it.** Run this from `backend/`, with the same four S3 values as step
+3.7 plus the old public base:
+
+```bash
+cd backend && STORAGE_BACKEND=s3 S3_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com" S3_BUCKET="hostel-uploads" S3_ACCESS_KEY="<access-key>" S3_SECRET_KEY="<secret-key>" go run ./cmd/storage-check --file ./some-image.png --public-url "https://pub-<hash>.r2.dev"
+```
+
+You should see both `OK: signed link opens the file` and `OK: plain link
+refused`. If the second check fails, step 3 did not take.
+
+**5. Look at it once.** Open a tenant with a photo in the live app. The picture
+should load, and its link should point at `r2.cloudflarestorage.com` and carry
+`X-Amz-Expires=3600`.
 
 ## The live owner account (Sep 2026)
 

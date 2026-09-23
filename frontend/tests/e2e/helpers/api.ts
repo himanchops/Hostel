@@ -2,6 +2,17 @@ import type { APIRequestContext, Page } from "@playwright/test";
 
 const BASE = "http://localhost:8080";
 
+/**
+ * A well-formed upload key for tests that register a tenant through the API.
+ *
+ * Registration requires the front of an ID, and the server checks only that
+ * the reference is a key it could have issued — not that the file exists. A
+ * real upload per test would spend the per-IP upload budget
+ * (PublicUploadRateLimiter) the whole suite shares from 127.0.0.1, so API-level
+ * setup uses this; `public/registration.test.ts` does real uploads.
+ */
+export const TEST_ID_KEY = "public/e2e00000000000000000000000000000.jpg";
+
 export async function createOwner(
   request: APIRequestContext,
   runId: string

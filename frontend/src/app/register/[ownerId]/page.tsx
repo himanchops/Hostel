@@ -80,21 +80,28 @@ function UploadField({
   file,
   onChange,
   hint,
+  error,
+  required,
   accept = "image/jpeg,image/png,image/webp,application/pdf",
 }: {
   label: React.ReactNode;
   file: File | null;
   onChange: (f: File | null) => void;
   hint?: string;
+  error?: string;
+  required?: boolean;
   accept?: string;
 }) {
   return (
     <Field
       label={label}
+      required={required}
+      error={error}
       hint={file ? `${file.name} (${(file.size / 1024).toFixed(0)} KB)` : hint}
     >
       <FileInput
         accept={accept}
+        required={required}
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
       />
     </Field>
@@ -117,6 +124,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   const [photo, setPhoto] = useState<File | null>(null);
   const [idProofFront, setIdProofFront] = useState<File | null>(null);
   const [idProofBack, setIdProofBack] = useState<File | null>(null);
+  const [idFrontError, setIdFrontError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -146,6 +154,14 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    // The input's `required` normally stops the submit before this runs and
+    // points at the field itself. This is the fallback for a browser that
+    // skips native validation — checked before any upload starts, so nobody
+    // waits through a photo upload to be told the ID is missing.
+    if (!idProofFront) {
+      setIdFrontError("Add a photo of the front of your ID.");
+      return;
+    }
     setLoading(true);
     try {
       let photoUrl: string | undefined;
@@ -349,9 +365,11 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <UploadField
-              label={<>ID proof — front {optionalSpan}</>}
-              onChange={setIdProofFront}
+              label="ID proof — front"
+              required
+              onChange={(f) => { setIdProofFront(f); if (f) setIdFrontError(""); }}
               file={idProofFront}
+              error={idFrontError}
               hint="Aadhaar, passport, driving licence…"
             />
             <UploadField

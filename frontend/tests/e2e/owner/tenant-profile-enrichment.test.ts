@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, createSiteRoomBed, loginAs } from "../helpers/api";
+import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY } from "../helpers/api";
 
 /**
  * Tenant profile enrichment & registration-time deposit tests.
@@ -37,6 +37,7 @@ test.describe("Tenant profile enrichment", () => {
         name: `Profile Tenant ${RUN_ID}`,
         phone: `7${RUN_ID.slice(-9)}`,
         password: "tenant123",
+        id_proof_front_url: TEST_ID_KEY,
         address: "123 Test Street, Bengaluru",
         workplace: "Acme Corp",
         emergency_contact_name: "Parent Name",
@@ -64,6 +65,7 @@ test.describe("Tenant profile enrichment", () => {
         name: `Deposit Tenant ${RUN_ID}`,
         phone: `6${RUN_ID.slice(-9)}`,
         password: "tenant123",
+        id_proof_front_url: TEST_ID_KEY,
       },
     });
     expect(regRes.ok()).toBeTruthy();
@@ -102,7 +104,7 @@ test.describe("Tenant profile enrichment", () => {
 
     // Register + approve without bed
     const regRes = await request.post(`${BASE}/public/register/${ownerId}`, {
-      data: { name: `Assign Tenant ${RUN_ID}`, phone: `5${RUN_ID.slice(-9)}`, password: "tenantpass" },
+      data: { name: `Assign Tenant ${RUN_ID}`, phone: `5${RUN_ID.slice(-9)}`, password: "tenantpass", id_proof_front_url: TEST_ID_KEY },
     });
     const { id: tenantId } = await regRes.json();
 

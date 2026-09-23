@@ -41,7 +41,7 @@ hostel/
 
 **See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session. `docs/BACKLOG.md` holds the loose ends that are too small to be a phase.
 
-Current state (Sep 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Deployment is done and the app is live (Phase 9.2–9.6), and **Phase 9.7 wired up error tracking** (Sentry, EU region — `docs/DEPLOYMENT.md` → "Where the logs go"). The DSNs still need a human to paste them into Render and Vercel; until then the backend boot log says `error tracking: DISABLED` and nothing else changes.
+Current state (Sep 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Deployment is done and the app is live (Phase 9.2–9.6), and **Phase 9.7 wired up error tracking** (Sentry, EU region — `docs/DEPLOYMENT.md` → "Where the logs go"). It is live and verified in both projects (Sep 2026).
 
 **Phase 15 (Insights)** added the app's first historical view — `GET /api/insights?months=N` and `/insights`, with collected-vs-billed by month, occupancy in bed-nights, and a per-room breakdown. No migration: every figure was already derivable from `payments.payment_date` and `stays.start_date`/`end_date`. 15b widened `seed-demo` to 20 beds over 15 months so the charts have a shape; 15c added hover readouts and folding panels; 15d made the dashboard's two lists linkable and bounded. **A real account is on production**: Chopra Boys Hostel, owner #4, site #1, 45 beds — see `docs/DEPLOYMENT.md` → "The live owner account".
 
@@ -73,9 +73,13 @@ the grid an "Owes money" filter that ignores bed status. A fourth
 (`TOUCH_TARGET`, `components/ui/touch.ts`), kept rejected payment proofs with a
 reason instead of deleting them, kept tenants who settled short on Collections
 under "Moved out — still owes", and let an owner whose session ended sign in
-again without losing a half-typed form. The rest of that list is open; two
-decisions wait on it before the real data import — Aadhaar to last four digits
-(decided, not built) and ID images at public URLs (parked).
+again without losing a half-typed form. The rest of that list is open.
+**Pre-import hardening** (`pre-import-hardening`, migration 010) made uploads
+private (keys in the database, presigned links on read), required the front of
+an ID on public registration, and rate-limited logins and registration. The
+Aadhaar number stays as typed (decision reversed 23 Sep 2026). Corrections,
+write-offs and rent changes that do not reprice the past wait for a dedicated
+design session (`docs/BACKLOG.md` → "Nothing can be corrected, anywhere").
 
 **The primary device is probably an iPad**, in either orientation — which puts
 it on both sides of the 1024px sidebar breakpoint. Test layout and interaction
@@ -123,6 +127,12 @@ Key conventions to carry forward:
   keyed on `pointer-coarse:` — the shared Button/Input/Select already do.
   `tests/e2e/owner/touch-targets.test.ts` measures every control on every
   screen and fails on anything smaller.
+- **Uploaded files are private** (migration 010). A file column (`*_url`)
+  stores an object key, never a URL. Anything that returns a tenant or payment
+  to a browser goes through `signTenant`/`signPayment` (`handlers/files.go`),
+  and anything that accepts a file reference checks `validFileRef`. A new file
+  column needs both, or it either ships a raw key (a broken image) or accepts a
+  URL from any host.
 - **A rejected payment is kept, never deleted** (migration 009). "Pending" is
   `is_approved = false AND rejected_at IS NULL`; any new query for the pending
   queue must say both.

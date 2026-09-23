@@ -9,15 +9,17 @@ import (
 	"github.com/winnow/hostel/internal/auth"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
 	"github.com/winnow/hostel/internal/models"
+	"github.com/winnow/hostel/internal/storage"
 )
 
 type TenantAuthHandler struct {
 	db          *sqlx.DB
 	authService *auth.Service
+	storage     storage.Service
 }
 
-func NewTenantAuthHandler(db *sqlx.DB, authService *auth.Service) *TenantAuthHandler {
-	return &TenantAuthHandler{db: db, authService: authService}
+func NewTenantAuthHandler(db *sqlx.DB, authService *auth.Service, s storage.Service) *TenantAuthHandler {
+	return &TenantAuthHandler{db: db, authService: authService, storage: s}
 }
 
 type tenantLoginRequest struct {
@@ -64,6 +66,9 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 	if err != nil {
 		return serverError(c, err, "failed to generate token")
 	}
+	if err := signTenant(c, h.storage, &tenant); err != nil {
+		return serverError(c, err, "failed to prepare tenant files")
+	}
 
 	return c.JSON(http.StatusOK, tenantAuthResponse{Token: token, Tenant: tenant})
 }
@@ -81,6 +86,9 @@ func (h *TenantAuthHandler) Me(c echo.Context) error {
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+	}
+	if err := signTenant(c, h.storage, &tenant); err != nil {
+		return serverError(c, err, "failed to prepare tenant files")
 	}
 	return c.JSON(http.StatusOK, tenant)
 }
