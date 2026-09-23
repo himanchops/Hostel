@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed } from "../helpers/api";
+import { createOwner, createSiteRoomBed, TEST_ID_KEY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -24,7 +24,7 @@ async function seedPortalTenant(
   const phone = `9${suffix}${RUN_ID.slice(-8)}`;
 
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: `Portal Tenant ${suffix} ${RUN_ID}`, phone, password: TENANT_PASSWORD },
+    data: { name: `Portal Tenant ${suffix} ${RUN_ID}`, phone, password: TENANT_PASSWORD, id_proof_front_url: TEST_ID_KEY },
   });
   if (!reg.ok()) throw new Error(`register failed: ${await reg.text()}`);
   const tenant = await reg.json();

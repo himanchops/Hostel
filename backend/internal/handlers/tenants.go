@@ -13,15 +13,28 @@ import (
 	"github.com/winnow/hostel/internal/auth"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
 	"github.com/winnow/hostel/internal/models"
+	"github.com/winnow/hostel/internal/storage"
 )
 
 type TenantHandler struct {
 	db          *sqlx.DB
 	authService *auth.Service
+	storage     storage.Service
 }
 
-func NewTenantHandler(db *sqlx.DB, authService *auth.Service) *TenantHandler {
-	return &TenantHandler{db: db, authService: authService}
+func NewTenantHandler(db *sqlx.DB, authService *auth.Service, s storage.Service) *TenantHandler {
+	return &TenantHandler{db: db, authService: authService, storage: s}
+}
+
+// respondTenant sends one tenant with its file keys turned into expiring
+// links. Every tenant that leaves this handler goes through here or
+// signTenants — a tenant returned any other way ships raw keys, which render
+// as broken images rather than leaking anything, but still render broken.
+func (h *TenantHandler) respondTenant(c echo.Context, status int, t *models.Tenant) error {
+	if err := signTenant(c, h.storage, t); err != nil {
+		return serverError(c, err, "failed to prepare tenant files")
+	}
+	return c.JSON(status, t)
 }
 
 // tenantCols is the SELECT column list for all tenant queries.
@@ -51,6 +64,27 @@ type tenantRequest struct {
 	PhotoURL              *string `json:"photo_url"`
 }
 
+// invalidFileRef names the first file field that is not an upload key, or
+// returns "". The owner's forms only ever send keys they just uploaded; an
+// edit that omits a field leaves the stored file alone (COALESCE in Update).
+func (r tenantRequest) invalidFileRef() string {
+	fields := []struct {
+		name string
+		v    *string
+	}{
+		{"id_proof_url", r.IDProofURL},
+		{"id_proof_front_url", r.IDProofFrontURL},
+		{"id_proof_back_url", r.IDProofBackURL},
+		{"photo_url", r.PhotoURL},
+	}
+	for _, f := range fields {
+		if f.v != nil && !validFileRef(*f.v) {
+			return "invalid " + f.name
+		}
+	}
+	return ""
+}
+
 func (h *TenantHandler) List(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 
@@ -68,6 +102,9 @@ func (h *TenantHandler) List(c echo.Context) error {
 	}
 	if tenants == nil {
 		tenants = []models.Tenant{}
+	}
+	if err := signTenants(c, h.storage, tenants); err != nil {
+		return serverError(c, err, "failed to prepare tenant files")
 	}
 	return c.JSON(http.StatusOK, tenants)
 }
@@ -87,7 +124,7 @@ func (h *TenantHandler) Get(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
-	return c.JSON(http.StatusOK, tenant)
+	return h.respondTenant(c, http.StatusOK, &tenant)
 }
 
 func (h *TenantHandler) Create(c echo.Context) error {
@@ -101,6 +138,9 @@ func (h *TenantHandler) Create(c echo.Context) error {
 	req.Phone = strings.TrimSpace(req.Phone)
 	if req.Name == "" || req.Phone == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
+	}
+	if msg := req.invalidFileRef(); msg != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
 
 	var tenant models.Tenant
@@ -119,7 +159,7 @@ func (h *TenantHandler) Create(c echo.Context) error {
 	if err != nil {
 		return serverError(c, err, "failed to create tenant")
 	}
-	return c.JSON(http.StatusCreated, tenant)
+	return h.respondTenant(c, http.StatusCreated, &tenant)
 }
 
 type publicRegisterRequest struct {
@@ -206,36 +246,33 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		return serverError(c, err, "failed to process password")
 	}
 
-	// Validate upload URLs
-	var idProofURL, idProofFrontURL, idProofBackURL *string
-	if req.IDProofURL != "" {
-		if !ValidateUploadedURL(req.IDProofURL) {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_url"))
-		}
-		idProofURL = &req.IDProofURL
+	// The front of an ID is the one upload registration insists on. The owner
+	// has to be able to say who is living in the building — police tenant
+	// verification asks for exactly this — and the person is standing there
+	// with a phone at this moment and at no later one. The back and the photo
+	// stay optional. Owner-created tenants are not held to this: the owner
+	// may have the paper copy in a drawer.
+	if req.IDProofFrontURL == "" && req.IDProofURL == "" {
+		return c.JSON(http.StatusBadRequest, errorResponse("Add a photo of the front of your ID."))
 	}
-	if req.IDProofFrontURL != "" {
-		if !ValidateUploadedURL(req.IDProofFrontURL) {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_front_url"))
-		}
-		idProofFrontURL = &req.IDProofFrontURL
+	files := []struct {
+		name string
+		v    string
+	}{
+		{"id_proof_url", req.IDProofURL},
+		{"id_proof_front_url", req.IDProofFrontURL},
+		{"id_proof_back_url", req.IDProofBackURL},
+		{"photo_url", req.PhotoURL},
 	}
-	if req.IDProofBackURL != "" {
-		if !ValidateUploadedURL(req.IDProofBackURL) {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_back_url"))
+	for _, f := range files {
+		if !validFileRef(f.v) {
+			return c.JSON(http.StatusBadRequest, errorResponse("invalid "+f.name))
 		}
-		idProofBackURL = &req.IDProofBackURL
 	}
-	// The photo is the cheapest identity signal in the system to collect and
-	// the most expensive to chase later: the person is standing in the
-	// corridor with a phone in their hand at exactly this moment.
-	var photoURL *string
-	if req.PhotoURL != "" {
-		if !ValidateUploadedURL(req.PhotoURL) {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid photo_url"))
-		}
-		photoURL = &req.PhotoURL
-	}
+	idProofURL := optionalString(req.IDProofURL)
+	idProofFrontURL := optionalString(req.IDProofFrontURL)
+	idProofBackURL := optionalString(req.IDProofBackURL)
+	photoURL := optionalString(req.PhotoURL)
 
 	var address, emergencyName, emergencyPhone, workplace, aadhaar *string
 	if req.Address != "" {
@@ -271,7 +308,7 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	if err != nil {
 		return serverError(c, err, "failed to register")
 	}
-	return c.JSON(http.StatusCreated, tenant)
+	return h.respondTenant(c, http.StatusCreated, &tenant)
 }
 
 type approveRequest struct {
@@ -366,7 +403,7 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, tenant)
+	return h.respondTenant(c, http.StatusOK, &tenant)
 }
 
 func (h *TenantHandler) Reject(c echo.Context) error {
@@ -407,18 +444,8 @@ func (h *TenantHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
 	}
 
-	// Validate upload URLs if provided
-	if req.IDProofURL != nil && *req.IDProofURL != "" && !ValidateUploadedURL(*req.IDProofURL) {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_url"))
-	}
-	if req.IDProofFrontURL != nil && *req.IDProofFrontURL != "" && !ValidateUploadedURL(*req.IDProofFrontURL) {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_front_url"))
-	}
-	if req.IDProofBackURL != nil && *req.IDProofBackURL != "" && !ValidateUploadedURL(*req.IDProofBackURL) {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid id_proof_back_url"))
-	}
-	if req.PhotoURL != nil && *req.PhotoURL != "" && !ValidateUploadedURL(*req.PhotoURL) {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid photo_url"))
+	if msg := req.invalidFileRef(); msg != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
 
 	var tenant models.Tenant
@@ -443,7 +470,7 @@ func (h *TenantHandler) Update(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
-	return c.JSON(http.StatusOK, tenant)
+	return h.respondTenant(c, http.StatusOK, &tenant)
 }
 
 type portalPasswordRequest struct {
@@ -503,7 +530,7 @@ func (h *TenantHandler) SetPortalPassword(c echo.Context) error {
 		}
 		return serverError(c, err, "failed to set portal password")
 	}
-	return c.JSON(http.StatusOK, tenant)
+	return h.respondTenant(c, http.StatusOK, &tenant)
 }
 
 // TenantSummary holds aggregate stats for a tenant's stays and payments.

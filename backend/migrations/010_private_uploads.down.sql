@@ -1,0 +1,14 @@
+-- Nothing to undo in the schema: 010 changed values, not columns.
+--
+-- The code that reads these columns accepts both a bare key and an old full
+-- URL (storage.KeyFromStored), so rolling the *code* back is the only case
+-- that needs data back. If you ever do that, rebuild the URLs by hand with the
+-- bucket's public base, e.g.:
+--
+--   UPDATE tenants SET photo_url = '<public base>/' || photo_url
+--    WHERE photo_url !~ '://' AND photo_url IS NOT NULL;
+--
+-- and the same for id_proof_url, id_proof_front_url, id_proof_back_url and
+-- payments.proof_url — and turn the bucket's public access back on, or the
+-- rebuilt URLs will not open.
+SELECT 1;

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -18,12 +18,14 @@ import (
 // For Cloudflare R2:
 //   - Endpoint: https://<account-id>.r2.cloudflarestorage.com
 //   - Region:   auto
-//   - PublicURL: the public R2 dev URL (https://pub-<hash>.r2.dev) or your custom domain.
-//     The bucket must be configured to expose objects publicly via that URL.
+//
+// The bucket should be private — no r2.dev subdomain, no custom domain. Reads
+// go through presigned GET links minted by SignedURL, which R2 serves from
+// the S3 endpoint with the signature as the only credential.
 type S3Storage struct {
-	client    *s3.Client
-	bucket    string
-	publicURL string // base URL where objects are publicly served; no trailing slash
+	client  *s3.Client
+	presign *s3.PresignClient
+	bucket  string
 }
 
 // S3Config holds the parameters for connecting to an S3-compatible backend.
@@ -33,7 +35,6 @@ type S3Config struct {
 	Bucket    string
 	AccessKey string
 	SecretKey string
-	PublicURL string // public base URL for built object URLs, e.g. https://pub-xxx.r2.dev
 }
 
 // NewS3Storage builds an S3Storage from the given config.
@@ -43,9 +44,6 @@ func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
 	}
 	if cfg.AccessKey == "" || cfg.SecretKey == "" {
 		return nil, errors.New("s3 storage: access key and secret key are required")
-	}
-	if cfg.PublicURL == "" {
-		return nil, errors.New("s3 storage: public URL is required")
 	}
 	region := cfg.Region
 	if region == "" {
@@ -72,14 +70,14 @@ func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
 	})
 
 	return &S3Storage{
-		client:    client,
-		bucket:    cfg.Bucket,
-		publicURL: strings.TrimRight(cfg.PublicURL, "/"),
+		client:  client,
+		presign: s3.NewPresignClient(client),
+		bucket:  cfg.Bucket,
 	}, nil
 }
 
 // Upload implements Service.
-func (s *S3Storage) Upload(ctx context.Context, key, contentType string, r io.Reader) (string, error) {
+func (s *S3Storage) Upload(ctx context.Context, key, contentType string, r io.Reader) error {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(key),
@@ -87,7 +85,21 @@ func (s *S3Storage) Upload(ctx context.Context, key, contentType string, r io.Re
 		ContentType: aws.String(contentType),
 	})
 	if err != nil {
-		return "", fmt.Errorf("s3 upload %q: %w", key, err)
+		return fmt.Errorf("s3 upload %q: %w", key, err)
 	}
-	return s.publicURL + "/" + strings.TrimLeft(key, "/"), nil
+	return nil
+}
+
+// SignedURL implements Service. Presigning is local arithmetic over the
+// secret key — no request leaves the process — so minting a link per file on
+// every tenant list is cheap.
+func (s *S3Storage) SignedURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("s3 presign %q: %w", key, err)
+	}
+	return req.URL, nil
 }

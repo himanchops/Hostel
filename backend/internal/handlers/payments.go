@@ -13,14 +13,16 @@ import (
 	"github.com/labstack/echo/v4"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
 	"github.com/winnow/hostel/internal/models"
+	"github.com/winnow/hostel/internal/storage"
 )
 
 type PaymentHandler struct {
-	db *sqlx.DB
+	db      *sqlx.DB
+	storage storage.Service
 }
 
-func NewPaymentHandler(db *sqlx.DB) *PaymentHandler {
-	return &PaymentHandler{db: db}
+func NewPaymentHandler(db *sqlx.DB, s storage.Service) *PaymentHandler {
+	return &PaymentHandler{db: db, storage: s}
 }
 
 type createPaymentRequest struct {
@@ -107,6 +109,9 @@ func (h *PaymentHandler) List(c echo.Context) error {
 	}
 	if payments == nil {
 		payments = []models.Payment{}
+	}
+	if err := signPayments(c, h.storage, payments); err != nil {
+		return serverError(c, err, "failed to prepare payment proofs")
 	}
 	return c.JSON(http.StatusOK, payments)
 }
@@ -202,6 +207,11 @@ func (h *PaymentHandler) ListPending(c echo.Context) error {
 	}
 	if payments == nil {
 		payments = []pendingPayment{}
+	}
+	for i := range payments {
+		if err := signPayment(c, h.storage, &payments[i].Payment); err != nil {
+			return serverError(c, err, "failed to prepare payment proofs")
+		}
 	}
 	return c.JSON(http.StatusOK, payments)
 }
@@ -299,6 +309,9 @@ func (h *PaymentHandler) Reject(c echo.Context) error {
 	}
 	if err != nil {
 		return serverError(c, err, "failed to reject payment")
+	}
+	if err := signPayment(c, h.storage, &payment); err != nil {
+		return serverError(c, err, "failed to prepare payment proof")
 	}
 	return c.JSON(http.StatusOK, payment)
 }

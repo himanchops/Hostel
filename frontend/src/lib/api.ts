@@ -302,8 +302,11 @@ async function uploadFile(endpoint: string, file: File, token?: string): Promise
     const body = await res.json().catch(() => ({ error: "Upload failed" }));
     throw new ApiError(res.status, body.error || "Upload failed");
   }
-  const { url } = await res.json();
-  return url as string;
+  // A storage key, not a link: uploads are private. The caller sends it back
+  // in the registration or payment; the server returns an expiring link
+  // whenever the file is read.
+  const { key } = await res.json();
+  return key as string;
 }
 
 export const uploadApi = {

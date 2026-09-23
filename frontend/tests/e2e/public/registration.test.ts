@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { createOwner } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
@@ -10,6 +10,22 @@ const RUN_ID = Date.now().toString();
  * file runs at 375px rather than testing mobile as an afterthought.
  */
 test.use({ viewport: { width: 375, height: 812 } });
+
+// A 1×1 PNG, built here rather than committed: the assertions are about the
+// upload round-trip, not about the pixels.
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/** Registration requires the front of an ID; every submitting test attaches one. */
+async function attachIdFront(page: Page) {
+  await page.getByLabel(/ID proof — front/).setInputFiles({
+    name: "id-front.png",
+    mimeType: "image/png",
+    buffer: PNG,
+  });
+}
 
 test.describe("Public registration", () => {
   test("the public owner endpoint gives a name and nothing else", async ({ request }) => {
@@ -44,6 +60,7 @@ test.describe("Public registration", () => {
     await page.getByPlaceholder("10-digit number").fill(phone);
     await page.getByPlaceholder("Company or college name").fill("Zoho");
     await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await attachIdFront(page);
 
     // Nothing may overflow the viewport on the way down — this page is long and
     // the whole point is that it survives a phone.
@@ -90,6 +107,7 @@ test.describe("Public registration", () => {
     await page.getByPlaceholder("Your full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`8${RUN_ID.slice(-9)}`);
     await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await attachIdFront(page);
     await page.getByRole("button", { name: "Submit registration" }).click();
 
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
@@ -116,16 +134,12 @@ test.describe("Public registration", () => {
     await page.getByPlaceholder("10-digit number").fill(`7${RUN_ID.slice(-9)}`);
     await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
 
-    // A 1×1 PNG, built here rather than committed: the assertion is about the
-    // upload round-trip, not about the pixels.
     await page.getByLabel(/Your photo/).setInputFiles({
       name: "selfie.png",
       mimeType: "image/png",
-      buffer: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-        "base64",
-      ),
+      buffer: PNG,
     });
+    await attachIdFront(page);
 
     // The filename echoed back is the only confirmation this page can give
     // someone who just picked a file out of a camera roll.
@@ -139,6 +153,67 @@ test.describe("Public registration", () => {
     });
     const created = (await pending.json()).find((t: { name: string }) => t.name === applicant);
     expect(created.photo_url).toBeTruthy();
+    expect(created.id_proof_front_url).toBeTruthy();
+
+    // Uploads are private: the database holds a key, and what reaches the
+    // owner is a link minted for this read. Locally that is the dev server's
+    // /uploads route (links expire only on R2 — see storage_test.go); the
+    // point here is that the key round-tripped into a link that opens.
+    for (const link of [created.photo_url, created.id_proof_front_url]) {
+      expect(link).toMatch(/^https?:\/\/.+\/public\/[0-9a-f]{32}\.png/);
+      const file = await request.get(link);
+      expect(file.status(), `${link} should open`).toBe(200);
+    }
+  });
+
+  /**
+   * The owner has to be able to say who is living in the building, and the
+   * applicant is standing there with a phone at this moment and no later one.
+   * The back and the photo stay optional; owner-created tenants are not held
+   * to it.
+   */
+  test("the front of an ID is required to register", async ({ page, request }) => {
+    const { token, owner } = await createOwner(request, `pub-noid-${RUN_ID}`);
+    const applicant = `No ID ${RUN_ID}`;
+
+    await page.goto(`/register/${owner.id}`);
+    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByPlaceholder("10-digit number").fill(`6${RUN_ID.slice(-9)}`);
+    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await page.getByRole("button", { name: "Submit registration" }).click();
+
+    // The browser stops the submit at the field, not with a banner at the top.
+    const idFront = page.getByLabel(/ID proof — front/);
+    expect(await idFront.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
+    await expect(page.getByRole("heading", { name: "You're registered" })).toHaveCount(0);
+
+    // And the API refuses it too, for anything that is not this form.
+    const direct = await request.post(`${BASE}/public/register/${owner.id}`, {
+      data: { name: applicant, phone: `6${RUN_ID.slice(-9)}`, password: "testpassword123" },
+    });
+    expect(direct.status()).toBe(400);
+    expect((await direct.json()).error).toBe("Add a photo of the front of your ID.");
+
+    const pending = await request.get(`${BASE}/api/tenants?pending=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect((await pending.json()).some((t: { name: string }) => t.name === applicant)).toBe(false);
+  });
+
+  // Before uploads went private, the only check was the file extension, so a
+  // registration could store any host's ".jpg" and the owner's browser would
+  // fetch it when the profile rendered — a tracking pixel aimed at one person.
+  test("a file reference must be an upload key, not a URL", async ({ request }) => {
+    const { owner } = await createOwner(request, `pub-foreign-${RUN_ID}`);
+    const res = await request.post(`${BASE}/public/register/${owner.id}`, {
+      data: {
+        name: `Foreign ${RUN_ID}`,
+        phone: `5${RUN_ID.slice(-9)}`,
+        password: "testpassword123",
+        id_proof_front_url: "https://anywhere.example/pixel.jpg",
+      },
+    });
+    expect(res.status()).toBe(400);
   });
 
   /**

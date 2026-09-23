@@ -23,7 +23,6 @@ func TestNewFromEnv_S3WhenConfigured(t *testing.T) {
 	t.Setenv("S3_BUCKET", "test-bucket")
 	t.Setenv("S3_ACCESS_KEY", "AKIAEXAMPLE")
 	t.Setenv("S3_SECRET_KEY", "secret")
-	t.Setenv("S3_PUBLIC_URL", "https://pub-test.r2.dev")
 
 	svc, err := NewFromEnv(context.Background())
 	if err != nil {
@@ -40,7 +39,6 @@ func TestNewFromEnv_S3MissingCredsErrors(t *testing.T) {
 	t.Setenv("S3_BUCKET", "test-bucket")
 	t.Setenv("S3_ACCESS_KEY", "")
 	t.Setenv("S3_SECRET_KEY", "")
-	t.Setenv("S3_PUBLIC_URL", "https://pub-test.r2.dev")
 
 	_, err := NewFromEnv(context.Background())
 	if err == nil {

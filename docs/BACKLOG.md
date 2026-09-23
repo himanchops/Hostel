@@ -150,6 +150,31 @@ the applicant can resubmit) confirms; settling a deposit (irreversible, largest
 sum in the business) does not. The owner's "Reset portal password" dialog is the
 template — it already does confirm, reveal and honest framing.
 
+**Owner's requirements for this, 23 Sep 2026 — a dedicated session, design first.**
+Deferred deliberately: the owner wants to talk through the design before any of
+it is built, and to rethink how corrections look rather than bolt on buttons.
+What that session has to cover:
+
+1. **Writing money off: a discount or a waiver.** "They owe ₹10,000, we're letting
+   it go." Once waived it must stop showing as owed, on Collections and in a
+   settlement. It is **rare**, so it must **not be prominent**: no button beside
+   "Record payment" on every ledger. It must also never count as money
+   collected, so the dashboard, Insights and "Collected" stay cash.
+   (Proposed and not adopted: a third payment kind, `waiver`. It is mechanically
+   simple, but the nine `kind = 'rent'` queries would each need a decision about
+   whether they mean "owed" or "cash".)
+2. **Corrections should be understandable at a glance.** The owner finds the
+   current way of recording corrections hard to read. This is a redesign
+   question, not a list of missing buttons.
+3. **A rent change must not reprice the past.** Editing `stays.rent_amount`
+   today reprices every cycle back to move-in, because dues are
+   `rent × cycles − paid` over the whole stay. "From next month it's ₹8,000"
+   needs rent that varies by date. **Until this is built: do not edit the rent on
+   a stay that already has payments.** It rewrites old months.
+4. Still open from the audit: edit a payment, undo a settlement, a confirm step
+   on settling, un-approve a proof, and a tenant withdrawing a notice. The
+   session should decide which of these the redesign absorbs.
+
 **Partly fixed (Sep 2026, B3):** `/account` lets an owner change their password
 and sign out everywhere, and both now actually revoke — owner tokens carry a
 version checked on every request (migration 008). **Recovering a forgotten
@@ -539,13 +564,16 @@ Still needs a human to create the account and paste the two DSNs.
 
 ## Security / privacy
 
-### Tenant ID scans live at permanent public URLs — M, and gets worse with time
+### ~~Tenant ID scans live at permanent public URLs~~ ✅ fixed (Sep 2026) — migration 010
 
-> **Parked by the owner (18 Sep 2026) — raise it again, do not drop it.** Asked
-> before the real data import, the owner was not yet convinced the presigned-URL
-> work is worth it and wants to discuss it separately. The cost argument below
-> still holds: the stored-URL → stored-key migration grows with every tenant row
-> imported. Bring this up when the import is planned or finished.
+**Done on `pre-import-hardening`**, which the owner approved on 23 Sep 2026, before the
+import. The database stores object keys (`public/<32 hex>.jpg`), and every
+response that carries a file mints a presigned link valid for an hour
+(`handlers/files.go`, `storage.SignedURL`). Migration 010 rewrote the stored
+URLs. The code also reads old URLs, so the order of deploy and migration does
+not matter. **Two human steps remain:** turn off the bucket's public access, and
+prove it with `storage-check --public-url`. See `docs/DEPLOYMENT.md` → "Private
+uploads — over to you". The original write-up:
 
 
 **Found cold by the Sep 2026 UX audit**, by a tester who then read the form's own
@@ -571,9 +599,18 @@ cost only goes up.
 Related: a custom domain on the bucket is wanted regardless — Cloudflare treats
 `pub-*.r2.dev` as a development subdomain and rate-limits it.
 
-### The app collects full Aadhaar numbers and card images — M, and it is a product question first
+### The app collects full Aadhaar numbers and card images — decided: keep the number (23 Sep 2026)
 
-> **Decided (18 Sep 2026): store the last four digits only.** The owner does not
+> **Reversed, 23 Sep 2026: keep storing the number as typed.** Asked again, the
+> owner said they did not much care either way. What settled it: the front of an
+> Aadhaar card shows all twelve digits, so cutting the typed number to four
+> protects almost nothing while the image exists. The exposure worth fixing was
+> the images, and those are now private (migration 010). The number stays
+> optional on both forms; registration now **requires** the front of an ID, and
+> the owner-side form does not. Point 1 below (the "stored securely" wording) is
+> still worth a sentence.
+>
+> **Earlier decision (18 Sep 2026, superseded): store the last four digits only.** The owner does not
 > need the full number — the ID images already identify the person. That answers
 > question 3 below. **Not built yet.** It needs: the registration and
 > new-tenant forms to take (or keep) only four digits, the pending queue to stop
@@ -614,7 +651,13 @@ of the exposure without removing the feature.
 Cheapest first step is (1). Do not touch the column without deciding (3), or the
 migration gets done twice.
 
-### `ValidateUploadedURL` checks the extension, not the host — S
+### ~~`ValidateUploadedURL` checks the extension, not the host~~ ✅ fixed with private uploads (Sep 2026)
+Gone. File references must now be a key the upload handler could have issued
+(`storage.ValidKey`), and a URL of any host is refused, as predicted below. The
+owner's create-tenant path, which had no check at all, has one now. Reads also
+drop any stored value that is not one of our keys, rather than handing it to a
+browser. The original write-up:
+
 It exists to sanity-check client-supplied URLs before they are stored, and it
 only tests `filepath.Ext(url)` against the allowed types. So a registration or a
 tenant update can store `https://anywhere.example/x.jpg` and the owner's browser
@@ -650,7 +693,12 @@ Both of these were live in production and invisible before error tracking.
 Neither was found by a test or by reading code — they arrived as issues from
 one signup.
 
-### `/api/collections` intermittently 500s — prepared statements crossing connections — **cause confirmed, one env var away from fixed**
+### ~~`/api/collections` intermittently 500s — prepared statements crossing connections~~ ✅ fixed (Sep 2026)
+**Closed 23 Sep 2026.** The owner confirmed that `DATABASE_URL` on Render points
+at the direct endpoint and that the issue is fixed. If `HOSTEL-BACKEND-1/2/3`
+ever recur, the boot-log warning from `database.IsPooledEndpoint` is the first
+thing to check. The original write-up:
+
 `HOSTEL-BACKEND-1/2/3`. Three issues, almost certainly **one bug**:
 
 ```
@@ -750,7 +798,20 @@ money. Probably fixed by dropping the dashboard's filter, but that changes a
 tested figure, so it wants its own change rather than riding along with
 something else. Flagged during Phase 10.
 
-### No rate limiting on the remaining public endpoints — M
+### ~~No rate limiting on the remaining public endpoints~~ ✅ done (Sep 2026)
+**Done on `pre-import-hardening`** (`middleware/login_limit.go`):
+- **Owner login and tenant login** get ten *failed* attempts per client IP, then
+  one more a minute. Only a 401 costs a token, so a hostel's worth of correct
+  logins from one Wi-Fi never trips it. The two logins have separate budgets.
+- **Public registration** allows twenty per IP *per hostel*, then one every
+  three minutes. That covers move-in day on shared Wi-Fi. Keying on the owner
+  also keeps the e2e suite, which makes a fresh owner per test, from throttling
+  itself.
+
+Still open, and smaller: a second budget keyed on the phone or email, against
+guessing spread across many IPs. `/auth/signup` is still unthrottled. There is
+also still no password complexity rule. The original write-up:
+
 
 **Confirmed cold by the Sep 2026 UX audit**: 15 consecutive wrong passwords, 15
 clean 401s, no delay or lockout. Compounded by there being no password

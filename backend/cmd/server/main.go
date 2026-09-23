@@ -66,11 +66,11 @@ func main() {
 	authHandler := handlers.NewAuthHandler(db, authService)
 	siteHandler := handlers.NewSiteHandler(db)
 	roomHandler := handlers.NewRoomHandler(db)
-	tenantHandler := handlers.NewTenantHandler(db, authService)
-	tenantAuthHandler := handlers.NewTenantAuthHandler(db, authService)
-	tenantPortalHandler := handlers.NewTenantPortalHandler(db)
+	tenantHandler := handlers.NewTenantHandler(db, authService, storageSvc)
+	tenantAuthHandler := handlers.NewTenantAuthHandler(db, authService, storageSvc)
+	tenantPortalHandler := handlers.NewTenantPortalHandler(db, storageSvc)
 	stayHandler := handlers.NewStayHandler(db)
-	paymentHandler := handlers.NewPaymentHandler(db)
+	paymentHandler := handlers.NewPaymentHandler(db, storageSvc)
 	gridHandler := handlers.NewGridHandler(db)
 	dashboardHandler := handlers.NewDashboardHandler(db)
 	insightsHandler := handlers.NewInsightsHandler(db)
@@ -133,13 +133,13 @@ func main() {
 
 	// Public auth routes
 	e.POST("/auth/signup", authHandler.Signup)
-	e.POST("/auth/login", authHandler.Login)
+	e.POST("/auth/login", authHandler.Login, appMiddleware.FailedLoginLimiter())
 
 	// Public tenant self-registration + auth + upload
 	e.GET("/public/owners/:ownerId", tenantHandler.PublicOwner)
-	e.POST("/public/register/:ownerId", tenantHandler.PublicRegister)
+	e.POST("/public/register/:ownerId", tenantHandler.PublicRegister, appMiddleware.PublicRegisterRateLimiter())
 	e.POST("/public/upload", uploadHandler.PublicUpload, appMiddleware.PublicUploadRateLimiter())
-	e.POST("/tenant-auth/login", tenantAuthHandler.Login)
+	e.POST("/tenant-auth/login", tenantAuthHandler.Login, appMiddleware.FailedLoginLimiter())
 
 	// Tenant portal (tenant JWT required)
 	portal := e.Group("/tenant")

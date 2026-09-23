@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { createOwner, createSiteRoomBed, loginAs } from "../helpers/api";
+import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -81,7 +81,7 @@ for (const device of [
       // a pending proof.
       const phone = `93${RUN_ID.slice(-7)}${device.viewport.width % 10}`;
       const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-        data: { name: `Tara ${RUN_ID}`, phone, password: "tenant1234" },
+        data: { name: `Tara ${RUN_ID}`, phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY },
       });
       if (!reg.ok()) throw new Error(`register failed: ${await reg.text()}`);
       const tenant = await reg.json();

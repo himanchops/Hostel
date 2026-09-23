@@ -10,14 +10,16 @@ import (
 	"github.com/labstack/echo/v4"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
 	"github.com/winnow/hostel/internal/models"
+	"github.com/winnow/hostel/internal/storage"
 )
 
 type TenantPortalHandler struct {
-	db *sqlx.DB
+	db      *sqlx.DB
+	storage storage.Service
 }
 
-func NewTenantPortalHandler(db *sqlx.DB) *TenantPortalHandler {
-	return &TenantPortalHandler{db: db}
+func NewTenantPortalHandler(db *sqlx.DB, s storage.Service) *TenantPortalHandler {
+	return &TenantPortalHandler{db: db, storage: s}
 }
 
 type tenantStay struct {
@@ -76,6 +78,9 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 		if payments == nil {
 			payments = []models.Payment{}
 		}
+		if err := signPayments(c, h.storage, payments); err != nil {
+			return serverError(c, err, "failed to prepare payment proofs")
+		}
 		stays[i].Payments = payments
 	}
 
@@ -112,13 +117,10 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("amount must be positive"))
 	}
 
-	var proofURL *string
-	if req.ProofURL != "" {
-		if !ValidateUploadedURL(req.ProofURL) {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid proof_url"))
-		}
-		proofURL = &req.ProofURL
+	if !validFileRef(req.ProofURL) {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid proof_url"))
 	}
+	proofURL := optionalString(req.ProofURL)
 
 	now := time.Now()
 	var payment models.Payment
@@ -135,6 +137,9 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 	).StructScan(&payment)
 	if err != nil {
 		return serverError(c, err, "failed to submit payment")
+	}
+	if err := signPayment(c, h.storage, &payment); err != nil {
+		return serverError(c, err, "failed to prepare payment proof")
 	}
 	return c.JSON(http.StatusCreated, payment)
 }

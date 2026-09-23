@@ -1680,7 +1680,8 @@ own. A signed-in **change password** form is separate and much smaller — it
 closes the "typed it into the password manager wrong" case, though not lockout.
 
 Also unaddressed and worth the same note: there is no rate limiting on
-`/auth/login` or `/public/register/:ownerId`. Low risk while the registration
+`/auth/login` or `/public/register/:ownerId`. ✅ **Done Sep 2026** (see
+"Pre-import hardening"). Low risk while the registration
 link is not public; a problem the day it is printed on a QR code by the door.
 
 ### Automated design review 🅿️
@@ -2127,14 +2128,96 @@ unit suite — figures in the PR. Screens checked at 375×812, 768×1024 and
 
 ### Decided, not built — before the import
 
-- **Aadhaar: last four digits only** (owner, 18 Sep 2026). The images already
-  identify the person. Needs the forms, the pending queue and a truncating
-  migration — `docs/BACKLOG.md` → "The app collects full Aadhaar numbers".
-- **ID images at permanent public URLs: parked** for a separate discussion.
-  Raise it again when the import is planned; the migration it needs grows with
-  every row.
-- **`DATABASE_URL` → direct endpoint:** done by the owner, not yet verified —
-  check the Render boot log and Sentry.
+All three were settled on 23 Sep 2026; see "Pre-import hardening" below.
+
+- ~~**Aadhaar: last four digits only**~~ **reversed: keep the number.** The
+  card image shows all twelve digits anyway. The images were the exposure.
+- ~~**ID images at permanent public URLs: parked**~~ **done:** private
+  uploads, migration 010.
+- ~~**`DATABASE_URL` → direct endpoint: not yet verified**~~ **confirmed fixed**
+  by the owner.
+
+---
+
+## Pre-import hardening — private uploads, required ID, login limits ✅ (Sep 2026)
+
+Branch `pre-import-hardening`, **migration 010**. The last session before the
+real data import. The owner made the calls up front:
+- **Aadhaar number:** kept as typed. The card image shows all twelve digits, so
+  truncating the number protects nothing while the image exists.
+- **ID images:** made private now, while production has no real tenants.
+- **ID front:** required on public registration, not on the owner's form.
+- **Rate limits:** added.
+- **Corrections, waivers and rent changes:** deferred to a dedicated session.
+  Their requirements are in `docs/BACKLOG.md` → "Nothing can be corrected,
+  anywhere".
+
+### Private uploads (migration 010)
+
+`storage.Service` now has `Upload(...) error` and `SignedURL(key, ttl)`. The
+upload endpoints return `{"key"}`, not a URL. The five file columns
+(`tenants.{photo,id_proof,id_proof_front,id_proof_back}_url`,
+`payments.proof_url`) hold keys, and every handler that returns a tenant or a
+payment swaps them for a presigned link on the way out: `signTenant` and
+`signPayment` in `handlers/files.go`. Links live an hour. That is long enough
+for a tab left open, and short enough that a leaked link is dead before anyone
+finds it.
+
+Decisions worth keeping:
+- **The column names still end in `_url`.** Renaming five columns touches
+  every query and the API for no behaviour change. The API still returns a URL
+  in those fields, just a signed one.
+- **Reads accept an old full URL as well as a key** (`storage.KeyFromStored`).
+  So deploy and migration can go in either order, and a value that is neither
+  is *dropped*, not passed to a browser.
+- **Writes accept keys only** (`storage.ValidKey`: `^(public|tenant)/<32
+  hex>.<jpg|png|webp|pdf>$`). This closes the old extension-only check, which
+  let any host's `.jpg` be stored. The owner's create-tenant path had no check
+  at all and has one now.
+- **`LocalStorage` links never expire.** Only R2 links do. The expiry is covered
+  by `TestS3SignedURL_Expires`, which presigns offline and reads
+  `X-Amz-Expires`.
+- **`storage-check` now proves privacy rather than asserting it.** It fetches
+  the signed link (expects 200), and with `--public-url` it fetches the plain
+  address (expects a failure).
+
+**Over to the owner:** run migration 010 on Neon, turn off the bucket's public
+access, then run `storage-check --public-url`. Exact commands are in
+`docs/DEPLOYMENT.md` → "Private uploads — over to you".
+
+### ID front required at registration
+
+`PublicRegister` returns 400 "Add a photo of the front of your ID." without
+one. The form marks the field required, so the browser stops the submit at the
+field itself, and a JS check runs before any upload starts. The owner's
+new-tenant form is unchanged, because the owner may have a paper copy.
+API-level e2e setup uses `TEST_ID_KEY` (a well-formed key with no file behind
+it), because a real upload per test would spend the per-IP upload budget the
+whole suite shares.
+
+### Login and registration limits
+
+In `middleware/login_limit.go`:
+- **Logins:** ten *failed* attempts per IP, then one a minute. Only a 401 costs
+  a token, so one hostel Wi-Fi full of correct logins never trips it. Owner and
+  tenant logins have separate budgets.
+- **Registration:** twenty per IP *per hostel*, then one every three minutes.
+
+Deliberately not built: a per-account budget, and throttling on `/auth/signup`.
+
+### Verification
+
+`go test ./...` (new: `login_limit_test.go`, `storage_test.go`,
+`files_test.go`), frontend unit tests, and the full e2e suite. Migration 010
+was run locally against the dev database: 11 stored URLs became keys, and one
+deliberately foreign URL from the audit was left in place and is dropped on
+read.
+
+**Found on the way:** the tenant profile's "Front"/"Back" ID links were 16px
+tall, a miss from audit round four's touch-target pass. `touch-targets.test.ts`
+could never see them, because no test tenant had an ID until registration
+required one. They use `TOUCH_LINK` now. Test fixtures that leave optional
+fields empty hide whatever renders only when those fields are filled.
 
 ---
 
