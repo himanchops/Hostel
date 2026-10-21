@@ -188,6 +188,7 @@ func main() {
 	// Insights — the historical view. Everything else in this API answers
 	// "what is true now"; this one answers "what has been happening".
 	api.GET("/insights", insightsHandler.GetInsights)
+	api.GET("/insights/months/:month", insightsHandler.GetMonth)
 
 	// Collections
 	api.GET("/collections", collectionsHandler.GetCollections)

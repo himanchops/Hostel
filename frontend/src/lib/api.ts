@@ -255,6 +255,10 @@ export interface TenantSummary {
   total_expected: number;  // paise
   balance: number;         // paise (positive = owes)
   duration_days: number;
+  /** total_paid is rent only. Deposit paid and not yet settled: */
+  deposit_held: number;    // paise
+  /** Deposit agreed on a current stay and not yet paid: */
+  deposit_due: number;     // paise
 }
 
 export const tenantsApi = {
@@ -582,6 +586,10 @@ export interface RevenueSummary {
   overdue_amount: number;       // paise, including moved_out_owed
   /** The part of overdue_amount owed by tenants who moved out and settled short. */
   moved_out_owed: number;       // paise
+  /** Money beside rent (backend money.go): deposits in, refunds out, and the net. */
+  deposits_in_this_month: number; // paise
+  returned_this_month: number;    // paise
+  net_in_this_month: number;      // paise, may be negative
 }
 
 export interface AlertsSummary {
@@ -677,16 +685,27 @@ export const collectionsApi = {
  * The historical view. Every other endpoint answers "what is true now"; this
  * one answers "what has been happening".
  *
- * `expected_paise` is derived from billing cycles the same way the dashboard's
- * card is, so the last point here equals the dashboard's "expected this month".
- * `collected_paise` is keyed by the month the money actually arrived, so
- * arrears cleared in one go show up as a single tall bar.
+ * Each month answers two questions (backend money.go):
+ *  - Rent: `expected_paise` against `collected_paise`. Collected is rent
+ *    received, plus rent a deposit paid off at move-out, less rent paid ahead
+ *    and handed back. The last month equals the dashboard's tile.
+ *  - Money: `net_in_paise`, which is every rupee in (rent and deposits, cash
+ *    and online) less refunds handed back. It is what the bank and the cash
+ *    drawer together should show, and it can be negative.
+ * Money is keyed by the month it moved. A settlement is dated the day the
+ * tenant left.
  */
 export interface RevenuePoint {
   month: string;   // "2026-09"
   label: string;   // "Sep 26"
   expected_paise: number;
   collected_paise: number;
+  net_in_paise: number;
+  rent_paid_paise: number;
+  deposits_in_paise: number;
+  returned_paise: number;
+  deposit_to_rent_paise: number;
+  advance_returned_paise: number;
 }
 
 /** Occupancy measured in bed-nights, so a mid-month move-in counts as a fraction. */
@@ -718,11 +737,42 @@ export interface InsightsData {
   revenue: RevenuePoint[];
   occupancy: OccupancyPoint[];
   rooms: RoomInsight[];
+  /** Held right now, not over the window: owed back at move-out. */
+  deposits_held_paise: number;
+}
+
+/**
+ * One line of a month. `amount_paise` is always positive; `kind` says which way
+ * it went. `deposit_to_rent` moved no money (the deposit arrived earlier), so
+ * it belongs to the rent view only.
+ */
+export type MoneyEntryKind = "rent" | "deposit" | "returned" | "deposit_to_rent" | "advance_returned";
+
+export interface MoneyEntry {
+  date: string;
+  kind: MoneyEntryKind;
+  amount_paise: number;
+  payment_type?: "cash" | "online";
+  stay_id: number;
+  tenant_id: number;
+  tenant_name: string;
+  room_name?: string;
+  bed_name?: string;
+}
+
+export interface MonthDetail {
+  month: string;
+  label: string;
+  from_date: string;
+  to_date: string;
+  entries: MoneyEntry[];
 }
 
 export const insightsApi = {
   get: (token: string, months = 12) =>
     request<InsightsData>(`/api/insights?months=${months}`, {}, token),
+  month: (token: string, month: string) =>
+    request<MonthDetail>(`/api/insights/months/${month}`, {}, token),
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

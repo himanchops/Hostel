@@ -510,8 +510,17 @@ export default function TenantDetailPage() {
       {summary && (
         <div className="mb-6 grid grid-cols-3 gap-4">
           <Card className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Total paid</p>
+            {/* Rent only, on purpose: a deposit is held, not paid towards
+                anything. Said in the label, and the deposit gets its own line,
+                so recording one here never looks like it went missing. */}
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Rent paid</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-stone-900">{formatCurrency(summary.total_paid)}</p>
+            {summary.deposit_held > 0 && (
+              <p className="mt-0.5 text-xs tabular-nums text-stone-500">+ {formatCurrency(summary.deposit_held)} deposit held</p>
+            )}
+            {summary.deposit_due > 0 && (
+              <p className="mt-0.5 text-xs tabular-nums text-amber-700">deposit {formatCurrency(summary.deposit_due)} not yet paid</p>
+            )}
           </Card>
           <Card className="text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Stay duration</p>
@@ -762,7 +771,7 @@ export default function TenantDetailPage() {
                           {settlement.dues_paise < 0 && (
                             <div className="flex justify-between gap-4">
                               <dt className="text-stone-600">
-                                Advance returned
+                                Rent refunded
                                 {/* What was kept is the decision worth seeing
                                     again months later, so it goes on the record
                                     rather than being inferable from the sum. */}

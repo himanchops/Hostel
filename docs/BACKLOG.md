@@ -301,7 +301,13 @@ Found in the live walkthrough on 21 Oct 2026, the day real use began.
   Now that the data is real, a scheduled `pg_dump` from the owner's laptop is
   worth having. The script must not need `NEON_URL` on Claude's side.
 
-### Insights ignores settlements — S
+### Insights ignores settlements — S, half fixed
+**Half fixed (Oct 2026):** rent that a held deposit paid off at settlement now
+counts as rent collected on the day the tenant left (`money.go`
+→ `settlementRent`), and so does an advance handed back (subtracted). Still
+open: a shortfall let go by an adjustment (a waiver) still reads as unpaid,
+which is the corrections design's question. The original report:
+
 Insights' "collected of billed" sums rent billed and rent paid, and nothing
 else. A stay settled square, with its shortfall absorbed by an adjustment,
 still reads as unpaid there. On the live account, a one-day test stay made
@@ -350,7 +356,12 @@ registrations that were rejected.
 Raised by the owner in the first days of real use, after the notebook import.
 He asked for these to be taken **one at a time**, not batched.
 
-### Nothing shows the money that actually came in — M, design in progress
+### ~~Nothing shows the money that actually came in~~ ✅ fixed on `insights-money` (Oct 2026)
+Insights is now a table with a Rent / All money switch, and tapping a month
+lists every line in it. The tenant tile says "Rent paid" with the deposit
+underneath, and the dashboard tile adds "All money in". See
+`docs/PROGRESS.md` → "Rent and all money". The original report:
+
 Every "paid" and "collected" figure counts rent only, on purpose. Rent is
 measured against rent billed, and a deposit counted there would read as over
 100%. But the owner checks the month against his bank and cash together, so he
@@ -365,9 +376,19 @@ wants a table you can read at a glance, with a way to switch between a rent
 view and an all-money view. Design under discussion. Related: "Insights ignores
 settlements" and "A payments list page" below.
 
-### The Insights chart drifts left at 3 and 6 months on the iPad — S
-12 months fills the panel; switching to 6 or 3 leaves the bars bunched to the
-left. Possibly superseded if the chart becomes a table (above).
+### ~~The Insights chart drifts left at 3 and 6 months on the iPad~~ ✅ gone with the chart
+The bar chart was replaced by the month table (above), which is tested to fit
+375px, 768px and 1024px without scrolling sideways. The original report: 12
+months filled the panel; switching to 6 or 3 left the bars bunched to the left.
+
+### The dashboard's "expected" forgets someone who left this month — S
+The tile's "of ₹X expected" sums open stays only, so a tenant who left on the
+12th drops out of it, while their rent for this month was billed and Insights
+still counts it. Once leavers are settled, the tile reads over 100%
+(rehearsal: "₹75,000 of ₹69,500 expected"). Expected should count every stay
+billed this month, ended or not; overdue must keep counting open stays only.
+Found while building the money table; left alone because overdue shares the
+query.
 
 ### A tenant row opens only from its "View →" link — S
 The whole row on `/tenants` should open the tenant.
@@ -382,6 +403,41 @@ e.g. a global "Record payment" with a name search.
 He recorded a notice, then tried to withdraw it with the "they're staying"
 control, and nothing happened. Reproduce with touch emulation at 768×1024 and
 1024×768 before guessing.
+
+### The move-out flow is hard to follow — M, after the money work
+"End without settling", "Settle & vacate", adjustments, advance returned: the
+owner, who built this with us, finds the words and the order unclear, and
+expects someone who is not an engineer to find it more so. What he wants to do
+at the door is simple: they gave notice on this date, they are leaving today,
+take off any deductions, hand back the rest. Redesign the wording and the
+steps around that sentence. Since the money work (Oct 2026), a settlement is
+also what records a refund and dates it on the day they left, and an unsettled
+leaver's deposit still counts as held, so the flow should make settling the
+obvious path. One guard to add while there: settling with an end date earlier
+than payments already recorded turns those payments into an "advance" that is
+handed back, which is right only if they really were paid ahead. Say so
+before confirming.
+
+### A tenant who comes back has no obvious way back in — S/M
+A returning tenant can be given a new stay today, but only from Sites → grid →
+a vacant bed → search their name. Their own page, where the owner looks, has no
+"Start a new stay" once the last one ended; it should, reusing `StayForm`'s
+bed picker and terms. Worse, nothing stops a *second* record for the same
+person: neither the new-tenant form nor public registration checks the phone,
+so the history splits in two. Tenant login then picks between the two records
+by phone (`tenant_auth.go`, `QueryRow`), so it may sign them into the wrong one.
+Wants a phone check: the owner form offers "this is Anjali Menon, open her
+page", and approving a registration whose phone matches an existing tenant
+offers to link them. Raised by the owner looking at a settled demo tenant
+(Oct 2026).
+
+### The tenant page's money tiles overflow on a narrow screen — S
+The three tiles (Rent paid, Stay duration, Balance) are three columns at every
+width. With a six-figure amount ("₹1,19,000") in a phone-width window, the
+figure runs out of its tile into the next. The fix is a smaller figure below
+`sm`, or letting the row wrap. Seen by the owner in the browser pane (Oct
+2026). Check the other tile rows (dashboard, Insights) at the same width
+while there.
 
 ### Explanations crowd the screens — S each, later
 The help text around Delete tenant, the vacating-notice controls and similar

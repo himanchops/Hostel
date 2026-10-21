@@ -148,7 +148,7 @@ func TestComputeRevenueSeries_MonthsBeforeTheChangeKeepTheOldRent(t *testing.T) 
 	points := computeRevenueSeries([]insightStay{{
 		StayID: 1, RoomID: 1, RentAmount: 550000, RentCycle: "monthly",
 		StartDate: raiseStart, Schedule: raised,
-	}}, map[string]int64{}, raiseToday, 5)
+	}}, nil, raiseToday, 5)
 	want := map[string]int64{
 		"2026-06": 500000, "2026-07": 500000, "2026-08": 500000,
 		"2026-09": 550000, "2026-10": 550000,

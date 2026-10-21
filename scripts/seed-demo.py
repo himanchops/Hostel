@@ -410,6 +410,12 @@ def main():
         "end_date": ended,
     })
 
+    # Public registration requires the front of an ID (PR #38). The server
+    # checks only that the reference is a key it could have issued, not that
+    # the file exists, so the demo uses a well-formed key and uploads nothing.
+    # The ID link on these two tenants opens nothing, which is fine for a demo.
+    demo_id = "public/de000000000000000000000000000000.jpg"
+
     # PENDING REGISTRATION: waiting in the approval queue.
     call("POST", f"/public/register/{owner_id}", {
         "name": "Nikhil Joshi", "phone": "9845110017",
@@ -418,6 +424,7 @@ def main():
         "emergency_contact_name": "Anita Joshi",
         "emergency_contact_phone": "9847110017",
         "aadhaar_number": "987654321098",
+        "id_proof_front_url": demo_id,
     })
 
     # PENDING PAYMENT: registered, approved into a bed, then submits a proof.
@@ -427,6 +434,7 @@ def main():
     call("POST", f"/public/register/{owner_id}", {
         "name": "Meera Pillai", "phone": "9845110018",
         "password": TENANT_PASSWORD, "workplace": "Cred",
+        "id_proof_front_url": demo_id,
     })
     pending = api("GET", "/api/tenants?pending=true")
     meera = next(x for x in pending if x["name"] == "Meera Pillai")

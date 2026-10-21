@@ -98,7 +98,7 @@ The rent-terms fields and the vacant-bed picker live in
 Phase 16d. A fifth screen that needs "rent, deposit, cycle, start date" or "pick
 a vacant bed" imports them; it does not write them again.
 
-UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. **Charts are hand-rolled SVG in `components/ui/Chart.tsx` — do not add a charting library.** The frontend has four runtime dependencies (react, react-dom, next, @sentry/browser) and a charting library would be a conspicuous addition; the charts it needs are bars and a line. One rule learned the hard way: a chart must measure its container rather than scale a fixed `viewBox`, which preserves aspect ratio and letterboxes a short series into an island of bars. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
+UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. **The app draws no charts, on purpose, and must not add a charting library.** Insights became tables in Oct 2026 because a chart's numbers sit behind a hover the iPad does not have. Prefer a table, with a `Meter` fill bar where a ratio needs to be seen at a glance. The frontend has four runtime dependencies (react, react-dom, next, @sentry/browser), and a charting library would be a conspicuous addition. If a chart ever comes back, it is hand-rolled SVG (the old `components/ui/Chart.tsx` is in git history), and it measures its container rather than scaling a fixed `viewBox`, which letterboxes a short series into an island of bars. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 
 Test dirs are `tests/e2e/{owner,tenant,public}/` — a whole surface with no directory is a surface nobody has tested. E2E tests log in with `loginAs(page, token)` from `tests/e2e/helpers/api.ts` — never `goto("/")` then `localStorage.setItem`, which races with the root redirect.
 
@@ -140,6 +140,13 @@ Key conventions to carry forward:
   and anything that accepts a file reference checks `validFileRef`. A new file
   column needs both, or it either ships a raw key (a broken image) or accepts a
   URL from any host.
+- **Rent and money are two questions** (`handlers/money.go`). "Collected" is
+  rent: rent payments, plus rent a deposit paid off at settlement, less an
+  advance handed back. It never includes a deposit. "Net in" is money: every
+  approved payment of both kinds, less refunds. Settlements are dated on the
+  stay's `end_date`, never `created_at`. Anything that reports collected rent
+  or money in by month goes through `loadMoneyByMonth`, so the dashboard and
+  Insights cannot drift.
 - **Rent can change partway through a stay** (migration 011). Anything that
   bills rent goes through `rentSchedule.billed` (`handlers/rent.go`), never
   `rent_amount × cycles`, which reprices every month already lived. There were

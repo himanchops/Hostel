@@ -277,7 +277,7 @@ test.describe("Tenant profile enrichment", () => {
     // ledger now opens by default (UX audit M1), so the payment's own row reads
     // ₹2,500 as well.
     await expect(
-      page.getByText("Total paid").locator("..").getByText("₹2,500", { exact: true })
+      page.getByText("Rent paid").locator("..").getByText("₹2,500", { exact: true })
     ).toBeVisible();
 
     // Stay should be visible

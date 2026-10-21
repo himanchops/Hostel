@@ -2421,6 +2421,102 @@ account and reported all 16 imported. That is the notebook's first batch.
 
 ---
 
+## Rent and all money: Insights becomes a table (Oct 2026)
+
+The owner's report, after a week of real use: recording a deposit on a tenant
+page did not move "Total paid", and nothing anywhere showed the money that had
+come in. He checks each month against the bank and the cash drawer together,
+so he needs rent *and* deposits in, less refunds out. A month with two
+departures and no arrivals goes negative, and should. He also disliked the
+Insights bar chart: every number was behind a hover the iPad does not have.
+
+### Two questions, one loader (`handlers/money.go`)
+
+- **Rent:** rent collected against rent billed, unchanged in spirit. A deposit
+  still never counts here. What is new is that a settlement counts on the day
+  the tenant left. Rent a held deposit paid off is collected
+  (`settlementRent`: all the dues when the deposit covered them, the whole
+  deposit when it did not), and rent paid ahead and handed back is
+  subtracted.
+- **All money:** every approved payment of either kind, cash and online, less
+  each refund handed back at settlement. `netIn` may be negative.
+
+A settlement has no date of its own (`created_at` is when it was typed), so
+its money is dated on the stay's `end_date`. `loadMoneyByMonth` serves both
+Insights and the dashboard tile, so the tile is the table's last row by
+construction rather than by a test that compares two queries.
+`loadDepositsHeld` is approved deposit payments on stays with no settlement:
+money owed back at move-out.
+
+### Insights
+
+A Rent / All money switch, remembered per device (localStorage, read after
+mount, and every access in try/catch). Three tiles per view:
+- **Rent:** rent collected and % of billed; still owed now (the dashboard's
+  own figure, fetched, linking to Collections); occupancy this month.
+- **All money:** net in; deposits in, with refunds beside them; deposits held
+  now.
+
+Below the tiles, one row per month, newest first. Months before the first
+tenant are dropped, and quiet months after that stay. Tapping a month calls
+`GET /api/insights/months/:month`, which lists each payment and each effect of
+a settlement as a line. Amounts are always positive, the kind says the
+direction, and each view lists only its own kinds, so the lines add up to the
+row (pinned in `money_test.go`). On a phone, the money view folds rent,
+deposits and returned into a small line under "Net in" rather than scrolling
+sideways. The collected bar chart is gone, and with it the iPad left-drift
+bug (BACKLOG).
+
+**After the owner saw it on demo data:**
+- **The occupancy chart went too.** It had the same left-drift and the same
+  hover problem, and "Occupancy this month" is already a tile. With it,
+  `components/ui/Chart.tsx` was deleted: nothing draws a chart now, and
+  `Meter` moved to its own file. CLAUDE.md's chart rule now says "prefer a
+  table".
+- **A busy month** leads with a totals strip by kind ("Rent ×45 ₹2,40,000 ·
+  Returned ×2 −₹30,900"). Deposits and refunds come before rent payments,
+  ten lines show until "Show all N lines", and a "Close" button at the foot
+  scrolls the month back into view.
+- **Range** gained 1m ("this month so far", so the tiles answer the
+  bank-statement question directly) and is remembered per device like the
+  view.
+- **"Advance returned" became "Rent refunded"**, in the Rent view and on the
+  tenant page's settlement card. It is rent paid for time not lived, handed
+  back at move-out. The settlement drawer keeps "paid in advance", where it
+  describes the choice being made.
+
+### Elsewhere
+
+- **Tenant page:** "Total paid" is now "Rent paid", with "+ ₹2,000 deposit
+  held" or "deposit ₹2,000 not yet paid" under it (`deposit_held` and
+  `deposit_due` on the summary).
+- **Dashboard:** the Collected tile adds one line, "All money in: ₹X", when a
+  deposit came in or went out this month. A first version listed deposits and
+  refunds separately and wrapped to four lines on an iPad in landscape, which
+  is the clutter the owner keeps flagging.
+
+**Found and left:** the dashboard's "expected this month" counts open stays
+only, so a tenant who leaves mid-month drops out of it, while Insights keeps
+their billed rent. Once leavers are settled the tile can read over 100%.
+Logged in BACKLOG. It shares a query with overdue, which must stay open-only.
+
+### Verification
+
+`money_test.go` uses three October leavers with exact values: short (the
+deposit pays ₹2,000 of ₹4,500), charged (₹500 kept, ₹1,500 back) and ahead
+(₹5,500 advance plus the deposit back). Rent collected comes to ₹67,000, net
+in to ₹65,500, and a refund-only month goes negative. The lines add up to the
+month, and the tenant summary's held and due figures are checked too.
+
+`insights.test.ts` was rewritten (9 tests). Four tenants make a current month
+with every kind of money in it: billed ₹23,000, rent ₹21,000 (91%), net
+₹17,000, held ₹3,500. It covers the view remembered across a reload, the
+dashboard tile, the tenant tile, and the table fitting 375, 768 and 1024px
+without scrolling sideways. Checked by eye on the rehearsal copy at all three
+sizes.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
