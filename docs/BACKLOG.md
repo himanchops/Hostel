@@ -413,7 +413,23 @@ take off any deductions, hand back the rest. Redesign the wording and the
 steps around that sentence. Since the money work (Oct 2026), a settlement is
 also what records a refund and dates it on the day they left, and an unsettled
 leaver's deposit still counts as held, so the flow should make settling the
-obvious path.
+obvious path. One guard to add while there: settling with an end date earlier
+than payments already recorded turns those payments into an "advance" that is
+handed back, which is right only if they really were paid ahead. Say so
+before confirming.
+
+### A tenant who comes back has no obvious way back in — S/M
+A returning tenant can be given a new stay today, but only from Sites → grid →
+a vacant bed → search their name. Their own page, where the owner looks, has no
+"Start a new stay" once the last one ended; it should, reusing `StayForm`'s
+bed picker and terms. Worse, nothing stops a *second* record for the same
+person: neither the new-tenant form nor public registration checks the phone,
+so the history splits in two. Tenant login then picks between the two records
+by phone (`tenant_auth.go`, `QueryRow`), so it may sign them into the wrong one.
+Wants a phone check: the owner form offers "this is Anjali Menon, open her
+page", and approving a registration whose phone matches an existing tenant
+offers to link them. Raised by the owner looking at a settled demo tenant
+(Oct 2026).
 
 ### Explanations crowd the screens — S each, later
 The help text around Delete tenant, the vacating-notice controls and similar
