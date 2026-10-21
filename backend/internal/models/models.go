@@ -114,6 +114,18 @@ type Stay struct {
 	ExpectedEndDate *time.Time `db:"expected_end_date" json:"expected_end_date,omitempty"`
 	CreatedAt       time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt       time.Time  `db:"updated_at" json:"updated_at"`
+	// RentChanges is the stay's rent schedule when it has ever changed
+	// (migration 011), oldest first, the first entry being the original rent
+	// from the start date. Empty means the rent never changed. Filled by the
+	// handlers that show a stay's history; not a column.
+	RentChanges []RentChange `db:"-" json:"rent_changes,omitempty"`
+}
+
+// RentChange is one step of a stay's rent schedule: from EffectiveDate, every
+// billing cycle that begins on or after it is billed at RentAmount.
+type RentChange struct {
+	EffectiveDate time.Time `db:"effective_date" json:"effective_date"`
+	RentAmount    int64     `db:"rent_amount" json:"rent_amount"` // paise
 }
 
 // PaymentType defines how the payment was made

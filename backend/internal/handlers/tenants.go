@@ -195,8 +195,18 @@ func (h *TenantHandler) PublicOwner(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid owner id"))
 	}
 
+	// The property's name, not the account holder's: "Register with Chopra
+	// Boys Hostel" is what a stranger at the door expects to read, and the
+	// owner's personal name on a public, enumerable page is both less
+	// reassuring and more than it needs to say. With several sites there is
+	// no single property this link belongs to, so it falls back to the
+	// owner's name until links are per site.
 	var name string
-	if err := h.db.Get(&name, `SELECT name FROM owners WHERE id = $1`, ownerID); err != nil {
+	if err := h.db.Get(&name,
+		`SELECT CASE WHEN (SELECT COUNT(*) FROM hostel_sites WHERE owner_id = o.id) = 1
+		             THEN (SELECT name FROM hostel_sites WHERE owner_id = o.id)
+		             ELSE o.name END
+		 FROM owners o WHERE o.id = $1`, ownerID); err != nil {
 		// Only a genuinely absent row is a bad link. Mapping every error here
 		// to 404 told a tenant standing in a corridor that the sticker they
 		// just scanned was invalid whenever Neon was asleep or unreachable —
@@ -473,6 +483,41 @@ func (h *TenantHandler) Update(c echo.Context) error {
 	return h.respondTenant(c, http.StatusOK, &tenant)
 }
 
+// Delete removes a tenant and, through ON DELETE CASCADE, every stay,
+// payment and settlement they have. Their bed becomes vacant because the stay
+// that held it is gone.
+//
+// This is the one place the app destroys money records, so the guard is on
+// the screen: the confirm dialog says how many stays and payments go with the
+// tenant before it offers the button. It exists because an owner who added a
+// test tenant, or a duplicate, had no way to remove them at all.
+//
+// Uploaded photos and ID scans stay in the bucket. They are private and
+// unreferenced, so nothing can reach them; removing them is noted in
+// docs/BACKLOG.md rather than done halfway here.
+//
+// DELETE /api/tenants/:id
+func (h *TenantHandler) Delete(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	tenantID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid tenant id"))
+	}
+
+	res, err := h.db.Exec(`DELETE FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to delete tenant")
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return serverError(c, err, "failed to delete tenant")
+	}
+	if rows == 0 {
+		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "tenant deleted"})
+}
+
 type portalPasswordRequest struct {
 	Password string `json:"password"`
 }
@@ -550,6 +595,7 @@ func dateOnly(t time.Time) time.Time {
 // staySummaryRow is one stay's contribution to a tenant's summary.
 // SettlementRefund is nil when the stay was never settled.
 type staySummaryRow struct {
+	StayID           int64      `db:"stay_id"`
 	RentAmount       int64      `db:"rent_amount"`
 	RentCycle        string     `db:"rent_cycle"`
 	StartDate        time.Time  `db:"start_date"`
@@ -559,6 +605,9 @@ type staySummaryRow struct {
 	// PaidAfterSettlement is money received on the stay since it was settled,
 	// which goes against a shortfall — see settledOwed.
 	PaidAfterSettlement int64 `db:"paid_after_settlement"`
+	// Schedule is the rent over time when it has ever changed (migration
+	// 011). Nil means flat at RentAmount.
+	Schedule rentSchedule `db:"-"`
 }
 
 // computeTenantSummary rolls a tenant's stays into the figures on their page.
@@ -596,7 +645,11 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 			until = dateOnly(*s.EndDate)
 		}
 
-		expected := s.RentAmount * int64(cyclesElapsed(start, until, s.RentCycle))
+		sched := s.Schedule
+		if len(sched) == 0 {
+			sched = flatSchedule(start, s.RentAmount)
+		}
+		expected := sched.billed(start, s.RentCycle, 0, cyclesElapsed(start, until, s.RentCycle))
 		summary.TotalPaid += s.TotalPaid
 		summary.TotalExpected += expected
 		if days := int64(until.Sub(start).Hours() / 24); days > 0 {
@@ -639,6 +692,7 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 	var stays []staySummaryRow
 	err = h.db.Select(&stays, `
 		SELECT
+			s.id AS stay_id,
 			s.rent_amount,
 			s.rent_cycle,
 			s.start_date,
@@ -659,6 +713,17 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 	)
 	if err != nil {
 		return serverError(c, err, "failed to compute summary")
+	}
+	stayIDs := make([]int64, len(stays))
+	for i := range stays {
+		stayIDs[i] = stays[i].StayID
+	}
+	schedules, err := rentSchedules(h.db, stayIDs)
+	if err != nil {
+		return serverError(c, err, "failed to compute summary")
+	}
+	for i := range stays {
+		stays[i].Schedule = schedules[stays[i].StayID]
 	}
 
 	summary := computeTenantSummary(stays, dateOnly(time.Now()))

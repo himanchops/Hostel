@@ -166,11 +166,13 @@ What that session has to cover:
 2. **Corrections should be understandable at a glance.** The owner finds the
    current way of recording corrections hard to read. This is a redesign
    question, not a list of missing buttons.
-3. **A rent change must not reprice the past.** Editing `stays.rent_amount`
-   today reprices every cycle back to move-in, because dues are
-   `rent × cycles − paid` over the whole stay. "From next month it's ₹8,000"
-   needs rent that varies by date. **Until this is built: do not edit the rent on
-   a stay that already has payments.** It rewrites old months.
+3. ~~**A rent change must not reprice the past.**~~ ✅ **Done, Oct 2026
+   (migration 011).** "Change rent" on the tenant page sets a new rent from a
+   date (pre-filled with the next due date), and earlier cycles keep the rent
+   they were billed at. Correcting the whole stay for a typo is a quiet
+   secondary link in the same dialog. See `docs/PROGRESS.md` → "Rent from a
+   date". It turned out no screen could edit rent at all before this — only the
+   API could — so the old warning applied to nothing the owner could tap.
 4. Still open from the audit: edit a payment, undo a settlement, a confirm step
    on settling, un-approve a proof, and a tenant withdrawing a notice. The
    session should decide which of these the redesign absorbs.
@@ -276,6 +278,25 @@ No balance (the number is already computed and correct on the owner's screen for
 the same tenant), no deposit, no headings at all, no way to contact the owner,
 no payment date or method field, and its two forms are visibly from different
 eras. `/my/page.tsx` was untouched by Phase 16.
+
+### ~~Found running the live account (Oct 2026)~~ ✅ fixed on `rent-from-a-date`
+- ~~The registration page said "Register with Lata Chopra"~~: it names the
+  hostel now when the owner has one site, and falls back to the owner's name
+  with several, until links are per site.
+- ~~Photos were stored at full camera size (3024px, several MB)~~: the browser
+  shrinks images to 1600px on the long edge before upload (`lib/shrinkImage.ts`).
+  PDFs are untouched. Photos already uploaded stay as they are.
+- ~~There was no way to delete a tenant~~: "Delete tenant" sits at the foot of
+  the tenant page, with a confirmation that counts the stays and payments it
+  removes.
+
+### Deleted tenants leave their files in the bucket — S
+Deleting a tenant removes their rows (ON DELETE CASCADE), but their photo and
+ID scans stay in R2. They are private and nothing references them, so nothing
+can reach them. Still, it is personal data kept for no reason.
+`storage.Service` has no Delete yet; adding one, and calling it after the row
+is gone, is small. A sweep for unreferenced keys would also catch uploads from
+registrations that were rejected.
 
 ### Smaller, verified, and cheap — S each
 - `Since` on `/tenants` renders `created_at` (`tenants/page.tsx:114`), so all 22

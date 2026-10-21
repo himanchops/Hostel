@@ -200,6 +200,7 @@ func main() {
 	api.POST("/tenants", tenantHandler.Create)
 	api.GET("/tenants/:id", tenantHandler.Get)
 	api.PUT("/tenants/:id", tenantHandler.Update)
+	api.DELETE("/tenants/:id", tenantHandler.Delete)
 	api.POST("/tenants/:id/approve", tenantHandler.Approve)
 	api.DELETE("/tenants/:id/reject", tenantHandler.Reject)
 	api.GET("/tenants/:id/stays", stayHandler.ListByTenant)
@@ -211,6 +212,7 @@ func main() {
 	api.POST("/stays", stayHandler.Create)
 	api.GET("/stays/:id", stayHandler.Get)
 	api.PUT("/stays/:id", stayHandler.Update)
+	api.POST("/stays/:id/rent-changes", stayHandler.ChangeRent)
 	api.PUT("/stays/:id/assign-bed", stayHandler.AssignBed)
 
 	// Settlements (move-out money reckoning)

@@ -203,6 +203,17 @@ type collectionStayRow struct {
 	StartDate       time.Time      `db:"start_date"`
 	TotalPaid       int64          `db:"total_paid"`
 	LastPaymentDate sql.NullString `db:"last_payment_date"`
+	// Schedule is the rent over time when it has ever changed (migration
+	// 011). Nil means flat at RentAmount.
+	Schedule rentSchedule `db:"-"`
+}
+
+// schedule returns the stay's rent schedule, flat when none was loaded.
+func (s collectionStayRow) schedule() rentSchedule {
+	if len(s.Schedule) > 0 {
+		return s.Schedule
+	}
+	return flatSchedule(s.StartDate, s.RentAmount)
 }
 
 // cycleStart returns the date the nth billing cycle begins, counting the
@@ -240,21 +251,22 @@ func cycleStart(startDate time.Time, n int, cycle string) time.Time {
 // DaysSinceDue is measured from the start of the FIRST UNPAID cycle, not from
 // the current one — a tenant three cycles behind has been overdue since the
 // oldest one, and that is the number worth putting in front of the owner (and
-// in the nudge message). Whole cycles paid = totalPaid / rentAmount, so a
-// part-payment does not clear the cycle it was made against.
+// in the nudge message). Payments clear cycles oldest first, each at the rent
+// it was billed at, so a part-payment does not clear the cycle it was made
+// against.
 func buildCollections(stays []collectionStayRow, today time.Time) []CollectionRow {
 	rows := make([]CollectionRow, 0, len(stays))
 
 	for _, s := range stays {
+		sched := s.schedule()
 		cycles := cyclesElapsed(s.StartDate, today, s.RentCycle)
-		balance := s.RentAmount*int64(cycles) - s.TotalPaid
+		balance := sched.billed(s.StartDate, s.RentCycle, 0, cycles) - s.TotalPaid
 		if balance <= 0 {
 			continue // paid up, or in credit — not a collections problem
 		}
-		// balance > 0 implies rentAmount > 0, so the division below is safe.
 
-		paidCycles := s.TotalPaid / s.RentAmount
-		dueSince := cycleStart(s.StartDate, int(paidCycles)+1, s.RentCycle)
+		paidCycles := sched.paidThrough(s.StartDate, s.RentCycle, s.TotalPaid, cycles)
+		dueSince := cycleStart(s.StartDate, paidCycles+1, s.RentCycle)
 		daysSinceDue := int(today.Sub(dueSince).Hours() / 24)
 		if daysSinceDue < 0 {
 			daysSinceDue = 0
@@ -338,6 +350,17 @@ func (h *CollectionsHandler) GetCollections(c echo.Context) error {
 	`, ownerID)
 	if err != nil {
 		return serverError(c, err, "failed to fetch collections")
+	}
+	ids := make([]int64, len(stays))
+	for i := range stays {
+		ids[i] = stays[i].StayID
+	}
+	schedules, err := rentSchedules(h.db, ids)
+	if err != nil {
+		return serverError(c, err, "failed to fetch rent schedules")
+	}
+	for i := range stays {
+		stays[i].Schedule = schedules[stays[i].StayID]
 	}
 
 	movedOut, err := loadMovedOut(h.db, ownerID)

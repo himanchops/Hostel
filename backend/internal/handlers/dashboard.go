@@ -117,10 +117,14 @@ const dashboardListLimit = 10
 
 // stayRevenueRow is one active stay's billing inputs, as scanned from the DB.
 type stayRevenueRow struct {
+	StayID     int64     `db:"stay_id"`
 	RentAmount int64     `db:"rent_amount"`
 	RentCycle  string    `db:"rent_cycle"`
 	StartDate  time.Time `db:"start_date"`
 	TotalPaid  int64     `db:"total_paid"`
+	// Schedule is the rent over time when it has ever changed (migration
+	// 011). Nil means flat at RentAmount.
+	Schedule rentSchedule `db:"-"`
 }
 
 // computeRevenue rolls active stays up into the dashboard's revenue summary.
@@ -141,8 +145,12 @@ func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time
 
 	summary := RevenueSummary{CollectedThisMonth: collectedThisMonth}
 	for _, row := range stays {
+		sched := row.Schedule
+		if len(sched) == 0 {
+			sched = flatSchedule(row.StartDate, row.RentAmount)
+		}
 		cyclesTotal := cyclesElapsed(row.StartDate, today, row.RentCycle)
-		totalExpected := row.RentAmount * int64(cyclesTotal)
+		totalExpected := sched.billed(row.StartDate, row.RentCycle, 0, cyclesTotal)
 
 		// Overdue: amount owed across all time
 		if totalExpected > row.TotalPaid {
@@ -155,7 +163,7 @@ func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time
 		if cyclesThisMonth < 0 {
 			cyclesThisMonth = 0
 		}
-		summary.ExpectedThisMonth += row.RentAmount * int64(cyclesThisMonth)
+		summary.ExpectedThisMonth += sched.billed(row.StartDate, row.RentCycle, cyclesTotal-cyclesThisMonth, cyclesTotal)
 	}
 	return summary
 }
@@ -258,6 +266,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	var stayRows []stayRevenueRow
 	err = h.db.Select(&stayRows, `
 		SELECT
+			s.id AS stay_id,
 			s.rent_amount,
 			s.rent_cycle,
 			s.start_date,
@@ -271,6 +280,17 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	`, ownerID)
 	if err != nil {
 		return serverError(c, err, "failed to fetch stay data")
+	}
+	stayIDs := make([]int64, len(stayRows))
+	for i := range stayRows {
+		stayIDs[i] = stayRows[i].StayID
+	}
+	schedules, err := rentSchedules(h.db, stayIDs)
+	if err != nil {
+		return serverError(c, err, "failed to fetch rent schedules")
+	}
+	for i := range stayRows {
+		stayRows[i].Schedule = schedules[stayRows[i].StayID]
 	}
 
 	revenue := computeRevenue(stayRows, collectedThisMonth, today)
