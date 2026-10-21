@@ -1,30 +1,99 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
-import { insightsApi, formatCurrency, type InsightsData, type RoomInsight } from "@/lib/api";
 import {
-  Banner, Button, Card, ChartScroll, Collapsible, EmptyState, GroupedBarChart,
-  Meter, PageHeader, PercentLineChart, SegmentedControl, SkeletonCard,
+  dashboardApi, insightsApi, formatCurrency,
+  type InsightsData, type MoneyEntry, type MoneyEntryKind, type MonthDetail,
+  type RevenuePoint, type RoomInsight,
+} from "@/lib/api";
+import { reportError } from "@/lib/reportError";
+import {
+  Badge, Banner, Button, Card, ChartScroll, ChevronIcon, Collapsible, EmptyState,
+  Meter, PageHeader, PercentLineChart, SegmentedControl, SkeletonCard, TOUCH_LINK, TOUCH_TARGET,
+  type BadgeTone,
 } from "@/components/ui";
 
 const RANGES = [3, 6, 12] as const;
 
-/** ₹ in thousands for axis and legend labels, where the exact rupee is noise. */
-function compactRupees(paise: number): string {
-  const rupees = paise / 100;
-  if (rupees >= 100000) return `₹${(rupees / 100000).toFixed(1)}L`;
-  if (rupees >= 1000) return `₹${Math.round(rupees / 1000)}k`;
-  return `₹${Math.round(rupees)}`;
+/**
+ * Two questions about the same money (backend money.go). Rent measures rent
+ * against rent billed; All money is every rupee in, less refunds, which is what
+ * the bank and the cash drawer show together. The owner switches between them,
+ * so the page remembers the last one on this device.
+ */
+type View = "rent" | "money";
+const VIEW_KEY = "insights:view";
+
+/** Which lines of a month each view lists, so the lines add up to its row. */
+const VIEW_KINDS: Record<View, MoneyEntryKind[]> = {
+  rent: ["rent", "deposit_to_rent", "advance_returned"],
+  money: ["rent", "deposit", "returned"],
+};
+
+const KIND: Record<MoneyEntryKind, { label: string; tone: BadgeTone; out: boolean }> = {
+  rent: { label: "Rent", tone: "success", out: false },
+  deposit: { label: "Deposit", tone: "info", out: false },
+  returned: { label: "Returned", tone: "warning", out: true },
+  deposit_to_rent: { label: "Paid from deposit", tone: "neutral", out: false },
+  advance_returned: { label: "Advance returned", tone: "warning", out: true },
+};
+
+// Spelled out rather than left to toLocaleString, whose en-IN short September
+// is "Sept" in one runtime and "Sep" in the next.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function monthName(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return `${MONTHS[m - 1]} ${y}`;
+}
+
+function dayName(date: string): string {
+  const [, m, d] = date.split("-").map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
+}
+
+/** Nothing billed and no money moved. */
+function isEmpty(r: RevenuePoint): boolean {
+  return r.expected_paise === 0 && r.rent_paid_paise === 0 && r.deposits_in_paise === 0
+    && r.returned_paise === 0 && r.deposit_to_rent_paise === 0 && r.advance_returned_paise === 0;
+}
+
+/** −₹2,000 for money going out. formatCurrency puts the sign after the ₹. */
+function signed(paise: number): string {
+  return paise < 0 ? `−${formatCurrency(-paise)}` : formatCurrency(paise);
 }
 
 export default function InsightsPage() {
   const { token } = useAuth();
   const [months, setMonths] = useState<number>(12);
+  const [view, setViewState] = useState<View>("rent");
   const [data, setData] = useState<InsightsData | null>(null);
+  const [owedNow, setOwedNow] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Read after mount, never during render: the server has no localStorage, and
+  // a first render that disagreed with it would not hydrate. A private window
+  // or blocked storage simply keeps the default.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (saved === "rent" || saved === "money") setViewState(saved);
+    } catch {
+      /* storage unavailable: Rent it is */
+    }
+  }, []);
+
+  const setView = (v: View) => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* not remembered on this device, which is all that is lost */
+    }
+  };
 
   const load = useCallback(
     async (m: number) => {
@@ -32,7 +101,14 @@ export default function InsightsPage() {
       setLoading(true);
       setError(null);
       try {
-        setData(await insightsApi.get(token, m));
+        // "Still owed" is the dashboard's own figure, fetched rather than
+        // recomputed, so the two screens cannot disagree about it.
+        const [insights, dashboard] = await Promise.all([
+          insightsApi.get(token, m),
+          dashboardApi.get(token),
+        ]);
+        setData(insights);
+        setOwedNow(dashboard.revenue.overdue_amount);
       } catch (e) {
         // Never swallow it — an insights page that silently renders zeros is
         // worse than one that says it could not load.
@@ -48,8 +124,15 @@ export default function InsightsPage() {
     load(months);
   }, [load, months]);
 
-  const totalCollected = data?.revenue.reduce((s, r) => s + r.collected_paise, 0) ?? 0;
-  const totalExpected = data?.revenue.reduce((s, r) => s + r.expected_paise, 0) ?? 0;
+  // Months before the first tenant ever arrived are dropped: twelve rows with
+  // a hostel that opened in August would be nine rows of "—". A quiet month
+  // after that stays, because a month with no money is itself the news.
+  const allMonths = data?.revenue ?? [];
+  const firstActive = allMonths.findIndex((r) => !isEmpty(r));
+  const revenue = firstActive === -1 ? [] : allMonths.slice(firstActive);
+  const sum = (f: (r: RevenuePoint) => number) => revenue.reduce((s, r) => s + f(r), 0);
+  const totalCollected = sum((r) => r.collected_paise);
+  const totalExpected = sum((r) => r.expected_paise);
   const collectionRate = totalExpected > 0 ? (totalCollected / totalExpected) * 100 : 0;
 
   const rooms = [...(data?.rooms ?? [])].sort((a, b) => b.percentage - a.percentage);
@@ -64,8 +147,8 @@ export default function InsightsPage() {
       <PageHeader
         title="Insights"
         subtitle={
-          data
-            ? `${data.from_date} to ${data.to_date} — ${formatCurrency(totalCollected)} collected of ${formatCurrency(totalExpected)} billed (${collectionRate.toFixed(0)}%)`
+          revenue.length > 0
+            ? `${monthName(revenue[0].month)} to ${monthName(revenue[revenue.length - 1].month)}`
             : "How the building has been doing"
         }
         actions={
@@ -81,7 +164,7 @@ export default function InsightsPage() {
       {error && (
         <Banner tone="danger" className="mb-6">
           {error}{" "}
-          <button onClick={() => load(months)} className="font-medium underline">
+          <button onClick={() => load(months)} className={`${TOUCH_TARGET} font-medium underline`}>
             Retry
           </button>
         </Banner>
@@ -96,45 +179,76 @@ export default function InsightsPage() {
 
       {data && (
         <>
-          {/* Stacked, not side by side: a 12-month series needs the width, and
-              two columns starve both charts until well past 1440px.
-
-              Collected-vs-billed is the headline and never folds. The other two
-              do, because this page is read in two different moods — "how did we
-              do this month", which is the first chart alone, and "why", which
-              is everything else. */}
-          {/* min-w-0 on the card, not on ChartScroll. A grid item's default
-              min-width is `auto` — its content's width — so without this the
-              card grew to fit a 672px chart, the scroller inside it was as
-              wide as what it held and had nothing to scroll, and <main>'s
-              overflow-x-hidden clipped the most recent months off a 375px
-              screen (UX audit M2). */}
-          <div className="mb-4 grid gap-4">
-            <Card title="Collected vs billed" className="min-w-0">
-              <ChartScroll minWidth={Math.max(280, data.revenue.length * 56)}>
-                <GroupedBarChart
-                  data={data.revenue.map((r) => ({
-                    label: r.label,
-                    base: r.expected_paise,
-                    value: r.collected_paise,
-                  }))}
-                  formatValue={compactRupees}
-                  formatExact={formatCurrency}
-                  baseLabel="Billed"
-                  valueLabel="Collected"
-                />
-              </ChartScroll>
-              <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
-                Hover a month for exact figures. Collected is counted in the
-                month the money arrived, so arrears cleared in one payment show
-                as a single tall bar.
-              </p>
-            </Card>
+          <div className="mb-4">
+            <SegmentedControl
+              ariaLabel="What to count"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "rent" as View, label: "Rent" },
+                { value: "money" as View, label: "All money" },
+              ]}
+            />
           </div>
+
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            {view === "rent" ? (
+              <>
+                <Tile
+                  label="Rent collected"
+                  value={formatCurrency(totalCollected)}
+                  note={totalExpected > 0
+                    ? `${collectionRate.toFixed(0)}% of ${formatCurrency(totalExpected)} billed`
+                    : "nothing billed in this range"}
+                />
+                <Tile
+                  label="Still owed now"
+                  value={owedNow === null ? "—" : formatCurrency(owedNow)}
+                  note={owedNow ? "chase it from Collections →" : "nobody is behind"}
+                  href={owedNow ? "/collections" : undefined}
+                />
+                <Tile
+                  label="Occupancy this month"
+                  value={latestOccupancy === undefined ? "—" : `${latestOccupancy.toFixed(0)}%`}
+                  note="of bed-nights so far"
+                />
+              </>
+            ) : (
+              <>
+                <Tile
+                  label="Money in, net"
+                  value={signed(sum((r) => r.net_in_paise))}
+                  note="rent and deposits, cash and online, less refunds"
+                />
+                <Tile
+                  label="Deposits in"
+                  value={formatCurrency(sum((r) => r.deposits_in_paise))}
+                  note={`${formatCurrency(sum((r) => r.returned_paise))} handed back at move-out`}
+                />
+                <Tile
+                  label="Deposits you hold"
+                  value={formatCurrency(data.deposits_held_paise)}
+                  note="right now, owed back when people leave"
+                />
+              </>
+            )}
+          </div>
+
+          <Card padding="none" className="mb-4 min-w-0">
+            {revenue.length === 0 ? (
+              <EmptyState
+                title="Nothing billed yet"
+                message="Once a tenant is placed in a bed, each month's rent and money shows up here."
+              />
+            ) : (
+              token && <MonthTable rows={[...revenue].reverse()} view={view} token={token} />
+            )}
+          </Card>
 
           <div className="mb-4">
             <Collapsible
               title="Occupancy"
+              defaultOpen={false}
               summary={latestOccupancy !== undefined ? `now ${latestOccupancy.toFixed(0)}%` : undefined}
             >
               <ChartScroll minWidth={Math.max(280, data.occupancy.length * 56)}>
@@ -180,7 +294,7 @@ export default function InsightsPage() {
                       <th className="px-4 py-2 font-medium">Beds</th>
                       <th className="px-4 py-2 font-medium">Occupancy</th>
                       <th className="px-4 py-2 text-right font-medium">Empty nights</th>
-                      <th className="px-4 py-2 text-right font-medium">Collected</th>
+                      <th className="px-4 py-2 text-right font-medium">Rent collected</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -195,6 +309,203 @@ export default function InsightsPage() {
         </>
       )}
     </div>
+  );
+}
+
+function Tile({ label, value, note, href }: { label: string; value: string; note?: string; href?: string }) {
+  const body = (
+    <Card>
+      <p className="text-[13px] text-stone-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-stone-900">{value}</p>
+      {note && <p className="mt-1 text-xs text-stone-400">{note}</p>}
+    </Card>
+  );
+  return href ? (
+    <Link href={href} className="block transition duration-150 ease-out hover:opacity-80">{body}</Link>
+  ) : body;
+}
+
+/**
+ * One row per month, newest first. A table rather than a chart because every
+ * figure here is read, not compared by eye — and a chart on a touch screen
+ * hides its numbers behind a hover the iPad does not have.
+ */
+function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; token: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [details, setDetails] = useState<Record<string, MonthDetail | "loading" | { error: string }>>({});
+
+  const toggle = async (month: string) => {
+    if (open === month) {
+      setOpen(null);
+      return;
+    }
+    setOpen(month);
+    if (details[month] && details[month] !== "loading" && !("error" in (details[month] as object))) return;
+    setDetails((d) => ({ ...d, [month]: "loading" }));
+    try {
+      const detail = await insightsApi.month(token, month);
+      setDetails((d) => ({ ...d, [month]: detail }));
+    } catch (e) {
+      reportError(e, { where: "insights month detail" });
+      setDetails((d) => ({ ...d, [month]: { error: e instanceof Error ? e.message : "Could not load this month" } }));
+    }
+  };
+
+  const cols = view === "rent" ? 3 : 5;
+  const th = "px-3 py-2 text-right font-medium first:pl-4 first:text-left last:pr-4";
+  const td = "px-3 py-3 text-right tabular-nums first:pl-4 first:text-left last:pr-4";
+  // On a phone the three parts of the money view fold into a line under the
+  // net figure. Scrolling sideways would hide the one column that matters.
+  const part = "hidden sm:table-cell";
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-stone-100 text-[11px] uppercase tracking-wide text-stone-400">
+            <th className={th}>Month</th>
+            {view === "rent" ? (
+              <>
+                <th className={th}>Billed</th>
+                <th className={`${th} w-[45%]`}>Collected</th>
+              </>
+            ) : (
+              <>
+                <th className={`${th} ${part}`}>Rent</th>
+                <th className={`${th} ${part}`}>Deposits in</th>
+                <th className={`${th} ${part}`}>Returned</th>
+                <th className={th}>Net in</th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const isOpen = open === r.month;
+            const pct = r.expected_paise > 0 ? (r.collected_paise / r.expected_paise) * 100 : null;
+            return (
+              <Fragment key={r.month}>
+                <tr
+                  onClick={() => toggle(r.month)}
+                  className="cursor-pointer border-b border-stone-50 transition duration-150 ease-out hover:bg-stone-50"
+                >
+                  <td className={td}>
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={(e) => { e.stopPropagation(); toggle(r.month); }}
+                      className={`${TOUCH_TARGET} inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-stone-800`}
+                    >
+                      <ChevronIcon className={`h-3.5 w-3.5 text-stone-400 transition duration-150 ease-out ${isOpen ? "rotate-90" : ""}`} />
+                      {monthName(r.month)}
+                    </button>
+                  </td>
+                  {view === "rent" ? (
+                    <>
+                      <td className={`${td} text-stone-500`}>{r.expected_paise ? formatCurrency(r.expected_paise) : "—"}</td>
+                      <td className={td}>
+                        <span className="font-medium text-stone-800">{formatCurrency(r.collected_paise)}</span>
+                        {pct !== null && <span className="ml-1.5 text-xs text-stone-400">{pct.toFixed(0)}%</span>}
+                        {pct !== null && (
+                          <span className="ml-auto mt-1.5 block w-full max-w-40 sm:inline-block sm:align-middle">
+                            <Meter percent={pct} tone={pct >= 95 ? "emerald" : pct >= 60 ? "indigo" : "amber"} />
+                          </span>
+                        )}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className={`${td} ${part} text-stone-600`}>{r.rent_paid_paise ? formatCurrency(r.rent_paid_paise) : "—"}</td>
+                      <td className={`${td} ${part} text-stone-600`}>{r.deposits_in_paise ? `+${formatCurrency(r.deposits_in_paise)}` : "—"}</td>
+                      <td className={`${td} ${part} text-stone-600`}>{r.returned_paise ? signed(-r.returned_paise) : "—"}</td>
+                      <td className={td}>
+                        <span className={`font-medium ${r.net_in_paise < 0 ? "text-overdue-700" : "text-stone-800"}`}>{signed(r.net_in_paise)}</span>
+                        <span className="block text-[11px] font-normal text-stone-400 sm:hidden">
+                          {[
+                            r.rent_paid_paise ? `${formatCurrency(r.rent_paid_paise)} rent` : "",
+                            r.deposits_in_paise ? `+${formatCurrency(r.deposits_in_paise)} dep.` : "",
+                            r.returned_paise ? `${signed(-r.returned_paise)} back` : "",
+                          ].filter(Boolean).join(" · ")}
+                        </span>
+                      </td>
+                    </>
+                  )}
+                </tr>
+                {isOpen && (
+                  <tr className="border-b border-stone-100 bg-stone-50/60">
+                    <td colSpan={cols} className="px-4 py-3">
+                      <MonthLines detail={details[r.month]} view={view} row={r} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MonthLines({
+  detail, view, row,
+}: {
+  detail: MonthDetail | "loading" | { error: string } | undefined;
+  view: View;
+  row: RevenuePoint;
+}) {
+  if (!detail || detail === "loading") return <p className="text-sm text-stone-400">Loading {monthName(row.month)}…</p>;
+  if ("error" in detail) return <p className="text-sm text-red-600">{detail.error}</p>;
+
+  const lines = detail.entries.filter((e) => VIEW_KINDS[view].includes(e.kind));
+  if (lines.length === 0) {
+    return <p className="text-sm text-stone-400">Nothing {view === "rent" ? "collected" : "came in or went out"} in {monthName(row.month)}.</p>;
+  }
+  const total = lines.reduce((s, e) => s + (KIND[e.kind].out ? -e.amount_paise : e.amount_paise), 0);
+
+  return (
+    <div>
+      <ul className="divide-y divide-stone-100">
+        {lines.map((e, i) => <MoneyLine key={`${e.stay_id}-${e.kind}-${e.date}-${i}`} entry={e} />)}
+      </ul>
+      <p className="mt-2 flex justify-between border-t border-stone-200 pt-2 text-xs text-stone-500">
+        <span>{lines.length} {lines.length === 1 ? "line" : "lines"}</span>
+        <span className="tabular-nums">
+          {view === "rent" ? "Collected" : "Net in"}: <span className="font-semibold text-stone-800">{signed(total)}</span>
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function MoneyLine({ entry: e }: { entry: MoneyEntry }) {
+  const kind = KIND[e.kind];
+  const place = [e.room_name, e.bed_name].filter(Boolean).join(" · ");
+  // One row from sm up. On a phone, two: date, name and amount on top, and
+  // the details under the name — `sm:contents` dissolves that second row's
+  // wrapper back into the single line.
+  return (
+    <li className="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 py-2 text-sm sm:flex">
+      <span className="tabular-nums text-stone-400 sm:w-14 sm:shrink-0">{dayName(e.date)}</span>
+      <span className="min-w-0 truncate sm:flex-1">
+        <Link
+          href={`/tenants/${e.tenant_id}`}
+          onClick={(ev) => ev.stopPropagation()}
+          className={`${TOUCH_LINK} font-medium text-stone-800 hover:text-indigo-600`}
+        >
+          {e.tenant_name}
+        </Link>
+        {place && <span className="ml-2 hidden text-xs text-stone-400 sm:inline">{place}</span>}
+      </span>
+      <span className={`text-right tabular-nums font-medium sm:order-last sm:w-24 ${kind.out ? "text-overdue-700" : "text-stone-800"}`}>
+        {kind.out ? signed(-e.amount_paise) : formatCurrency(e.amount_paise)}
+      </span>
+      <span className="col-span-2 col-start-2 flex items-center gap-2 text-xs text-stone-400 sm:contents">
+        <Badge tone={kind.tone}>{kind.label}</Badge>
+        <span className="capitalize sm:w-14">{e.payment_type ?? ""}</span>
+        {place && <span className="sm:hidden">{place}</span>}
+      </span>
+    </li>
   );
 }
 

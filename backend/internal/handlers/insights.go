@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -20,12 +21,16 @@ func NewInsightsHandler(db *sqlx.DB) *InsightsHandler {
 
 // ── Response shapes ──────────────────────────────────────────────────────────
 
-// RevenuePoint is one month on the collected-vs-expected chart.
+// RevenuePoint is one month of the money table: the rent question (expected
+// against collected) and the money question (what came in, what went back).
+// See money.go for why those are different figures.
 type RevenuePoint struct {
 	Month          string `json:"month"` // "2026-09", sortable
-	Label          string `json:"label"` // "Sep 26", for the axis
+	Label          string `json:"label"` // "Sep 26"
 	ExpectedPaise  int64  `json:"expected_paise"`
-	CollectedPaise int64  `json:"collected_paise"`
+	CollectedPaise int64  `json:"collected_paise"` // rent collected: moneyMonth.rentCollected
+	NetInPaise     int64  `json:"net_in_paise"`    // all money in, less refunds: moneyMonth.netIn
+	moneyMonth
 }
 
 // OccupancyPoint is one month on the occupancy chart, measured in bed-nights
@@ -67,11 +72,6 @@ type insightStay struct {
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
-}
-
-type monthlyPaid struct {
-	Month  string `db:"month"`
-	Amount int64  `db:"amount"`
 }
 
 type roomPaid struct {
@@ -176,7 +176,7 @@ func billedCycles(s insightStay, asOf time.Time) int {
 // paying three months of arrears in one go shows the whole payment in the month
 // they actually paid. That is deliberate: this chart answers "what came in",
 // and the gap against expected is the point of drawing them together.
-func computeRevenueSeries(stays []insightStay, collected map[string]int64, today time.Time, months int) []RevenuePoint {
+func computeRevenueSeries(stays []insightStay, money map[string]moneyMonth, today time.Time, months int) []RevenuePoint {
 	windows := monthWindows(today, months)
 	points := make([]RevenuePoint, 0, len(windows))
 
@@ -201,11 +201,14 @@ func computeRevenueSeries(stays []insightStay, collected map[string]int64, today
 			}
 		}
 
+		m := money[key]
 		points = append(points, RevenuePoint{
 			Month:          key,
 			Label:          start.Format("Jan 06"),
 			ExpectedPaise:  expected,
-			CollectedPaise: collected[key],
+			CollectedPaise: m.rentCollected(),
+			NetInPaise:     m.netIn(),
+			moneyMonth:     m,
 		})
 	}
 	return points
@@ -326,6 +329,10 @@ type InsightsResponse struct {
 	Revenue   []RevenuePoint   `json:"revenue"`
 	Occupancy []OccupancyPoint `json:"occupancy"`
 	Rooms     []RoomInsight    `json:"rooms"`
+	// DepositsHeldPaise is deposit money held right now, not over the window:
+	// it is owed back at move-out, so it is the one figure on the page that
+	// is not the owner's to spend.
+	DepositsHeldPaise int64 `json:"deposits_held_paise"`
 }
 
 const (
@@ -377,26 +384,13 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 		stays[i].Schedule = schedules[stays[i].StayID]
 	}
 
-	var monthly []monthlyPaid
-	err = h.db.Select(&monthly, `
-		SELECT to_char(p.payment_date, 'YYYY-MM') AS month,
-		       COALESCE(SUM(p.amount), 0) AS amount
-		FROM payments p
-		JOIN stays s   ON s.id = p.stay_id
-		JOIN tenants t ON t.id = s.tenant_id
-		WHERE t.owner_id = $1
-		  AND p.is_approved = true
-		  AND p.kind = 'rent' -- "collected" is set against rent billed; a deposit would read as >100%
-		  AND p.payment_date >= $2
-		  AND p.payment_date <  $3
-		GROUP BY 1
-	`, ownerID, from.Format("2006-01-02"), to.Format("2006-01-02"))
+	money, err := loadMoneyByMonth(h.db, ownerID, from, to)
 	if err != nil {
-		return serverError(c, err, "failed to load monthly payments")
+		return serverError(c, err, "failed to load monthly money")
 	}
-	collectedByMonth := make(map[string]int64, len(monthly))
-	for _, m := range monthly {
-		collectedByMonth[m.Month] = m.Amount
+	depositsHeld, err := loadDepositsHeld(h.db, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to load deposits held")
 	}
 
 	var totalBeds int
@@ -450,13 +444,186 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	for _, r := range perRoom {
 		collectedByRoom[r.RoomID] = r.Amount
 	}
+	// Rent a deposit paid off at move-out is rent collected in that room too,
+	// the same as on the monthly series.
+	flows, err := loadSettlementFlows(h.db, ownerID, from, to)
+	if err != nil {
+		return serverError(c, err, "failed to load settlements for insights")
+	}
+	for _, f := range flows {
+		collectedByRoom[f.RoomID] += f.rentDelta()
+	}
 
 	return c.JSON(http.StatusOK, InsightsResponse{
 		Months:    months,
 		FromDate:  from.Format("2006-01-02"),
 		ToDate:    to.AddDate(0, 0, -1).Format("2006-01-02"),
-		Revenue:   computeRevenueSeries(stays, collectedByMonth, today, months),
+		Revenue:   computeRevenueSeries(stays, money, today, months),
 		Occupancy: computeOccupancySeries(stays, totalBeds, today, months),
 		Rooms:     computeRoomInsights(rooms, stays, collectedByRoom, from, to),
+
+		DepositsHeldPaise: depositsHeld,
+	})
+}
+
+// ── One month, line by line ──────────────────────────────────────────────────
+
+// MoneyEntry is one line of a month: a payment, or one effect of a
+// settlement. AmountPaise is always positive and Kind says which way it went,
+// so the client never has to reason about a sign:
+//
+//	rent, deposit       money in
+//	returned            money handed back at move-out
+//	deposit_to_rent     rent paid off from a held deposit; no money moved
+//	advance_returned    rent paid ahead, handed back; comes off rent collected
+type MoneyEntry struct {
+	Date        string  `json:"date"`
+	Kind        string  `json:"kind"`
+	AmountPaise int64   `json:"amount_paise"`
+	PaymentType *string `json:"payment_type,omitempty"` // cash | online, payments only
+	StayID      int64   `json:"stay_id"`
+	TenantID    int64   `json:"tenant_id"`
+	TenantName  string  `json:"tenant_name"`
+	RoomName    *string `json:"room_name,omitempty"`
+	BedName     *string `json:"bed_name,omitempty"`
+}
+
+type MonthDetail struct {
+	Month    string       `json:"month"`
+	Label    string       `json:"label"`
+	FromDate string       `json:"from_date"`
+	ToDate   string       `json:"to_date"`
+	Entries  []MoneyEntry `json:"entries"`
+}
+
+type moneyEntryRow struct {
+	Date        time.Time `db:"date"`
+	Kind        string    `db:"kind"`
+	AmountPaise int64     `db:"amount"`
+	PaymentType *string   `db:"payment_type"`
+	StayID      int64     `db:"stay_id"`
+	TenantID    int64     `db:"tenant_id"`
+	TenantName  string    `db:"tenant_name"`
+	RoomName    *string   `db:"room_name"`
+	BedName     *string   `db:"bed_name"`
+	// Settlement rows only.
+	DepositPaise    int64 `db:"deposit_paise"`
+	DuesPaise       int64 `db:"dues_paise"`
+	AdvanceReturned int64 `db:"advance_returned_paise"`
+	RefundPaise     int64 `db:"refund_paise"`
+}
+
+// settlementEntries splits one settlement into the lines it contributes,
+// using the same rules as the monthly totals (money.go), so a month's lines
+// always add up to its row. A settlement that moved nothing, such as a
+// tenant who paid nothing and owed nothing, contributes no lines.
+func settlementEntries(r moneyEntryRow) []MoneyEntry {
+	base := MoneyEntry{
+		Date: r.Date.Format("2006-01-02"), StayID: r.StayID,
+		TenantID: r.TenantID, TenantName: r.TenantName, RoomName: r.RoomName, BedName: r.BedName,
+	}
+	f := settlementFlow{DepositPaise: r.DepositPaise, DuesPaise: r.DuesPaise,
+		AdvanceReturned: r.AdvanceReturned, RefundPaise: r.RefundPaise}
+	var out []MoneyEntry
+	add := func(kind string, amount int64) {
+		if amount > 0 {
+			e := base
+			e.Kind, e.AmountPaise = kind, amount
+			out = append(out, e)
+		}
+	}
+	add("deposit_to_rent", settlementRent(f.DepositPaise, f.DuesPaise))
+	add("advance_returned", f.AdvanceReturned)
+	add("returned", f.returned())
+	return out
+}
+
+// GetMonth lists one month's money line by line: what the owner reads when a
+// row in the table does not match the bank.
+//
+// GET /api/insights/months/:month   (month = "2026-10")
+func (h *InsightsHandler) GetMonth(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	today := dateOnly(time.Now())
+
+	start, err := time.Parse("2006-01", c.Param("month"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("month must look like 2026-10"))
+	}
+	if start.After(today) {
+		return c.JSON(http.StatusBadRequest, errorResponse("that month has not started yet"))
+	}
+	// The same window the monthly row used, so the lines add up to it: the
+	// current month stops at today.
+	end := start.AddDate(0, 1, 0)
+	if tomorrow := today.AddDate(0, 0, 1); end.After(tomorrow) {
+		end = tomorrow
+	}
+	from, to := start.Format("2006-01-02"), end.Format("2006-01-02")
+
+	var payments []moneyEntryRow
+	err = h.db.Select(&payments, `
+		SELECT p.payment_date AS date, p.kind::text AS kind, p.amount,
+		       p.payment_type::text AS payment_type,
+		       s.id AS stay_id, t.id AS tenant_id, t.name AS tenant_name,
+		       r.name AS room_name, b.name AS bed_name
+		FROM payments p
+		JOIN stays s     ON s.id = p.stay_id
+		JOIN tenants t   ON t.id = s.tenant_id
+		LEFT JOIN beds b ON b.id = s.bed_id
+		LEFT JOIN rooms r ON r.id = b.room_id
+		WHERE t.owner_id = $1
+		  AND p.is_approved = true
+		  AND p.payment_date >= $2
+		  AND p.payment_date <  $3
+	`, ownerID, from, to)
+	if err != nil {
+		return serverError(c, err, "failed to load the month's payments")
+	}
+
+	var settled []moneyEntryRow
+	err = h.db.Select(&settled, `
+		SELECT s.end_date AS date, 'settlement' AS kind, 0 AS amount,
+		       s.id AS stay_id, t.id AS tenant_id, t.name AS tenant_name,
+		       r.name AS room_name, b.name AS bed_name,
+		       st.deposit_paise, st.dues_paise, st.advance_returned_paise, st.refund_paise
+		FROM settlements st
+		JOIN stays s     ON s.id = st.stay_id
+		JOIN tenants t   ON t.id = s.tenant_id
+		LEFT JOIN beds b ON b.id = s.bed_id
+		LEFT JOIN rooms r ON r.id = b.room_id
+		WHERE t.owner_id = $1
+		  AND s.end_date >= $2
+		  AND s.end_date <  $3
+	`, ownerID, from, to)
+	if err != nil {
+		return serverError(c, err, "failed to load the month's settlements")
+	}
+
+	entries := make([]MoneyEntry, 0, len(payments)+len(settled))
+	for _, p := range payments {
+		entries = append(entries, MoneyEntry{
+			Date: p.Date.Format("2006-01-02"), Kind: p.Kind, AmountPaise: p.AmountPaise,
+			PaymentType: p.PaymentType, StayID: p.StayID, TenantID: p.TenantID,
+			TenantName: p.TenantName, RoomName: p.RoomName, BedName: p.BedName,
+		})
+	}
+	for _, s := range settled {
+		entries = append(entries, settlementEntries(s)...)
+	}
+	// Newest first, the order a bank statement is read back against.
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].Date != entries[j].Date {
+			return entries[i].Date > entries[j].Date
+		}
+		return entries[i].TenantName < entries[j].TenantName
+	})
+
+	return c.JSON(http.StatusOK, MonthDetail{
+		Month:    start.Format("2006-01"),
+		Label:    start.Format("Jan 2006"),
+		FromDate: from,
+		ToDate:   end.AddDate(0, 0, -1).Format("2006-01-02"),
+		Entries:  entries,
 	})
 }

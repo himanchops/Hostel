@@ -140,6 +140,13 @@ Key conventions to carry forward:
   and anything that accepts a file reference checks `validFileRef`. A new file
   column needs both, or it either ships a raw key (a broken image) or accepts a
   URL from any host.
+- **Rent and money are two questions** (`handlers/money.go`). "Collected" is
+  rent: rent payments, plus rent a deposit paid off at settlement, less an
+  advance handed back. It never includes a deposit. "Net in" is money: every
+  approved payment of both kinds, less refunds. Settlements are dated on the
+  stay's `end_date`, never `created_at`. Anything that reports collected rent
+  or money in by month goes through `loadMoneyByMonth`, so the dashboard and
+  Insights cannot drift.
 - **Rent can change partway through a stay** (migration 011). Anything that
   bills rent goes through `rentSchedule.billed` (`handlers/rent.go`), never
   `rent_amount × cycles`, which reprices every month already lived. There were

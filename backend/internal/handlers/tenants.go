@@ -586,6 +586,11 @@ type TenantSummary struct {
 	TotalExpected int64 `json:"total_expected"`
 	Balance       int64 `json:"balance"`
 	DurationDays  int64 `json:"duration_days"`
+	// TotalPaid is rent only, so a deposit recorded on this page never moves
+	// it. These say where the deposit went instead: held now (paid, not yet
+	// settled), and still to come (agreed on a current stay, not yet paid).
+	DepositHeld int64 `json:"deposit_held"`
+	DepositDue  int64 `json:"deposit_due"`
 }
 
 // dateOnly strips the time component so day arithmetic isn't skewed by the
@@ -603,6 +608,8 @@ type staySummaryRow struct {
 	StartDate        time.Time  `db:"start_date"`
 	EndDate          *time.Time `db:"end_date"`
 	TotalPaid        int64      `db:"total_paid"`
+	DepositAmount    int64      `db:"deposit_amount"` // agreed at intake
+	DepositPaid      int64      `db:"deposit_paid"`   // approved deposit payments
 	SettlementRefund *int64     `db:"settlement_refund"`
 	// PaidAfterSettlement is money received on the stay since it was settled,
 	// which goes against a shortfall — see settledOwed.
@@ -662,6 +669,10 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 			summary.Balance += settledOwed(*s.SettlementRefund, s.PaidAfterSettlement)
 			continue
 		}
+		summary.DepositHeld += s.DepositPaid
+		if s.EndDate == nil && s.DepositAmount > s.DepositPaid {
+			summary.DepositDue += s.DepositAmount - s.DepositPaid
+		}
 		summary.Balance += expected - s.TotalPaid
 	}
 
@@ -699,6 +710,11 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 			s.rent_cycle,
 			s.start_date,
 			s.end_date,
+			s.deposit_amount,
+			COALESCE((
+				SELECT SUM(p.amount) FROM payments p
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'deposit'
+			), 0) AS deposit_paid,
 			st.refund_paise AS settlement_refund,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p

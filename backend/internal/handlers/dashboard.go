@@ -43,6 +43,12 @@ type RevenueSummary struct {
 	// and settled short. Included in the total so the tile agrees with the
 	// Collections page it links to; reported apart so the tile can say so.
 	MovedOutOwed int64 `json:"moved_out_owed"`
+	// The money question beside the rent one (money.go): deposits that came
+	// in this month, refunds handed back, and everything net. The tile shows
+	// these as one quiet line under the rent figure.
+	DepositsInThisMonth int64 `json:"deposits_in_this_month"`
+	ReturnedThisMonth   int64 `json:"returned_this_month"`
+	NetInThisMonth      int64 `json:"net_in_this_month"`
 }
 
 type AlertsSummary struct {
@@ -239,22 +245,15 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 
 	// 2. Collected this month — rent only. A deposit is held, not earned, and
 	// counting it here would put a ₹16,000 spike in the month someone moved in.
-	var collectedThisMonth int64
+	// Rent a deposit paid off at move-out does count (money.go). Same loader as
+	// Insights, so this tile is always the last row of its table.
 	firstOfMonth, collectedUntil := collectedWindow(today)
-	err = h.db.Get(&collectedThisMonth, `
-		SELECT COALESCE(SUM(p.amount), 0)
-		FROM payments p
-		JOIN stays s   ON s.id = p.stay_id
-		JOIN tenants t ON t.id = s.tenant_id
-		WHERE t.owner_id = $1
-		  AND p.is_approved = true
-		  AND p.kind = 'rent'
-		  AND p.payment_date >= $2
-		  AND p.payment_date <  $3
-	`, ownerID, firstOfMonth.Format("2006-01-02"), collectedUntil.Format("2006-01-02"))
+	money, err := loadMoneyByMonth(h.db, ownerID, firstOfMonth, collectedUntil)
 	if err != nil {
 		return serverError(c, err, "failed to fetch revenue")
 	}
+	thisMonth := money[firstOfMonth.Format("2006-01")]
+	collectedThisMonth := thisMonth.rentCollected()
 
 	// 3. Active stays for expected/overdue calculation.
 	//
@@ -294,6 +293,9 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	}
 
 	revenue := computeRevenue(stayRows, collectedThisMonth, today)
+	revenue.DepositsInThisMonth = thisMonth.DepositsIn
+	revenue.ReturnedThisMonth = thisMonth.Returned
+	revenue.NetInThisMonth = thisMonth.netIn()
 
 	movedOut, err := loadMovedOut(h.db, ownerID)
 	if err != nil {

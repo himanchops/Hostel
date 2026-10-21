@@ -35,3 +35,4 @@ export const SearchIcon = (p: IconProps) => <Line {...p} d="M21 21l-4.35-4.35M11
 export const InboxIcon = (p: IconProps) => <Line {...p} d="M3 13h4l2 3h6l2-3h4M5 5h14l2 8v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4l2-8z" />;
 export const ReceiptIcon = (p: IconProps) => <Line {...p} d="M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6" />;
 export const DoorIcon = (p: IconProps) => <Line {...p} d="M4 21h16M6 21V4a1 1 0 011-1h10a1 1 0 011 1v17M14 12h.01" />;
+export const ChevronIcon = (p: IconProps) => <Line {...p} d="M9 5l7 7-7 7" />;

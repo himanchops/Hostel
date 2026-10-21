@@ -94,7 +94,7 @@ func TestComputeRevenueSeries_ArrearsLandInThePayingMonth(t *testing.T) {
 
 	stay := insightStay{RoomID: 1, RentAmount: rent, RentCycle: "monthly",
 		StartDate: date(2026, time.June, 1)}
-	collected := map[string]int64{"2026-08": 3 * rent}
+	collected := map[string]moneyMonth{"2026-08": {RentPaid: 3 * rent}}
 
 	series := computeRevenueSeries([]insightStay{stay}, collected, insightsToday, 3)
 

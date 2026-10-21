@@ -142,11 +142,14 @@ export default function DashboardPage() {
                pins them equal. Linking makes that a doorway rather than a
                duplicate. */
             href="/insights"
-            note={
-              rev && rev.expected_this_month > 0
-                ? `of ${formatCurrency(rev.expected_this_month)} expected`
-                : undefined
-            }
+            note={[
+              rev && rev.expected_this_month > 0 ? `of ${formatCurrency(rev.expected_this_month)} expected` : "",
+              // The money beside the rent, in one short line: deposits in,
+              // refunds out. The breakdown is behind the link, in Insights.
+              rev && (rev.deposits_in_this_month > 0 || rev.returned_this_month > 0)
+                ? `All money in: ${rev.net_in_this_month < 0 ? "−" : ""}${formatCurrency(Math.abs(rev.net_in_this_month))}`
+                : "",
+            ].filter(Boolean).join("\n") || undefined}
             progress={
               rev && rev.expected_this_month > 0
                 ? Math.min(100, (rev.collected_this_month / rev.expected_this_month) * 100)
@@ -465,7 +468,7 @@ function StatCard({
           />
         </div>
       )}
-      {note && <p className="mt-1 text-xs tabular-nums text-stone-400">{note}</p>}
+      {note && <p className="mt-1 whitespace-pre-line text-xs tabular-nums text-stone-400">{note}</p>}
     </>
   );
 
