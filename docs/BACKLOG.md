@@ -345,6 +345,51 @@ registrations that were rejected.
 
 ---
 
+## Feedback from running the real hostel, round two (Oct 2026)
+
+Raised by the owner in the first days of real use, after the notebook import.
+He asked for these to be taken **one at a time**, not batched.
+
+### Nothing shows the money that actually came in — M, design in progress
+Every "paid" and "collected" figure counts rent only, on purpose. Rent is
+measured against rent billed, and a deposit counted there would read as over
+100%. But the owner checks the month against his bank and cash together, so he
+needs **all money in**: rent plus deposits received, minus deposits returned at
+move-out. A month with no new tenants and two departures has *negative*
+deposit flow, and that has to show. The tenant page's "Total paid" tile is the
+sharpest case: a deposit recorded there does not move it, and the label does
+not say why.
+
+He also dislikes the Insights bar chart: he has to hover to read anything. He
+wants a table you can read at a glance, with a way to switch between a rent
+view and an all-money view. Design under discussion. Related: "Insights ignores
+settlements" and "A payments list page" below.
+
+### The Insights chart drifts left at 3 and 6 months on the iPad — S
+12 months fills the panel; switching to 6 or 3 leaves the bars bunched to the
+left. Possibly superseded if the chart becomes a table (above).
+
+### A tenant row opens only from its "View →" link — S
+The whole row on `/tenants` should open the tenant.
+
+### Recording a payment is three screens deep — M
+Tenants → tenant → Record payment, and this is the most frequent thing he
+does. Two shorter paths exist and are hard to find: Collections (only lists
+people who owe) and the grid's bed drawer. Wants a quick path from anywhere,
+e.g. a global "Record payment" with a name search.
+
+### "They're staying" does not cancel a vacating notice on the iPad — S, bug
+He recorded a notice, then tried to withdraw it with the "they're staying"
+control, and nothing happened. Reproduce with touch emulation at 768×1024 and
+1024×768 before guessing.
+
+### Explanations crowd the screens — S each, later
+The help text around Delete tenant, the vacating-notice controls and similar
+is good the first time and clutter after that. Move it behind an on-demand
+info control. Circle back once the items above are done.
+
+---
+
 ## Feedback from running the real hostel (Sep 2026) — ✅ all closed
 
 Found by the owner using the live app against real tenants, not by building it.
