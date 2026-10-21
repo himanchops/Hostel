@@ -591,6 +591,10 @@ type TenantSummary struct {
 	// settled), and still to come (agreed on a current stay, not yet paid).
 	DepositHeld int64 `json:"deposit_held"`
 	DepositDue  int64 `json:"deposit_due"`
+	// The current stay's next due rent (due.go). Absent when no stay is open.
+	DueDate  *string `json:"due_date,omitempty"`
+	DuePaise *int64  `json:"due_paise,omitempty"`
+	DueState *string `json:"due_state,omitempty"`
 }
 
 // dateOnly strips the time component so day arithmetic isn't skewed by the
@@ -672,6 +676,13 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 		summary.DepositHeld += s.DepositPaid
 		if s.EndDate == nil && s.DepositAmount > s.DepositPaid {
 			summary.DepositDue += s.DepositAmount - s.DepositPaid
+		}
+		if s.EndDate == nil {
+			// One open stay per tenant (idx_stays_active_tenant), so this is set
+			// at most once.
+			due := dueFor(sched, start, s.RentCycle, s.TotalPaid, today)
+			d := due.Date.Format("2006-01-02")
+			summary.DueDate, summary.DuePaise, summary.DueState = &d, &due.Paise, &due.State
 		}
 		summary.Balance += expected - s.TotalPaid
 	}

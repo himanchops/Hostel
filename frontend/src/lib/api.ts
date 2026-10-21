@@ -1,3 +1,4 @@
+import type { DueState } from "./due";
 import { shrinkImage } from "@/lib/shrinkImage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -190,6 +191,10 @@ export interface GridBed {
   end_date?: string;
   notice_date?: string;
   expected_end_date?: string;
+  /** When rent is next due (handlers/due.go); worded by lib/due.ts. */
+  due_date?: string;
+  due_paise?: number;
+  due_state?: DueState;
 }
 
 export interface GridRoom {
@@ -259,6 +264,10 @@ export interface TenantSummary {
   deposit_held: number;    // paise
   /** Deposit agreed on a current stay and not yet paid: */
   deposit_due: number;     // paise
+  /** The current stay's next due rent; absent when no stay is open. */
+  due_date?: string;
+  due_paise?: number;
+  due_state?: DueState;
 }
 
 export const tenantsApi = {

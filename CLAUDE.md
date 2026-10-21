@@ -147,6 +147,9 @@ Key conventions to carry forward:
   stay's `end_date`, never `created_at`. Anything that reports collected rent
   or money in by month goes through `loadMoneyByMonth`, so the dashboard and
   Insights cannot drift.
+- **When rent is due comes from `dueFor`** (`handlers/due.go`): the oldest
+  cycle not fully paid, via `paidThrough`. Screens word it with `lib/due.ts`
+  and never work out a due date themselves.
 - **Rent can change partway through a stay** (migration 011). Anything that
   bills rent goes through `rentSchedule.billed` (`handlers/rent.go`), never
   `rent_amount × cycles`, which reprices every month already lived. There were
