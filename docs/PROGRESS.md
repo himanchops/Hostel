@@ -2404,6 +2404,21 @@ one bed orange (leaving 1 Nov), with 16 of 45 beds occupied. Collections was
 empty and overdue was ₹0. October's expected rent was ₹75,000, which matches a
 hand sum. A second run created nothing.
 
+**Production, 21 Oct 2026: done.** The owner ran migration 012 on Neon, and
+PR #40 was merged as `919ccc2`. Render reported the backend deploy successful
+at 09:21 UTC. The owner then ran the dry run and the import against the real
+account and reported all 16 imported. That is the notebook's first batch.
+
+**Still to come**, in later batches with the same script and a new file under
+`.hostel-import/`:
+- **More current tenants.** This batch was "a start".
+- **People who left in between.** The script only creates open stays today.
+  A past tenant needs an `end_date` (and probably a settlement) the script
+  does not write yet. Add that when the batch arrives, and remember that
+  Collections deliberately leaves unsettled ended stays out.
+- **Bed placements.** The notebook names rooms, not beds, so this batch filled
+  lower bunks first in move-in order. The owner will correct them in the app.
+
 ---
 
 ## Architecture Notes
