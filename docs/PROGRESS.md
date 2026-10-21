@@ -2474,9 +2474,16 @@ bug (BACKLOG).
   `Meter` moved to its own file. CLAUDE.md's chart rule now says "prefer a
   table".
 - **A busy month** leads with a totals strip by kind ("Rent ×45 ₹2,40,000 ·
-  Returned ×2 −₹30,900"). Deposits and refunds come before rent payments,
-  ten lines show until "Show all N lines", and a "Close" button at the foot
-  scrolls the month back into view.
+  Returned ×2 −₹30,900"), lists its lines newest first whatever their kind,
+  shows ten until "Show all N lines", and has a "Close" button at the foot
+  that scrolls the month back into view. Grouping deposits and refunds ahead
+  of rent shipped in #41 and read as out of order to the owner, so it was
+  removed (`insights-fixes`).
+- **Remembered range, fixed** (`insights-fixes`). On return, "1m" was pressed
+  over twelve months of figures. The page loaded the default and the saved
+  range one after the other, and the slower answer won. Now nothing loads
+  until the saved range is read, and an answer that arrives after a newer
+  request is dropped. The test delays a 6m answer past a tap on 1m.
 - **Range** gained 1m ("this month so far", so the tiles answer the
   bank-statement question directly) and is remembered per device like the
   view.

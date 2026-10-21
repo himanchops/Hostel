@@ -156,7 +156,12 @@ test.describe("Insights", () => {
     await expect(page.getByText("Deposits you hold").locator("..")).toContainText("₹3,500");
 
     await row.getByRole("button").click();
-    await expect(page.getByText("Returned", { exact: true })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Returned" })).toContainText("−₹2,500");
+    // Newest first, whatever the kind: the dates down the list never go up.
+    const dates = await page.getByRole("listitem").evaluateAll((items) =>
+      items.map((li) => li.firstElementChild?.textContent ?? ""));
+    const day = (d: string) => Number(d.split(" ")[0]);
+    expect(dates.map(day)).toEqual([...dates.map(day)].sort((a, b) => b - a));
     await expect(page.getByText("Net in: ₹17,000")).toBeVisible();
     // The deposit that paid rent moved no money, so it is not a line here.
     await expect(page.getByRole("listitem").filter({ hasText: "Paid from deposit" })).toHaveCount(0);
@@ -233,44 +238,49 @@ test.describe("Insights", () => {
     await expect(empty).toContainText("0%");
   });
 
-  test("a busy month leads with its totals and shows ten lines until asked", async ({ page, request }) => {
+  test("a busy month leads with its totals, lists newest first, and shows ten lines until asked", async ({ page, request }) => {
     const { token } = await createOwner(request, `${RUN_ID}-busy`);
     const auth = { Authorization: `Bearer ${token}` };
     const { bedId } = await createSiteRoomBed(request, token, `${RUN_ID}-busy`);
     const tenant = await createTenantViaApi(request, token, { name: "Busy Tenant", phone: phone() });
+    const last = firstOf(-1);
+    const day = (n: number) => new Date(Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), n));
     const stayRes = await request.post(`${BASE}/api/stays`, {
       headers: auth,
       data: {
         tenant_id: tenant.id, bed_id: bedId, rent_amount: 100000, deposit_amount: 50000,
-        rent_cycle: "monthly", start_date: isoDate(firstOf(0)),
+        rent_cycle: "monthly", start_date: isoDate(last),
       },
     });
     const stay = await stayRes.json();
-    // Twelve ₹1,000 rent payments and one deposit, all on the 1st.
-    for (let i = 0; i < 12; i++) {
+    // Twelve ₹1,000 rent payments on the 1st to the 12th of last month, and a
+    // deposit on the 5th, which belongs in the middle of the list, not on top.
+    for (let d = 1; d <= 12; d++) {
       await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
-        headers: auth, data: { amount: 100000, payment_type: "cash", payment_date: isoDate(firstOf(0)) },
+        headers: auth, data: { amount: 100000, payment_type: "cash", payment_date: isoDate(day(d)) },
       });
     }
     await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
-      headers: auth, data: { amount: 50000, payment_type: "cash", kind: "deposit", payment_date: isoDate(firstOf(0)) },
+      headers: auth, data: { amount: 50000, payment_type: "cash", kind: "deposit", payment_date: isoDate(day(5)) },
     });
 
     await loginAs(page, token);
     await page.goto("/insights");
     await page.getByRole("button", { name: "All money" }).click();
-    await monthRow(page, firstOf(0)).getByRole("button").click();
+    await monthRow(page, last).getByRole("button").click();
 
-    // The deposit leads, ahead of a dozen rent payments.
     const lines = page.getByRole("listitem");
     await expect(lines).toHaveCount(10);
-    await expect(lines.first()).toContainText("Deposit");
     await expect(page.getByText("×12")).toBeVisible();
+    await expect(lines.first()).toContainText("12 ");
 
     await page.getByRole("button", { name: "Show all 13 lines" }).click();
     await expect(lines).toHaveCount(13);
+    const days = (await lines.evaluateAll((items) => items.map((li) => li.firstElementChild?.textContent ?? "")))
+      .map((t) => Number(t.split(" ")[0]));
+    expect(days).toEqual([12, 11, 10, 9, 8, 7, 6, 5, 5, 4, 3, 2, 1]);
 
-    await page.getByRole("button", { name: `Close ${monthName(firstOf(0))}` }).click();
+    await page.getByRole("button", { name: `Close ${monthName(last)}` }).click();
     await expect(lines).toHaveCount(0);
   });
 
@@ -289,8 +299,32 @@ test.describe("Insights", () => {
     await expect(page.getByText(`${monthName(firstOf(0))} to ${monthName(firstOf(0))}`)).toBeVisible();
     await expect(page.getByText("Rent collected").locator("..")).toContainText("₹8,000");
 
+    // Coming back shows 1m's figures, not only a pressed 1m button. It used to
+    // load twelve months first and the remembered one second, and whichever
+    // answer landed last won.
     await page.reload();
     await expect(page.getByRole("button", { name: "1m" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText(`${monthName(firstOf(0))} to ${monthName(firstOf(0))}`)).toBeVisible();
+    await expect(monthRow(page, firstOf(-1))).toHaveCount(0);
+  });
+
+  test("a slow answer for an earlier range never replaces a newer one", async ({ page, request }) => {
+    const { token } = await seedYear(request, `${RUN_ID}-race`);
+    await loginAs(page, token);
+    await page.goto("/insights");
+    await expect(page.getByText(`${monthName(firstOf(-11))} to ${monthName(firstOf(0))}`)).toBeVisible();
+
+    // 6m answers slowly; 1m is tapped while it is still on its way.
+    await page.route("**/api/insights?months=6", async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await page.getByRole("button", { name: "6m" }).click();
+    await page.getByRole("button", { name: "1m" }).click();
+    await page.waitForTimeout(2000);
+
+    await expect(page.getByText(`${monthName(firstOf(0))} to ${monthName(firstOf(0))}`)).toBeVisible();
+    await expect(monthRow(page, firstOf(-1))).toHaveCount(0);
   });
 
   /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import {
@@ -75,6 +75,13 @@ export default function InsightsPage() {
   const [owedNow, setOwedNow] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Nothing loads until the saved range has been read. Loading the default
+  // first and the saved one second raced: whichever answer landed last won,
+  // so "1m" could sit pressed above twelve months of figures.
+  const [prefsRead, setPrefsRead] = useState(false);
+  // Every load takes a number. An answer that comes back after a newer load
+  // started is dropped, which also covers tapping 12m then 1m in quick succession.
+  const latest = useRef(0);
 
   // Read after mount, never during render: the server has no localStorage, and
   // a first render that disagreed with it would not hydrate. A private window
@@ -88,6 +95,7 @@ export default function InsightsPage() {
     } catch {
       /* storage unavailable: the defaults stand */
     }
+    setPrefsRead(true);
   }, []);
 
   const setMonths = (m: number) => {
@@ -111,6 +119,7 @@ export default function InsightsPage() {
   const load = useCallback(
     async (m: number) => {
       if (!token) return;
+      const mine = ++latest.current;
       setLoading(true);
       setError(null);
       try {
@@ -120,22 +129,24 @@ export default function InsightsPage() {
           insightsApi.get(token, m),
           dashboardApi.get(token),
         ]);
+        if (mine !== latest.current) return;
         setData(insights);
         setOwedNow(dashboard.revenue.overdue_amount);
       } catch (e) {
+        if (mine !== latest.current) return;
         // Never swallow it — an insights page that silently renders zeros is
         // worse than one that says it could not load.
         setError(e instanceof Error ? e.message : "Could not load insights");
       } finally {
-        setLoading(false);
+        if (mine === latest.current) setLoading(false);
       }
     },
     [token],
   );
 
   useEffect(() => {
-    load(months);
-  }, [load, months]);
+    if (prefsRead) load(months);
+  }, [load, months, prefsRead]);
 
   // Months before the first tenant ever arrived are dropped: twelve rows with
   // a hostel that opened in August would be nine rows of "—". A quiet month
@@ -469,10 +480,10 @@ function MonthLines({
   const value = (e: MoneyEntry) => (KIND[e.kind].out ? -e.amount_paise : e.amount_paise);
   const total = lines.reduce((s, e) => s + value(e), 0);
 
-  // Deposits and refunds first: a month has dozens of rent payments and a
-  // handful of these, and the handful is what the owner is looking for. The
-  // server's newest-first order holds within each group.
-  const ordered = [...lines.filter((e) => e.kind !== "rent"), ...lines.filter((e) => e.kind === "rent")];
+  // Newest first, whatever the kind: the order a bank statement is read in.
+  // Grouping deposits and refunds ahead of rent was tried and read as out of
+  // order; the totals strip above already says how many of each there are.
+  const ordered = lines;
   const shown = all ? ordered : ordered.slice(0, LINES_SHOWN);
 
   return (
