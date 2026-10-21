@@ -418,6 +418,44 @@ than payments already recorded turns those payments into an "advance" that is
 handed back, which is right only if they really were paid ahead. Say so
 before confirming.
 
+### When is each tenant's rent due? — M, **start here next session**
+The owner wants to see at a glance when rent is due for a tenant. The app
+already bills on each stay's anchor day (move-in day of the month; the 31st
+clamps to a short month's last day, `cycleStart`), but no screen says so. The
+proposal below is waiting on his pick of the first or first-plus-third option:
+
+- **Bed drawer and tenant page:** one line under the balance:
+  - "Next rent ₹6,000 due 31 Oct (every month on the 31st)" when square.
+  - "₹6,000 overdue since 15 Oct" in red when behind: the oldest unpaid
+    cycle's start, from `rentSchedule.paidThrough`, the same rule Collections
+    uses for days overdue.
+  - "Paid until 15 Dec" when ahead.
+- **Grid tiles:** a small "due in 3d" only on tenants due within 7 days. The
+  tiles are too small for a date on every one, and overdue tiles are already
+  red.
+- **Optional: "Due this week" on the dashboard,** next to Vacating Soon, with
+  name, date and amount. It is the across-the-building view, and later the
+  home for a one-tap Record payment (see "Recording a payment is three
+  screens deep").
+
+Backend: the grid and the tenant summary gain `next_due_date` and
+`overdue_since`, computed with `cycleStart` and `paidThrough`, never
+re-derived on the client. Ships with Go tests with exact dates (a 31st
+move-in across a short month, a rent change mid-stay, paid ahead).
+
+### Empty nights in "By room" confuses more than it tells — S
+Insights → By room shows "Empty nights" per room for the range: 168 for a
+9-bed room over a 1m range is accurate (bed-nights not slept in) and means
+nothing at a glance. Options to put to the owner:
+- **Empty now:** "8 of 9 beds empty" today. Concrete, and what he would act on.
+- **Rent missed (estimate):** empty bed-nights × that room's average nightly
+  rent. In money terms, but an estimate, and it must say so.
+- **Average beds empty:** empty nights ÷ days in range, e.g. "5.6 beds".
+  Closest to the current figure, still abstract.
+- Or drop the column: occupancy % already carries it.
+Lean: "Empty now", possibly with occupancy % covering the history. Raised by
+the owner looking at 1m on production (Oct 2026).
+
 ### A tenant who comes back has no obvious way back in — S/M
 A returning tenant can be given a new stay today, but only from Sites → grid →
 a vacant bed → search their name. Their own page, where the owner looks, has no

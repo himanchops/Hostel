@@ -2522,6 +2522,15 @@ dashboard tile, the tenant tile, and the table fitting 375, 768 and 1024px
 without scrolling sideways. Checked by eye on the rehearsal copy at all three
 sizes.
 
+**Production, 21 Oct 2026: live.** PR #41 was merged as `81c8284`. The
+owner checked Insights on his real account and found the remembered-range bug
+and the grouping he did not want. Both were fixed in PR #42 (`580d3c4`), and
+Vercel reported the production deploy successful.
+
+**Next session starts with** the rent due-date design: `docs/BACKLOG.md` →
+"When is each tenant's rent due?". The proposal is written there, and it is
+waiting on the owner's choice of scope.
+
 ---
 
 ## Architecture Notes
