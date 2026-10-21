@@ -2574,6 +2574,14 @@ waits to be designed with quicker payment recording.
   slide-in panels at tablet sizes (known), so the panel was read from the page
   and screenshotted at desktop width.
 
+**Production, 21 Oct 2026: live.** PR #43 was merged as `e438f3d`, and
+Vercel and Render both reported their deploys successful at 13:53 UTC. No
+migration.
+
+**Next:** the owner picks between the move-out flow redesign and "Due this
+week" plus quicker payment recording (designed together, at his request). The
+rest of `docs/BACKLOG.md` → "round two" follows, one at a time.
+
 ---
 
 ## Architecture Notes
