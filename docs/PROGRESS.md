@@ -2314,8 +2314,12 @@ per month; partial-vs-overdue. New frontend unit tests: `rent.test.ts` and
 `delete-tenant.test.ts` (2), and registration (hostel name, a 3024×4032 upload
 arriving as 1200×1600). Plus the full suite.
 
-**Over to the owner:** run migration 011 on Neon **before** merging. The new
-queries read `stay_rent_changes` and would 500 without it.
+**Production, 21 Oct 2026 — done.** The owner ran migration 011 on Neon, and
+PR #39 was merged as `b8a170d`. The new backend was live about 75 seconds
+later. Every screen that reads `stay_rent_changes` (dashboard, Collections,
+grid, Insights, tenant summaries) returned 200, with the same figures as
+before the deploy, and the new tenant-page controls appeared on Vercel.
+**The owner started using the app for real the same day.**
 
 ---
 

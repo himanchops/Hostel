@@ -290,6 +290,25 @@ eras. `/my/page.tsx` was untouched by Phase 16.
   the tenant page, with a confirmation that counts the stays and payments it
   removes.
 
+### Running it daily: keep the backend awake, and back it up — ops, not code
+Found in the live walkthrough on 21 Oct 2026, the day real use began.
+- **Render's free plan sleeps after 15 minutes idle**, so the first request
+  after that takes 20–30 seconds (22s measured). On the iPad, the first open of
+  the day looks broken. The `starter` plan (~$7/month, `render.yaml` → `plan`)
+  keeps it awake. This is the owner's call.
+- **Backups:** the only copy is Neon's own restore history, which on the free
+  plan covers hours, not weeks (check the exact window in the Neon dashboard).
+  Now that the data is real, a scheduled `pg_dump` from the owner's laptop is
+  worth having. The script must not need `NEON_URL` on Claude's side.
+
+### Insights ignores settlements — S
+Insights' "collected of billed" sums rent billed and rent paid, and nothing
+else. A stay settled square, with its shortfall absorbed by an adjustment,
+still reads as unpaid there. On the live account, a one-day test stay made
+"50% collected" read worse than reality. Collections and the tenant summary
+already respect settlements (`settledOwed`). This belongs with the corrections
+and write-offs design, which decides how money that is let go shows up.
+
 ### Deleted tenants leave their files in the bucket — S
 Deleting a tenant removes their rows (ON DELETE CASCADE), but their photo and
 ID scans stay in R2. They are private and nothing references them, so nothing
