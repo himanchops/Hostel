@@ -39,7 +39,7 @@ const KIND: Record<MoneyEntryKind, { label: string; tone: BadgeTone; out: boolea
   deposit: { label: "Deposit", tone: "info", out: false },
   returned: { label: "Returned", tone: "warning", out: true },
   deposit_to_rent: { label: "Paid from deposit", tone: "neutral", out: false },
-  advance_returned: { label: "Advance returned", tone: "warning", out: true },
+  advance_returned: { label: "Rent refunded", tone: "warning", out: true },
 };
 
 // Spelled out rather than left to toLocaleString, whose en-IN short September

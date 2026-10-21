@@ -771,7 +771,7 @@ export default function TenantDetailPage() {
                           {settlement.dues_paise < 0 && (
                             <div className="flex justify-between gap-4">
                               <dt className="text-stone-600">
-                                Advance returned
+                                Rent refunded
                                 {/* What was kept is the decision worth seeing
                                     again months later, so it goes on the record
                                     rather than being inferable from the sum. */}

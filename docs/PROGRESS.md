@@ -2480,6 +2480,10 @@ bug (BACKLOG).
 - **Range** gained 1m ("this month so far", so the tiles answer the
   bank-statement question directly) and is remembered per device like the
   view.
+- **"Advance returned" became "Rent refunded"**, in the Rent view and on the
+  tenant page's settlement card. It is rent paid for time not lived, handed
+  back at move-out. The settlement drawer keeps "paid in advance", where it
+  describes the choice being made.
 
 ### Elsewhere
 
