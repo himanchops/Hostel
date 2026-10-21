@@ -158,6 +158,7 @@ export default function InsightsPage() {
   const totalCollected = sum((r) => r.collected_paise);
   const totalExpected = sum((r) => r.expected_paise);
   const collectionRate = totalExpected > 0 ? (totalCollected / totalExpected) * 100 : 0;
+  const depositsNet = sum((r) => r.deposits_in_paise - r.deposit_returned_paise);
 
   const rooms = [...(data?.rooms ?? [])].sort((a, b) => b.percentage - a.percentage);
   const hasRooms = rooms.length > 0;
@@ -244,10 +245,13 @@ export default function InsightsPage() {
                   value={signed(sum((r) => r.net_in_paise))}
                   note="rent and deposits, cash and online, less refunds"
                 />
+                {/* Net, not "in": a month where people only left would read ₹0
+                    while ₹30,900 of deposits went back out. */}
                 <Tile
-                  label="Deposits in"
-                  value={formatCurrency(sum((r) => r.deposits_in_paise))}
-                  note={`${formatCurrency(sum((r) => r.returned_paise))} handed back at move-out`}
+                  label="Deposits, net"
+                  value={depositsNet > 0 ? `+${formatCurrency(depositsNet)}` : signed(depositsNet)}
+                  valueClassName={depositsNet < 0 ? "text-overdue-700" : undefined}
+                  note={`${formatCurrency(sum((r) => r.deposits_in_paise))} in · ${formatCurrency(sum((r) => r.deposit_returned_paise))} back`}
                 />
                 <Tile
                   label="Deposits you hold"
@@ -315,11 +319,13 @@ export default function InsightsPage() {
   );
 }
 
-function Tile({ label, value, note, href }: { label: string; value: string; note?: string; href?: string }) {
+function Tile({ label, value, note, href, valueClassName }: {
+  label: string; value: string; note?: string; href?: string; valueClassName?: string;
+}) {
   const body = (
     <Card>
       <p className="text-[13px] text-stone-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-stone-900">{value}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums ${valueClassName ?? "text-stone-900"}`}>{value}</p>
       {note && <p className="mt-1 text-xs text-stone-400">{note}</p>}
     </Card>
   );

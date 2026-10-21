@@ -37,6 +37,7 @@ type moneyMonth struct {
 	RentPaid        int64 `json:"rent_paid_paise"`        // approved rent payments
 	DepositsIn      int64 `json:"deposits_in_paise"`      // approved deposit payments
 	Returned        int64 `json:"returned_paise"`         // refunds at settlement
+	DepositReturned int64 `json:"deposit_returned_paise"` // the deposit part of Returned
 	DepositToRent   int64 `json:"deposit_to_rent_paise"`  // rent a deposit covered at settlement
 	AdvanceReturned int64 `json:"advance_returned_paise"` // rent paid ahead, handed back at settlement
 }
@@ -85,6 +86,17 @@ type settlementFlow struct {
 func (f settlementFlow) returned() int64 {
 	if f.RefundPaise > 0 {
 		return f.RefundPaise
+	}
+	return 0
+}
+
+// depositReturned is the part of the refund that was deposit. A refund can
+// include rent paid ahead (advance_returned); that part is rent, and a
+// "deposits, net" figure that counted it would report deposits leaving that
+// never arrived as deposits.
+func (f settlementFlow) depositReturned() int64 {
+	if back := f.returned() - f.AdvanceReturned; back > 0 {
+		return back
 	}
 	return 0
 }
@@ -159,6 +171,7 @@ func addSettlementFlows(out map[string]moneyMonth, flows []settlementFlow) {
 	for _, f := range flows {
 		m := out[f.Month]
 		m.Returned += f.returned()
+		m.DepositReturned += f.depositReturned()
 		m.DepositToRent += settlementRent(f.DepositPaise, f.DuesPaise)
 		m.AdvanceReturned += f.AdvanceReturned
 		out[f.Month] = m

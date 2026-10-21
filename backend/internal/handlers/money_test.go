@@ -50,6 +50,11 @@ func TestMoneyMonth_RentAndMoneyAreDifferentQuestions(t *testing.T) {
 	if oct.Returned != 900000 {
 		t.Errorf("returned = %d, want 900000 (₹1,500 + ₹7,500; the short leaver got nothing)", oct.Returned)
 	}
+	// Of the ₹9,000 handed back, ₹5,500 was the ahead leaver's rent: only
+	// ₹3,500 of it was deposit (₹1,500 + ₹2,000).
+	if oct.DepositReturned != 350000 {
+		t.Errorf("deposit returned = %d, want 350000", oct.DepositReturned)
+	}
 	if oct.DepositToRent != 200000 {
 		t.Errorf("deposit to rent = %d, want 200000 (only the short leaver's deposit went on rent)", oct.DepositToRent)
 	}

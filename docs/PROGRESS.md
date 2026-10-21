@@ -2487,6 +2487,11 @@ bug (BACKLOG).
 - **Range** gained 1m ("this month so far", so the tiles answer the
   bank-statement question directly) and is remembered per device like the
   view.
+- **"Deposits in" became "Deposits, net"** (`net-deposits`). A month where
+  people only left read "₹0" while ₹30,900 of deposits went back. The tile is
+  now deposits in less the *deposit part* of refunds (`deposit_returned_paise`:
+  a refund less any rent paid ahead in it), signed and red when negative, with
+  "₹X in · ₹Y back" under it.
 - **"Advance returned" became "Rent refunded"**, in the Rent view and on the
   tenant page's settlement card. It is rent paid for time not lived, handed
   back at move-out. The settlement drawer keeps "paid in advance", where it
