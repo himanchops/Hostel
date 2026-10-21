@@ -713,6 +713,8 @@ export interface RevenuePoint {
   rent_paid_paise: number;
   deposits_in_paise: number;
   returned_paise: number;
+  /** The deposit part of returned_paise; the rest was rent paid ahead. */
+  deposit_returned_paise: number;
   deposit_to_rent_paise: number;
   advance_returned_paise: number;
 }

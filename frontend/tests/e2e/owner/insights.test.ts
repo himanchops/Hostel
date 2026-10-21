@@ -154,6 +154,16 @@ test.describe("Insights", () => {
     await expect(row).toContainText("₹17,000");
 
     await expect(page.getByText("Deposits you hold").locator("..")).toContainText("₹3,500");
+    // Net, not "in". Over the default 12 months: ₹9,000 of deposits came in
+    // (A, B, C, D) and C's ₹2,500 went back.
+    const net = page.getByText("Deposits, net").locator("..");
+    await expect(net).toContainText("+₹6,500");
+    await expect(net).toContainText("₹9,000 in · ₹2,500 back");
+    // This month alone, more went back than came in, and it says so.
+    await page.getByRole("button", { name: "1m" }).click();
+    await expect(net).toContainText("−₹1,000");
+    await expect(net).toContainText("₹1,500 in · ₹2,500 back");
+    await page.getByRole("button", { name: "12m" }).click();
 
     await row.getByRole("button").click();
     await expect(page.getByRole("listitem").filter({ hasText: "Returned" })).toContainText("−₹2,500");
