@@ -221,6 +221,8 @@ export interface Tenant {
   aadhaar_number?: string;
   id_proof_front_url?: string;
   id_proof_back_url?: string;
+  /** The owner's own notes. Never sent to the tenant portal (migration 012). */
+  notes?: string;
   /**
    * Whether this person can sign in at /my at all. Computed server-side from
    * the password hash, which never leaves the backend. False for every tenant
@@ -241,6 +243,7 @@ export interface TenantUpdateData {
   emergency_contact_phone?: string;
   workplace?: string;
   aadhaar_number?: string;
+  notes?: string;
   id_proof_url?: string;
   id_proof_front_url?: string;
   id_proof_back_url?: string;

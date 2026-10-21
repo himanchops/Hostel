@@ -85,6 +85,7 @@ type Tenant struct {
 	AadhaarNumber         *string `db:"aadhaar_number" json:"aadhaar_number,omitempty"`
 	IDProofFrontURL       *string `db:"id_proof_front_url" json:"id_proof_front_url,omitempty"`
 	IDProofBackURL        *string `db:"id_proof_back_url" json:"id_proof_back_url,omitempty"`
+	Notes                 *string `db:"notes" json:"notes,omitempty"` // owner-only: portal queries leave it out (migration 012)
 	PasswordHash          string  `db:"password_hash" json:"-"`
 	// HasPortalLogin is computed, never stored: whether this tenant can sign
 	// in at /my at all. The hash itself must never leave the process, but

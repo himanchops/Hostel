@@ -1,0 +1,13 @@
+-- Free-text notes about a tenant, for the owner only.
+--
+-- The paper notebook records things no field holds: who referred them, "a
+-- two-month course", "entered on the 13th, rent from the 20th", "deposit still
+-- to come". workplace stays as the one-line answer to "where do they work or
+-- study" — it is what the public registration form asks a stranger, and what
+-- the pending queue shows — and this holds everything else.
+--
+-- Owner-only. The tenant portal's queries name their columns and leave this
+-- one out, and the public registration request has no field for it, so a
+-- tenant can neither read nor write their own notes. An owner can write here
+-- what they would not say to the tenant.
+ALTER TABLE tenants ADD COLUMN notes TEXT;

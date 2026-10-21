@@ -2323,6 +2323,89 @@ before the deploy, and the new tenant-page controls appeared on Vercel.
 
 ---
 
+## Tenant notes, and importing the notebook (Oct 2026)
+
+The owner began backfilling production from the paper notebook: 16 people
+across 15 entries, each with a move-in date, a room, a rent, a deposit, one or
+two phone numbers, usually an Aadhaar, and a line about where they work or
+study. Almost everything had a field already. The import needed one small
+feature and one fix, and the old importer was broken.
+
+### Notes (migration 012)
+
+`tenants.notes`, free text, owner-only. The notebook holds things no field
+does: "2-month course", "so-and-so is the reference contact", "entered 13
+Oct, rent from 20 Oct". The owner wanted general notes rather than a
+college-or-office field, and chose to **keep Workplace / College as its own
+one-liner** next to a new Notes box. The one-liner is what the public
+registration form asks a stranger and what the pending queue shows, so folding
+it into the notes would have mixed a tenant's own answer into the owner's
+private text.
+
+Owner-only by construction. The portal's tenant queries (`tenant_auth.go`)
+name their columns and leave `notes` out, and `publicRegisterRequest` has no
+field for it. Both are pinned by tests. The form says so under the box: "Only
+you see this. Tenants never do."
+
+**Fixed on the way:** the profile showed an emergency contact only when it had
+a *name*. Eight of these tenants have only a second number, so it would never
+have appeared. It now shows whichever parts exist.
+
+### The import script
+
+`scripts/import-notebook.py` (`make import-notebook[-dry] FILE=…`). It goes
+through the API as the owner, so it can only enter what the forms could. The
+data lives under `.hostel-import/`, which git ignores: real names, phones and
+Aadhaar numbers, in a public repo. **This log, the tests and commit messages
+name no real tenant either.** Describe them by situation, never by name or
+number.
+
+- **Payments are derived, not listed.** The owner's instruction was "assume
+  paid as of today". So each rent cycle that began on or before `as_of` gets
+  one cash payment, dated the day it fell due, and each deposit gets one dated
+  the move-in day unless the entry says `"deposit_paid": false`. The dates
+  mirror `cycleStart` and `rentSchedule`, so a month-end move-in clamps, and a
+  rent change (one tenant paid a lower first month, then more from the second) goes through
+  `POST /stays/:id/rent-changes`. It never writes one stay at the later rent.
+- **Every check runs before the first write:** phone and Aadhaar shape,
+  duplicate phones or beds, each room and bed exists and is empty, and no phone
+  is already on the account. It asks `yes` before writing.
+- **It reads everything back.** A field the server dropped stops the run.
+  That check caught exactly that in rehearsal, before migration 012 existed.
+  Rent paid, balance and deposit held must match the plan.
+- **Re-running skips phones already on the account**, so a fixed file adds
+  only what is missing.
+
+Entry date ≠ billing date came up for one tenant (entered 13 Oct, rent from
+20 Oct). A stay has one date, and it drives both. It is set to the billing date
+and the entry date is kept in the notes. Worth a field only if early arrivals
+become common.
+
+### The old importer is gone
+
+`backend/cmd/import` (with `docs/import-prompt.md` and `make import-data`)
+wrote straight to the database, which would need `NEON_URL` on this machine.
+Its stay insert had also been broken since migration 004: it named 8 columns
+and supplied 7 values, left over from `rent_due_day`. It also knew nothing of
+deposits as their own payment kind, of rent changes or of expected end dates.
+Deleted rather than fixed: two importers would drift, and the API path
+inherits every rule the handlers already enforce.
+
+### Verification
+
+New e2e test `owner/tenant-notes.test.ts` (4 tests): write, show, edit and
+clear on the forms; never returned at tenant login or `/tenant/me`; not
+writable through public registration; an unnamed emergency number shows on
+the profile. Plus the full suite.
+
+**Full rehearsal on a local copy** (`seed-chopra.py` into a local owner, then
+the import): 16 created, 16 read back as planned. The grid showed 15 paid and
+one bed orange (leaving 1 Nov), with 16 of 45 beds occupied. Collections was
+empty and overdue was ₹0. October's expected rent was ₹75,000, which matches a
+hand sum. A second run created nothing.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

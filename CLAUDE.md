@@ -80,7 +80,11 @@ verified in production 23 Sep 2026), required the front of
 an ID on public registration, and rate-limited logins and registration. The
 Aadhaar number stays as typed (decision reversed 23 Sep 2026). **Rent from a date** (migration 011, Oct 2026) made rent changes apply only
 from a date onward, added "Delete tenant", shrank photos before upload, and
-named the hostel on its registration page. Corrections and write-offs still
+named the hostel on its registration page. **Tenant notes** (migration 012)
+added owner-only free text beside Workplace / College, and
+`scripts/import-notebook.py` backfills the paper notebook through the API.
+Its data lives in gitignored `.hostel-import/`, and it replaces the old
+`cmd/import`, which was broken and wrote to the database directly. Corrections and write-offs still
 wait for a dedicated design session (`docs/BACKLOG.md` → "Nothing can be
 corrected, anywhere").
 
@@ -184,6 +188,13 @@ Key conventions to carry forward:
   appended ten fake tenants to a live owner's data. Credentials live in
   `.hostel-credentials.env`, gitignored, because **this repo is public**.
   Details: `docs/DEPLOYMENT.md` → "The live owner account".
+  A third script, `scripts/import-notebook.py`, *does* write tenants, stays
+  and payments to the real account. It only creates, checks everything before
+  its first write, and reads every tenant back. Its data never enters git.
+- **Tenant notes are owner-only.** The portal's tenant queries name their
+  columns and leave `notes` out. Never switch them to `tenantCols`, which
+  includes it. `tests/e2e/owner/tenant-notes.test.ts` fails if a note reaches
+  `/tenant/me` or tenant login.
 - Every new feature ships with a Playwright e2e test in `frontend/tests/e2e/`
 - Money math ships with a unit test too — `backend/internal/handlers/*_test.go` or `frontend/tests/unit/`. Exact values, non-degenerate fixtures (see Phase 12a in `docs/PROGRESS.md`)
 - Amounts stored in **paise** (₹1 = 100 paise), displayed via `formatCurrency()`

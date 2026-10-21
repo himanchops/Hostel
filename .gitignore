@@ -44,3 +44,7 @@ backend/uploads/
 
 # Real-account credentials for scripts/seed-chopra.py (never commit)
 .hostel-credentials.env
+
+# Real tenant data for scripts/import-notebook.py — names, phones, Aadhaar
+# numbers. This repo is public; the data never enters git.
+.hostel-import/
