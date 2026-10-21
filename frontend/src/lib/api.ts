@@ -1,3 +1,5 @@
+import { shrinkImage } from "@/lib/shrinkImage";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export class ApiError extends Error {
@@ -269,6 +271,9 @@ export const tenantsApi = {
   }) => request<Tenant>(`/api/tenants/${id}/approve`, { method: "POST", body: JSON.stringify(data) }, token),
   reject: (token: string, id: number) =>
     request<void>(`/api/tenants/${id}/reject`, { method: "DELETE" }, token),
+  /** Permanently deletes the tenant with every stay, payment and settlement. */
+  delete: (token: string, id: number) =>
+    request<{ message: string }>(`/api/tenants/${id}`, { method: "DELETE" }, token),
   stays: (token: string, id: number) =>
     request<Stay[]>(`/api/tenants/${id}/stays`, {}, token),
   summary: (token: string, id: number) =>
@@ -294,7 +299,9 @@ export const tenantsApi = {
 
 async function uploadFile(endpoint: string, file: File, token?: string): Promise<string> {
   const form = new FormData();
-  form.append("file", file);
+  // Every upload passes through here, so this one line covers registration,
+  // the owner's forms and payment proofs alike. See shrinkImage.ts.
+  form.append("file", await shrinkImage(file));
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", headers, body: form });
@@ -434,6 +441,17 @@ export interface Stay {
   site_name?: string | null;
   room_name?: string | null;
   bed_name?: string | null;
+  /**
+   * The rent over time, oldest first, when it has ever changed from a date
+   * (migration 011). The first entry is the original rent from move-in.
+   * Absent when the rent never changed — rent_amount is then the whole story.
+   */
+  rent_changes?: RentChange[];
+}
+
+export interface RentChange {
+  effective_date: string;
+  rent_amount: number; // paise
 }
 
 /**
@@ -474,6 +492,20 @@ export const staysApi = {
     },
   ) =>
     request<Stay>(`/api/stays/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),
+
+  /**
+   * New rent from a date. Cycles that began before it keep the rent they were
+   * billed at. This is the everyday way to change rent.
+   */
+  changeRent: (token: string, id: number, data: { rent_amount: number; effective_date: string }) =>
+    request<Stay>(`/api/stays/${id}/rent-changes`, { method: "POST", body: JSON.stringify(data) }, token),
+
+  /**
+   * The rent was entered wrong: bill the whole stay, from move-in, at this
+   * figure, discarding any changes from a date. Not for a rent rise.
+   */
+  correctRent: (token: string, id: number, rentAmount: number) =>
+    request<Stay>(`/api/stays/${id}`, { method: "PUT", body: JSON.stringify({ rent_amount: rentAmount }) }, token),
 
   assignBed: (token: string, stayId: number, data: { bed_id: number }) =>
     request<Stay>(`/api/stays/${stayId}/assign-bed`, { method: "PUT", body: JSON.stringify(data) }, token),

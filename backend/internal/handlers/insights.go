@@ -58,11 +58,15 @@ type RoomInsight struct {
 // bed-less stay: it still bills rent, so it counts toward revenue, but it
 // occupies no bed and so contributes nothing to occupancy.
 type insightStay struct {
+	StayID     int64      `db:"stay_id"`
 	RoomID     int64      `db:"room_id"`
 	RentAmount int64      `db:"rent_amount"`
 	RentCycle  string     `db:"rent_cycle"`
 	StartDate  time.Time  `db:"start_date"`
 	EndDate    *time.Time `db:"end_date"`
+	// Schedule is the rent over time when it has ever changed (migration
+	// 011). Nil means flat at RentAmount.
+	Schedule rentSchedule `db:"-"`
 }
 
 type monthlyPaid struct {
@@ -187,9 +191,13 @@ func computeRevenueSeries(stays []insightStay, collected map[string]int64, today
 
 		var expected int64
 		for _, s := range stays {
-			added := billedCycles(s, asOf) - billedCycles(s, before)
-			if added > 0 {
-				expected += s.RentAmount * int64(added)
+			upTo, from := billedCycles(s, asOf), billedCycles(s, before)
+			if upTo > from {
+				sched := s.Schedule
+				if len(sched) == 0 {
+					sched = flatSchedule(s.StartDate, s.RentAmount)
+				}
+				expected += sched.billed(s.StartDate, s.RentCycle, from, upTo)
 			}
 		}
 
@@ -346,7 +354,7 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	// not a current-state view. LEFT JOIN because a bed-less stay still bills.
 	var stays []insightStay
 	err := h.db.Select(&stays, `
-		SELECT COALESCE(r.id, 0) AS room_id,
+		SELECT s.id AS stay_id, COALESCE(r.id, 0) AS room_id,
 		       s.rent_amount, s.rent_cycle, s.start_date, s.end_date
 		FROM stays s
 		JOIN tenants t   ON t.id = s.tenant_id
@@ -356,6 +364,17 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	`, ownerID)
 	if err != nil {
 		return serverError(c, err, "failed to load stays for insights")
+	}
+	stayIDs := make([]int64, len(stays))
+	for i := range stays {
+		stayIDs[i] = stays[i].StayID
+	}
+	schedules, err := rentSchedules(h.db, stayIDs)
+	if err != nil {
+		return serverError(c, err, "failed to load rent schedules for insights")
+	}
+	for i := range stays {
+		stays[i].Schedule = schedules[stays[i].StayID]
 	}
 
 	var monthly []monthlyPaid

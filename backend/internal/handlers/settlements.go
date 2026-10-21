@@ -47,6 +47,17 @@ type settlementStayRow struct {
 	StartDate     time.Time  `db:"start_date"`
 	EndDate       *time.Time `db:"end_date"`
 	TotalPaid     int64      `db:"total_paid"` // rent payments only
+	// Schedule is the stay's rent over time (migration 011); flat unless the
+	// rent was ever changed from a date.
+	Schedule rentSchedule `db:"-"`
+}
+
+// schedule returns the stay's rent schedule, flat when none was loaded.
+func (s settlementStayRow) schedule() rentSchedule {
+	if len(s.Schedule) > 0 {
+		return s.Schedule
+	}
+	return flatSchedule(s.StartDate, s.RentAmount)
 }
 
 // SettlementPreview is the calculator's opening position: what the owner owes
@@ -96,8 +107,14 @@ type createSettlementRequest struct {
 // two is owed that month back, and clamping the number at zero would quietly
 // pocket it. The refund line adds it back.
 func duesFor(rent int64, cycle string, start, until time.Time, totalPaid int64) (dues int64, cycles int) {
+	return duesForSchedule(flatSchedule(start, rent), cycle, start, until, totalPaid)
+}
+
+// duesForSchedule is duesFor for a rent that may have changed partway: each
+// cycle is billed at the rent in effect when it began.
+func duesForSchedule(sched rentSchedule, cycle string, start, until time.Time, totalPaid int64) (dues int64, cycles int) {
 	cycles = cyclesElapsed(dateOnly(start), dateOnly(until), cycle)
-	return rent*int64(cycles) - totalPaid, cycles
+	return sched.billed(start, cycle, 0, cycles) - totalPaid, cycles
 }
 
 // advanceHeld is how much rent the tenant has paid beyond what was billed.
@@ -200,7 +217,15 @@ func (h *SettlementHandler) loadSettlementStay(stayID, ownerID int64) (settlemen
 		WHERE s.id = $1 AND t.owner_id = $2`,
 		stayID, ownerID,
 	)
-	return row, err
+	if err != nil {
+		return row, err
+	}
+	schedules, err := rentSchedules(h.db, []int64{row.StayID})
+	if err != nil {
+		return row, err
+	}
+	row.Schedule = scheduleFor(schedules, row.StayID, row.StartDate, row.RentAmount)
+	return row, nil
 }
 
 // settlementDate decides which date rent is billed up to.
@@ -241,7 +266,7 @@ func settlementDate(stay settlementStayRow, requested string, today time.Time) (
 }
 
 func (h *SettlementHandler) previewFor(stay settlementStayRow, endDate time.Time) SettlementPreview {
-	dues, cycles := duesFor(stay.RentAmount, stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
+	dues, cycles := duesForSchedule(stay.schedule(), stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
 	advance := advanceHeld(dues)
 	return SettlementPreview{
 		StayID:             stay.StayID,
@@ -260,7 +285,7 @@ func (h *SettlementHandler) previewFor(stay settlementStayRow, endDate time.Time
 		RentCycle:     stay.RentCycle,
 		StartDate:     dateOnly(stay.StartDate).Format("2006-01-02"),
 		CyclesBilled:  cycles,
-		TotalExpected: stay.RentAmount * int64(cycles),
+		TotalExpected: stay.schedule().billed(stay.StartDate, stay.RentCycle, 0, cycles),
 		TotalPaid:     stay.TotalPaid,
 	}
 }
@@ -322,7 +347,7 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 	}
 
-	dues, _ := duesFor(stay.RentAmount, stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
+	dues, _ := duesForSchedule(stay.schedule(), stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
 
 	// Omitting the field returns the whole advance, so a client written before
 	// the choice existed keeps behaving the way it always did.

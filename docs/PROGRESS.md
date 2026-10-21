@@ -2234,6 +2234,91 @@ fields empty hide whatever renders only when those fields are filled.
 
 ---
 
+## Rent from a date, delete tenant, smaller photos ✅ (Oct 2026)
+
+Branch `rent-from-a-date`, **migration 011**. Prompted by a live walkthrough of
+the production account on 21 Oct 2026, a month after pre-import hardening. That
+walkthrough was read-only, and found the app working with no blocker. The
+account still held September's two test tenants, and the real import had not
+started. The owner asked for four things.
+
+### Rent from a date (migration 011)
+
+The owner: a long stay's rent "may eventually get bumped, it shouldn't affect
+earlier [months]... The default behaviour should always be just to change the
+price [from then on]", with whole-stay correction still available "although not
+at the cost of poor UX".
+
+- **`stay_rent_changes`** holds `(stay_id, effective_date, rent_amount)`. Rows
+  exist only once a stay's rent has changed, and the first change writes two:
+  the original rent from the start date, then the new one. A stay with no rows
+  bills flat at `stays.rent_amount`, exactly as before. `stays.rent_amount`
+  tracks the latest scheduled rent, so screens that only *show* the rent needed
+  no change.
+- **A step applies to every cycle that begins on or after its date.** A
+  mid-cycle date never splits a cycle; it starts with the next due date.
+- **`rentSchedule`** (`handlers/rent.go`) replaced `rent × cycles` at all six
+  sites: dashboard, grid, Collections, Insights, tenant summary and
+  settlements. Its single-step path *is* the old multiplication, so no existing
+  test needed a new expected value. The grid's partial-vs-overdue threshold
+  uses the rent of the cycle being billed now, not the move-in rent.
+- **Two endpoints, two meanings.** `POST /api/stays/:id/rent-changes` sets a
+  rent from a date; it refuses a date on or before move-in, and refuses a
+  settled stay (409). `PUT /api/stays/:id` with a *different* `rent_amount` is
+  the typo fix: it discards the schedule and bills the whole stay at the new
+  figure. An unchanged `rent_amount` sent alongside other fields leaves the
+  schedule alone, so a form that re-sends everything cannot wipe it by accident.
+- **UI:** "Change rent" on each active stay opens `ChangeRentDialog`. The date is
+  pre-filled with the next due date (`lib/rent.ts`, which mirrors the backend's
+  `cycleStart`), and the dialog says which payment the new rent starts with.
+  "Correct the whole stay instead" is a link under the form, not a second
+  button. The stay card shows the history: "₹5,000/monthly → ₹5,500 from 6 Nov
+  2026".
+
+**Found while building it:** no screen could edit rent at all. Only the API
+could, so the earlier "never edit the rent on a stay with payments" warning
+covered nothing the owner could tap. The real gap was the missing capability.
+
+### Delete tenant
+
+`DELETE /api/tenants/:id`, owner-scoped. Stays, payments and settlements go
+with the tenant by cascade, and the bed becomes vacant. The button is at the
+foot of the tenant page with a short explanation. The confirmation counts what
+goes ("1 stay, 1 payment (₹2,500 received)") before offering the button, and
+says to end the stay instead for someone who simply left. Uploaded files stay
+in R2 (BACKLOG).
+
+### Photos shrink before upload
+
+`lib/shrinkImage.ts`, called once in `uploadFile`, re-encodes JPEG, PNG and
+WebP to JPEG at 1600px on the long edge, with EXIF rotation applied. It skips
+anything already small, and falls back to the original (and reports why) if
+decoding fails. Built on the browser's canvas, so no new dependency. The
+original 3024×4032 photo on production was about 3 MB; a 1600px JPEG is a few
+hundred KB.
+
+### Registration names the hostel
+
+`GET /public/owners/:id` returns the site's name when the owner has exactly
+one site ("Register with Chopra Boys Hostel"), and the owner's name otherwise.
+The response is still `{name}` and nothing else.
+
+### Verification
+
+New Go tests in `rent_test.go`, with exact values on one fixture (₹5,000 from
+6 Jun, ₹5,500 from 6 Sep, seen on 21 Oct): billed ₹26,000, not ₹27,500;
+mid-cycle dates; two changes; `paidThrough`; settlement dues; Collections'
+days overdue; the dashboard's expected-this-month; tenant summary; Insights
+per month; partial-vs-overdue. New frontend unit tests: `rent.test.ts` and
+`image-size.test.ts`. New e2e tests: `change-rent.test.ts` (4),
+`delete-tenant.test.ts` (2), and registration (hostel name, a 3024×4032 upload
+arriving as 1200×1600). Plus the full suite.
+
+**Over to the owner:** run migration 011 on Neon **before** merging. The new
+queries read `stay_rent_changes` and would 500 without it.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

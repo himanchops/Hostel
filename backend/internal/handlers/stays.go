@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
 	"github.com/winnow/hostel/internal/models"
 )
@@ -303,8 +305,52 @@ func (h *StayHandler) Update(c echo.Context) error {
 		}
 	}
 
+	// A stay with a rent schedule (migration 011) needs the schedule kept
+	// consistent with whatever this update changes.
+	var schedule []models.RentChange
+	if err := h.db.Select(&schedule,
+		`SELECT effective_date, rent_amount FROM stay_rent_changes WHERE stay_id = $1 ORDER BY effective_date`,
+		stayID,
+	); err != nil {
+		return serverError(c, err, "failed to update stay")
+	}
+	// Only a rent that actually differs is a correction. An edit form that
+	// re-sends the current rent alongside a new deposit must not quietly
+	// discard the schedule.
+	rentCorrected := patch.has("rent_amount") && next.RentAmount != current.RentAmount
+
+	// Moving the start date moves the schedule's opening step with it — but
+	// not past a later change, which would leave a cycle with no rent.
+	if !rentCorrected && len(schedule) > 1 && patch.has("start_date") && !next.StartDate.Before(schedule[1].EffectiveDate) {
+		return c.JSON(http.StatusBadRequest, errorResponse("The rent changes on a date before that. Correct the whole stay's rent first, or pick an earlier move-in date."))
+	}
+
+	tx, err := h.db.Beginx()
+	if err != nil {
+		return serverError(c, err, "failed to update stay")
+	}
+	defer tx.Rollback()
+
+	// rent_amount sent here is the "correct the whole stay" path: one rent from
+	// move-in to now, as if it had been typed right the first time. So it
+	// discards the schedule. Changing rent from a date is ChangeRent.
+	if rentCorrected && len(schedule) > 0 {
+		if _, err := tx.Exec(`DELETE FROM stay_rent_changes WHERE stay_id = $1`, stayID); err != nil {
+			return serverError(c, err, "failed to update stay")
+		}
+		schedule = nil
+	}
+	if len(schedule) > 0 && patch.has("start_date") {
+		if _, err := tx.Exec(
+			`UPDATE stay_rent_changes SET effective_date = $1 WHERE stay_id = $2 AND effective_date = $3`,
+			next.StartDate, stayID, schedule[0].EffectiveDate,
+		); err != nil {
+			return serverError(c, err, "failed to update stay")
+		}
+	}
+
 	var stay models.Stay
-	err = h.db.QueryRowx(
+	err = tx.QueryRowx(
 		`UPDATE stays
 		 SET start_date = $1, end_date = $2, notice_date = $3, expected_end_date = $4,
 		     rent_amount = $5, deposit_amount = $6, rent_cycle = $7, updated_at = $8
@@ -316,6 +362,14 @@ func (h *StayHandler) Update(c echo.Context) error {
 	if err != nil {
 		return serverError(c, err, "failed to update stay")
 	}
+	changes, err := loadRentChanges(tx, []int64{stayID})
+	if err != nil {
+		return serverError(c, err, "failed to update stay")
+	}
+	if err := tx.Commit(); err != nil {
+		return serverError(c, err, "failed to update stay")
+	}
+	stay.RentChanges = changes[stayID]
 	return c.JSON(http.StatusOK, stay)
 }
 
@@ -446,5 +500,151 @@ func (h *StayHandler) ListByTenant(c echo.Context) error {
 	if stays == nil {
 		stays = []tenantStayRow{}
 	}
+	ids := make([]int64, len(stays))
+	for i := range stays {
+		ids[i] = stays[i].ID
+	}
+	changes, err := loadRentChanges(h.db, ids)
+	if err != nil {
+		return serverError(c, err, "failed to fetch rent changes")
+	}
+	for i := range stays {
+		stays[i].RentChanges = changes[stays[i].ID]
+	}
 	return c.JSON(http.StatusOK, stays)
+}
+
+// loadRentChanges returns the recorded schedule of each stay in ids, for
+// display. Stays whose rent never changed are absent.
+func loadRentChanges(db sqlx.Queryer, ids []int64) (map[int64][]models.RentChange, error) {
+	out := map[int64][]models.RentChange{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var rows []struct {
+		StayID int64 `db:"stay_id"`
+		models.RentChange
+	}
+	if err := sqlx.Select(db, &rows,
+		`SELECT stay_id, effective_date, rent_amount FROM stay_rent_changes
+		 WHERE stay_id = ANY($1) ORDER BY stay_id, effective_date`, pq.Array(ids)); err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.StayID] = append(out[r.StayID], r.RentChange)
+	}
+	return out, nil
+}
+
+type rentChangeRequest struct {
+	RentAmount    int64  `json:"rent_amount"`    // paise
+	EffectiveDate string `json:"effective_date"` // YYYY-MM-DD
+}
+
+// ChangeRent sets a new rent from a date, leaving every cycle that began
+// before it at the rent it was billed at.
+//
+// This is the default way to change rent. The other way — PUT /stays/:id with
+// rent_amount — corrects the rent for the whole stay, for a figure typed wrong
+// at move-in, and wipes any schedule. The owner asked for exactly this split:
+// a rent bump on a long stay must not touch the months already lived, with a
+// whole-stay correction still available but not in the way.
+//
+// The change applies from the first cycle that begins on or after the date, so
+// a mid-cycle date never splits a cycle. A settled stay is closed: changing its
+// rent would change a figure someone has already been paid or charged.
+//
+// POST /api/stays/:id/rent-changes
+func (h *StayHandler) ChangeRent(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	stayID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid stay id"))
+	}
+	var req rentChangeRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid request body"))
+	}
+	if req.RentAmount <= 0 {
+		return c.JSON(http.StatusBadRequest, errorResponse("Enter the new rent."))
+	}
+	from, err := time.Parse("2006-01-02", req.EffectiveDate)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("Pick the date the new rent starts from."))
+	}
+
+	tx, err := h.db.Beginx()
+	if err != nil {
+		return serverError(c, err, "failed to change rent")
+	}
+	defer tx.Rollback()
+
+	var stay struct {
+		models.Stay
+		Settled bool `db:"settled"`
+	}
+	err = tx.QueryRowx(
+		`SELECT `+stayColsQualified+`, EXISTS(SELECT 1 FROM settlements st WHERE st.stay_id = s.id) AS settled
+		 FROM stays s JOIN tenants t ON t.id = s.tenant_id
+		 WHERE s.id = $1 AND t.owner_id = $2
+		 FOR UPDATE OF s`,
+		stayID, ownerID,
+	).StructScan(&stay)
+	if errors.Is(err, sql.ErrNoRows) {
+		return c.JSON(http.StatusNotFound, errorResponse("stay not found"))
+	}
+	if err != nil {
+		return serverError(c, err, "failed to change rent")
+	}
+	if stay.Settled {
+		return c.JSON(http.StatusConflict, errorResponse("This stay is settled, so its rent can no longer change."))
+	}
+	start := dateOnly(stay.StartDate)
+	if !dateOnly(from).After(start) {
+		return c.JSON(http.StatusBadRequest, errorResponse("Pick a date after move-in. To fix the rent from the very start, correct the whole stay instead."))
+	}
+	if stay.EndDate != nil && dateOnly(from).After(dateOnly(*stay.EndDate)) {
+		return c.JSON(http.StatusBadRequest, errorResponse("That date is after the stay ended."))
+	}
+
+	// The first change writes the original rent as the schedule's opening
+	// step, so the months before the change keep it.
+	if _, err := tx.Exec(
+		`INSERT INTO stay_rent_changes (stay_id, effective_date, rent_amount)
+		 SELECT $1, $2, $3
+		 WHERE NOT EXISTS (SELECT 1 FROM stay_rent_changes WHERE stay_id = $1)`,
+		stayID, start, stay.RentAmount,
+	); err != nil {
+		return serverError(c, err, "failed to change rent")
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO stay_rent_changes (stay_id, effective_date, rent_amount)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (stay_id, effective_date) DO UPDATE SET rent_amount = EXCLUDED.rent_amount`,
+		stayID, from, req.RentAmount,
+	); err != nil {
+		return serverError(c, err, "failed to change rent")
+	}
+	// stays.rent_amount follows the latest scheduled rent, so every screen
+	// that only shows "the rent" shows the new one.
+	var updated models.Stay
+	if err := tx.QueryRowx(
+		`UPDATE stays SET rent_amount = (
+		     SELECT rent_amount FROM stay_rent_changes WHERE stay_id = $1
+		     ORDER BY effective_date DESC LIMIT 1),
+		   updated_at = NOW()
+		 WHERE id = $1 RETURNING `+stayCols,
+		stayID,
+	).StructScan(&updated); err != nil {
+		return serverError(c, err, "failed to change rent")
+	}
+	changes, err := loadRentChanges(tx, []int64{stayID})
+	if err != nil {
+		return serverError(c, err, "failed to change rent")
+	}
+	if err := tx.Commit(); err != nil {
+		return serverError(c, err, "failed to change rent")
+	}
+	updated.RentChanges = changes[stayID]
+	return c.JSON(http.StatusOK, updated)
 }

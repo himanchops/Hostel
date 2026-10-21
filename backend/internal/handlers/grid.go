@@ -84,6 +84,9 @@ type gridRow struct {
 	TenantName      sql.NullString `db:"tenant_name"`
 	TenantPhone     sql.NullString `db:"tenant_phone"`
 	TotalPaid       int64          `db:"total_paid"`
+	// Schedule is the rent over time when it has ever changed (migration
+	// 011). Nil means flat at RentAmount.
+	Schedule rentSchedule `db:"-"`
 }
 
 func (h *GridHandler) GetGrid(c echo.Context) error {
@@ -136,6 +139,22 @@ func (h *GridHandler) GetGrid(c echo.Context) error {
 	`, siteID)
 	if err != nil {
 		return serverError(c, err, "failed to fetch grid")
+	}
+
+	var ids []int64
+	for _, r := range rows {
+		if r.StayID.Valid {
+			ids = append(ids, r.StayID.Int64)
+		}
+	}
+	schedules, err := rentSchedules(h.db, ids)
+	if err != nil {
+		return serverError(c, err, "failed to fetch rent schedules")
+	}
+	for i := range rows {
+		if rows[i].StayID.Valid {
+			rows[i].Schedule = schedules[rows[i].StayID.Int64]
+		}
 	}
 
 	grid := buildGrid(rows)
@@ -205,8 +224,15 @@ func buildBed(row gridRow, today time.Time) GridBed {
 		expectedEnd = &t
 	}
 
+	sched := row.Schedule
+	if len(sched) == 0 {
+		sched = flatSchedule(startDate, rentAmount)
+	}
 	cycles := cyclesElapsed(startDate, today, row.RentCycle.String)
-	totalExpected := rentAmount * int64(cycles)
+	totalExpected := sched.billed(startDate, row.RentCycle.String, 0, cycles)
+	// "Partial" means less than one cycle behind, measured against the cycle
+	// being billed now, not against whatever the rent was at move-in.
+	currentRent := sched.at(cycleStart(startDate, cycles, row.RentCycle.String))
 	balance := row.TotalPaid - totalExpected
 
 	bed.StayID = &stayID
@@ -228,7 +254,7 @@ func buildBed(row gridRow, today time.Time) GridBed {
 		}
 	}
 
-	bed.Status = computeBedStatus(balance, rentAmount, noticeDate, expectedEnd, today)
+	bed.Status = computeBedStatus(balance, currentRent, noticeDate, expectedEnd, today)
 	return bed
 }
 

@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth";
 import {
   tenantsApi, staysApi, paymentsApi, settlementsApi,
   Tenant, Stay, Payment, PaymentKind, TenantSummary, TenantUpdateData, Settlement,
-  formatCurrency, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi, withPlace,
+  formatCurrency, formatDay, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi, withPlace,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
 import {
@@ -34,6 +34,7 @@ import { BedPicker, VacantBed } from "@/components/StayForm";
 import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
 import { EndStayDialog } from "@/components/EndStayDialog";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
+import { ChangeRentDialog } from "@/components/ChangeRentDialog";
 import { SettleStayDrawer } from "@/components/SettleStayDrawer";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -271,6 +272,7 @@ export default function TenantDetailPage() {
   const [settlingStay, setSettlingStay] = useState<number | null>(null);
   // Recording (or amending) a notice — the plan to leave, not the leaving.
   const [noticeStay, setNoticeStay] = useState<Stay | null>(null);
+  const [rentStay, setRentStay] = useState<Stay | null>(null);
 
   // Assign bed modal
   const [assigningStay, setAssigningStay] = useState<number | null>(null);
@@ -366,6 +368,45 @@ export default function TenantDetailPage() {
       toast.success("Payment deleted");
     } catch {
       toast.error("Failed to delete the payment");
+    }
+  }
+
+  const settlementsCount = Object.keys(settlements).length;
+
+  async function handleDeleteTenant() {
+    if (!token || !tenant) return;
+    // Counted from what this page already loaded, so the dialog states the
+    // cost before the button is offered — this is the one action in the app
+    // that destroys payment records.
+    const all = Object.values(payments).flat();
+    const received = all.filter((p) => p.is_approved).reduce((sum, p) => sum + p.amount, 0);
+    const parts = [
+      stays.length > 0 && `${stays.length} ${stays.length === 1 ? "stay" : "stays"}`,
+      all.length > 0 && `${all.length} ${all.length === 1 ? "payment" : "payments"} (${formatCurrency(received)} received)`,
+      settlementsCount > 0 && `${settlementsCount} ${settlementsCount === 1 ? "settlement" : "settlements"}`,
+    ].filter(Boolean);
+    const ok = await confirm({
+      title: `Delete ${tenant.name}?`,
+      message: (
+        <>
+          {parts.length > 0
+            ? <>This permanently deletes them along with {parts.join(", ")}. </>
+            : <>This permanently deletes them. </>}
+          {stays.some((s) => !s.end_date && s.bed_id) && <>Their bed becomes vacant. </>}
+          It cannot be undone. Meant for a test entry or a duplicate — to record
+          that someone left, end their stay instead.
+        </>
+      ),
+      confirmLabel: "Delete tenant",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await tenantsApi.delete(token, tenant.id);
+      toast.success(`${tenant.name} deleted`);
+      router.replace("/tenants");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to delete the tenant");
     }
   }
 
@@ -574,7 +615,16 @@ export default function TenantDetailPage() {
                       {stay.start_date.slice(0, 10)}
                       {stay.end_date ? ` → ${stay.end_date.slice(0, 10)}` : " → present"}
                       {" · "}
-                      {formatCurrency(stay.rent_amount)}/{stay.rent_cycle}
+                      {stay.rent_changes && stay.rent_changes.length > 1
+                        ? <>
+                            {formatCurrency(stay.rent_changes[0].rent_amount)}/{stay.rent_cycle}
+                            {stay.rent_changes.slice(1).map((c) => (
+                              <span key={c.effective_date} className="whitespace-nowrap">
+                                {" → "}{formatCurrency(c.rent_amount)} from {formatDay(c.effective_date)}
+                              </span>
+                            ))}
+                          </>
+                        : <>{formatCurrency(stay.rent_amount)}/{stay.rent_cycle}</>}
                     </p>
                     {deposit && (
                       <p className="mt-0.5 text-xs tabular-nums text-stone-500">{deposit}</p>
@@ -609,6 +659,11 @@ export default function TenantDetailPage() {
                     {active && unassigned && (
                       <Button variant="secondary" size="sm" onClick={() => setAssigningStay(stay.id)}>
                         Assign bed
+                      </Button>
+                    )}
+                    {active && (
+                      <Button variant="secondary" size="sm" onClick={() => setRentStay(stay)}>
+                        Change rent
                       </Button>
                     )}
                     {active && (
@@ -867,6 +922,20 @@ export default function TenantDetailPage() {
         </div>
       )}
 
+      {/* Last on the page and deliberately plain: removing a tenant is for
+          test entries and duplicates, not for someone who moved out, and it
+          should not sit beside the everyday actions. */}
+      <section className="mt-10 border-t border-stone-200 pt-6">
+        <h2 className="text-sm font-semibold text-stone-900">Delete tenant</h2>
+        <p className="mt-1 max-w-prose text-sm text-stone-500">
+          For a test entry or a duplicate. Removes them with every stay and payment,
+          and cannot be undone. To record that someone left, end their stay instead.
+        </p>
+        <Button variant="secondary" className="mt-3 text-red-600 hover:text-red-700" onClick={handleDeleteTenant}>
+          Delete tenant…
+        </Button>
+      </section>
+
       {/* Ending a stay is the same dialog the grid uses, so a departure
           recorded late is billed to the day it happened either way. */}
       {token && (
@@ -895,6 +964,21 @@ export default function TenantDetailPage() {
             setNoticeStay(null);
           }}
           onClose={() => setNoticeStay(null)}
+        />
+      )}
+
+      {token && (
+        <ChangeRentDialog
+          open={rentStay !== null}
+          stay={rentStay}
+          token={token}
+          tenantName={tenant?.name}
+          onSaved={(updated) => {
+            setStays((prev) => prev.map((s) => (s.id === updated.id ? withPlace(updated, s) : s)));
+            setRentStay(null);
+            loadSummary();
+          }}
+          onClose={() => setRentStay(null)}
         />
       )}
 

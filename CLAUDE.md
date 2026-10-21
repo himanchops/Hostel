@@ -78,9 +78,11 @@ again without losing a half-typed form. The rest of that list is open.
 in the database, presigned links on read; the bucket's public URL is disabled,
 verified in production 23 Sep 2026), required the front of
 an ID on public registration, and rate-limited logins and registration. The
-Aadhaar number stays as typed (decision reversed 23 Sep 2026). Corrections,
-write-offs and rent changes that do not reprice the past wait for a dedicated
-design session (`docs/BACKLOG.md` → "Nothing can be corrected, anywhere").
+Aadhaar number stays as typed (decision reversed 23 Sep 2026). **Rent from a date** (migration 011, Oct 2026) made rent changes apply only
+from a date onward, added "Delete tenant", shrank photos before upload, and
+named the hostel on its registration page. Corrections and write-offs still
+wait for a dedicated design session (`docs/BACKLOG.md` → "Nothing can be
+corrected, anywhere").
 
 **The primary device is probably an iPad**, in either orientation — which puts
 it on both sides of the 1024px sidebar breakpoint. Test layout and interaction
@@ -134,6 +136,12 @@ Key conventions to carry forward:
   and anything that accepts a file reference checks `validFileRef`. A new file
   column needs both, or it either ships a raw key (a broken image) or accepts a
   URL from any host.
+- **Rent can change partway through a stay** (migration 011). Anything that
+  bills rent goes through `rentSchedule.billed` (`handlers/rent.go`), never
+  `rent_amount × cycles`, which reprices every month already lived. There were
+  six such sites when the table arrived (dashboard, grid, Collections,
+  Insights, tenant summary, settlements). `stays.rent_amount` is the *latest*
+  scheduled rent, good for display and wrong for arithmetic.
 - **A rejected payment is kept, never deleted** (migration 009). "Pending" is
   `is_approved = false AND rejected_at IS NULL`; any new query for the pending
   queue must say both.

@@ -45,6 +45,23 @@ test.describe("Public registration", () => {
     expect(missing.status()).toBe(404);
   });
 
+  // The header is a trust signal for a stranger at the door, so it names the
+  // property, not the account holder. With several sites there is no single
+  // property the link belongs to, so it falls back to the owner's name.
+  test("the registration header names the hostel, not its owner", async ({ page, request }) => {
+    const { token, owner } = await createOwner(request, `pub-site-${RUN_ID}`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const hostel = `Sunrise PG ${RUN_ID}`;
+    await request.post(`${BASE}/api/sites`, { headers: auth, data: { name: hostel } });
+
+    await page.goto(`/register/${owner.id}`);
+    await expect(page.getByRole("heading", { name: `Register with ${hostel}` })).toBeVisible();
+
+    await request.post(`${BASE}/api/sites`, { headers: auth, data: { name: `Second site ${RUN_ID}` } });
+    const body = await (await request.get(`${BASE}/public/owners/${owner.id}`)).json();
+    expect(body).toEqual({ name: owner.name });
+  });
+
   test("a stranger registers end-to-end at 375px", async ({ page, request }) => {
     const { token, owner } = await createOwner(request, `pub-reg-${RUN_ID}`);
     const applicant = `Priya Nair ${RUN_ID}`;
@@ -164,6 +181,58 @@ test.describe("Public registration", () => {
       const file = await request.get(link);
       expect(file.status(), `${link} should open`).toBe(200);
     }
+  });
+
+  // A phone camera's 3000–4000px original used to be stored as-is, and every
+  // screen that shows the photo downloaded all of it again. The browser now
+  // shrinks it to 1600px on the long edge before upload.
+  test("a large photo is shrunk before it is uploaded", async ({ page, request }) => {
+    const { token, owner } = await createOwner(request, `pub-shrink-${RUN_ID}`);
+    const applicant = `Big Photo ${RUN_ID}`;
+    await page.goto(`/register/${owner.id}`);
+
+    // A 3024×4032 image, the size of the iPhone portrait that prompted this,
+    // drawn with noise so it cannot compress to nothing.
+    const big = await page.evaluate(() => {
+      const c = document.createElement("canvas");
+      c.width = 3024;
+      c.height = 4032;
+      const ctx = c.getContext("2d")!;
+      const img = ctx.createImageData(c.width, c.height);
+      for (let i = 0; i < img.data.length; i += 4) {
+        img.data[i] = (i * 7) % 255;
+        img.data[i + 1] = (i * 13) % 255;
+        img.data[i + 2] = (i * 31) % 255;
+        img.data[i + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      return c.toDataURL("image/png").split(",")[1];
+    });
+
+    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByPlaceholder("10-digit number").fill(`4${RUN_ID.slice(-9)}`);
+    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await page.getByLabel(/ID proof — front/).setInputFiles({
+      name: "id-front.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(big, "base64"),
+    });
+    await page.getByRole("button", { name: "Submit registration" }).click();
+    await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
+
+    const pending = await request.get(`${BASE}/api/tenants?pending=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const created = (await pending.json()).find((t: { name: string }) => t.name === applicant);
+    expect(created.id_proof_front_url).toMatch(/\.jpg/); // re-encoded as JPEG
+
+    const size = await page.evaluate(async (src) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      return { w: img.naturalWidth, h: img.naturalHeight };
+    }, created.id_proof_front_url);
+    expect(size).toEqual({ w: 1200, h: 1600 });
   });
 
   /**
