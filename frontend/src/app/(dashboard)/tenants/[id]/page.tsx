@@ -8,6 +8,7 @@ import {
   Tenant, Stay, Payment, PaymentKind, TenantSummary, TenantUpdateData, Settlement,
   formatCurrency, formatDay, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi, withPlace,
 } from "@/lib/api";
+import { dueLine } from "@/lib/due";
 import { depositSummary } from "@/lib/settlement";
 import {
   Badge,
@@ -251,6 +252,7 @@ export default function TenantDetailPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [stays, setStays] = useState<Stay[]>([]);
   const [summary, setSummary] = useState<TenantSummary | null>(null);
+  const dueNote = summary ? dueLine(summary) : null;
   // Keyed by stay so an ended stay can be badged without a request each.
   const [settlements, setSettlements] = useState<Record<number, Settlement>>({});
   const [loading, setLoading] = useState(true);
@@ -533,6 +535,11 @@ export default function TenantDetailPage() {
                 ? `${formatCurrency(Math.abs(summary.balance))} ahead`
                 : `${formatCurrency(summary.balance)} owed`}
             </p>
+            {dueNote && (
+              <p className={`mt-0.5 text-xs font-medium ${dueNote.tone === "danger" ? "text-overdue-700" : dueNote.tone === "warning" ? "text-amber-700" : "text-stone-500"}`}>
+                {dueNote.text}
+              </p>
+            )}
           </Card>
         </div>
       )}

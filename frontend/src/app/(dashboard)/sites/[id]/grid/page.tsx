@@ -11,6 +11,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
+import { dueChip, dueLine, localToday } from "@/lib/due";
 import {
   Avatar,
   Badge,
@@ -380,6 +381,9 @@ function BedTile({ bed, selected, onClick }: { bed: GridBed; selected: boolean; 
   const cfg = STATUS_STYLES[bed.status];
   const owes = bed.balance !== undefined && bed.balance < 0 ? -bed.balance : 0;
   const firstName = bed.tenant?.name.trim().split(/\s+/)[0];
+  // A date only when it is worth acting on: since when they are behind, or
+  // due within the week. Everyone else's tile stays as quiet as before.
+  const chip = bed.stay_id ? dueChip(bed, localToday()) : null;
 
   return (
     <button
@@ -397,6 +401,11 @@ function BedTile({ bed, selected, onClick }: { bed: GridBed; selected: boolean; 
       {owes > 0 && (
         <p className="mt-0.5 truncate text-[11px] font-semibold tabular-nums text-overdue-700">
           {formatCurrency(owes)}
+        </p>
+      )}
+      {chip && (
+        <p className={`mt-0.5 truncate text-[11px] font-medium ${chip.tone === "danger" ? "text-overdue-700" : "text-amber-700"}`}>
+          {chip.text}
         </p>
       )}
     </button>
@@ -627,6 +636,7 @@ function OccupiedPanel({
     .filter((p) => p.kind === "deposit" && p.is_approved)
     .reduce((s, p) => s + p.amount, 0);
   const deposit = depositSummary(bed.deposit_amount ?? 0, paymentsLoading ? undefined : depositReceived);
+  const line = dueLine(bed);
 
   return (
     <div>
@@ -658,6 +668,11 @@ function OccupiedPanel({
         <p className={`text-2xl font-bold tabular-nums ${settled ? "text-paid-800" : "text-overdue-800"}`}>
           {settled ? "+" : ""}{formatCurrency(balance)}
         </p>
+        {line && (
+          <p className={`mt-1 text-sm font-medium ${line.tone === "danger" ? "text-overdue-800" : line.tone === "warning" ? "text-amber-800" : "text-stone-700"}`}>
+            {line.text}
+          </p>
+        )}
         <p className="mt-1 text-xs tabular-nums text-stone-400">
           Paid {formatCurrency(bed.total_paid ?? 0)} of {formatCurrency(bed.total_expected ?? 0)} expected
         </p>

@@ -2527,9 +2527,52 @@ owner checked Insights on his real account and found the remembered-range bug
 and the grouping he did not want. Both were fixed in PR #42 (`580d3c4`), and
 Vercel reported the production deploy successful.
 
-**Next session starts with** the rent due-date design: `docs/BACKLOG.md` →
-"When is each tenant's rent due?". The proposal is written there, and it is
-waiting on the owner's choice of scope.
+---
+
+## When rent is due (Oct 2026)
+
+The owner wanted to see at a glance when each tenant's rent is due. Billing
+has always run on the stay's anchor day (`cycleStart`), but nothing said what
+that was.
+
+**`handlers/due.go` → `dueFor`** returns one stay's next due rent: the start
+of the oldest cycle not fully paid (from `paidThrough`, the rule Collections
+uses), what is still owed on it, and a state:
+- `overdue`: behind; the date is when they fell behind.
+- `due_today`: a cycle began today and is unpaid.
+- `upcoming`: square; the date is the next due day.
+- `paid_ahead`: nothing due until the date.
+
+The grid's beds and the tenant summary (open stay only) carry
+`due_date`/`due_paise`/`due_state`. The date is a calendar string, so no
+timezone moves it. `lib/due.ts` only words it.
+
+What the owner sees:
+- **Bed panel and tenant page:** one line under the balance:
+  - "Next rent ₹6,000 due 31 Oct"
+  - "Overdue since 15 Oct" (red)
+  - "Rent ₹5,500 due today"
+  - "Paid up to 15 Jan"
+- **Grid tiles:** a date only when it needs acting on: "due 15 Oct" in red
+  under the amount owed, or "due 24 Oct" / "due today" in amber within 7
+  days. Paid-ahead and later dates stay quiet.
+
+He shaped it before it was built: red tiles get the date too, the line lost a
+redundant "every month on the 31st", and the "Due this week" dashboard list
+waits to be designed with quicker payment recording.
+
+### Verification
+
+- `due_test.go`: exact dates for square, one month behind, part of a month
+  paid, due today, paid three months ahead, a 31 Aug move-in across
+  September, after a mid-stay rent change, and moving in next month. The
+  summary reports the open stay's due rent and nothing when no stay is open.
+- `tests/unit/due.test.ts` covers the wording and the 7-day tile window.
+- `owner/rent-due.test.ts` (2 tests): behind, soon and paid-ahead tenants on
+  the grid, the bed panel and the tenant page.
+- Checked by eye on the local demo at iPad portrait. The pane misplaces
+  slide-in panels at tablet sizes (known), so the panel was read from the page
+  and screenshotted at desktop width.
 
 ---
 

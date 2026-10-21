@@ -56,6 +56,11 @@ type GridBed struct {
 	EndDate         *time.Time  `json:"end_date,omitempty"`
 	NoticeDate      *time.Time  `json:"notice_date,omitempty"`
 	ExpectedEndDate *time.Time  `json:"expected_end_date,omitempty"`
+	// When rent is next due, and what state that leaves the tenant in (due.go).
+	// DueDate is a calendar date, "2026-10-31", so no timezone can move it.
+	DueDate  *string `json:"due_date,omitempty"`
+	DuePaise *int64  `json:"due_paise,omitempty"`
+	DueState *string `json:"due_state,omitempty"`
 }
 
 type GridRoom struct {
@@ -253,6 +258,10 @@ func buildBed(row gridRow, today time.Time) GridBed {
 			Phone: row.TenantPhone.String,
 		}
 	}
+
+	due := dueFor(sched, startDate, row.RentCycle.String, row.TotalPaid, today)
+	dueDate := due.Date.Format("2006-01-02")
+	bed.DueDate, bed.DuePaise, bed.DueState = &dueDate, &due.Paise, &due.State
 
 	bed.Status = computeBedStatus(balance, currentRent, noticeDate, expectedEnd, today)
 	return bed

@@ -418,7 +418,15 @@ than payments already recorded turns those payments into an "advance" that is
 handed back, which is right only if they really were paid ahead. Say so
 before confirming.
 
-### When is each tenant's rent due? — M, **start here next session**
+### ~~When is each tenant's rent due?~~ ✅ first two parts done on `rent-due-dates` (Oct 2026)
+The bed panel and tenant page have their one line, and grid tiles show a date
+when someone is behind ("due 15 Oct", red) or due within 7 days (amber). The
+owner trimmed the design before it was built: a red tile shows the date too,
+not only the amount, and the line drops the repeated "every month on the
+31st". **The "Due this week" dashboard list is deferred**, to be designed
+together with "Recording a payment is three screens deep": he has thoughts on
+both. The original proposal:
+
 The owner wants to see at a glance when rent is due for a tenant. The app
 already bills on each stay's anchor day (move-in day of the month; the 31st
 clamps to a short month's last day, `cycleStart`), but no screen says so. The
