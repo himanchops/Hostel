@@ -2464,8 +2464,22 @@ a settlement as a line. Amounts are always positive, the kind says the
 direction, and each view lists only its own kinds, so the lines add up to the
 row (pinned in `money_test.go`). On a phone, the money view folds rent,
 deposits and returned into a small line under "Net in" rather than scrolling
-sideways. The occupancy chart stays, folded by default. The collected bar
-chart is gone, and with it the iPad left-drift bug (BACKLOG).
+sideways. The collected bar chart is gone, and with it the iPad left-drift
+bug (BACKLOG).
+
+**After the owner saw it on demo data:**
+- **The occupancy chart went too.** It had the same left-drift and the same
+  hover problem, and "Occupancy this month" is already a tile. With it,
+  `components/ui/Chart.tsx` was deleted: nothing draws a chart now, and
+  `Meter` moved to its own file. CLAUDE.md's chart rule now says "prefer a
+  table".
+- **A busy month** leads with a totals strip by kind ("Rent ×45 ₹2,40,000 ·
+  Returned ×2 −₹30,900"). Deposits and refunds come before rent payments,
+  ten lines show until "Show all N lines", and a "Close" button at the foot
+  scrolls the month back into view.
+- **Range** gained 1m ("this month so far", so the tiles answer the
+  bank-statement question directly) and is remembered per device like the
+  view.
 
 ### Elsewhere
 

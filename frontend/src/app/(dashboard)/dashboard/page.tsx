@@ -383,7 +383,7 @@ const PEEK = 5;
  * Shows the first few rows and offers the rest, rather than rendering all ten.
  *
  * Chosen over a max-height scroll box for two reasons: there is not one vertical
- * nested scroller in this app (ChartScroll is horizontal on purpose), and a
+ * nested scroller in this app, and a
  * scroll box hides the truncation exactly as silently as rendering ten did —
  * reaching the bottom of it tells you nothing about whether the server sent ten
  * or ten-of-forty. The button says the number out loud instead.

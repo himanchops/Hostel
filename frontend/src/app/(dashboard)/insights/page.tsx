@@ -10,12 +10,14 @@ import {
 } from "@/lib/api";
 import { reportError } from "@/lib/reportError";
 import {
-  Badge, Banner, Button, Card, ChartScroll, ChevronIcon, Collapsible, EmptyState,
-  Meter, PageHeader, PercentLineChart, SegmentedControl, SkeletonCard, TOUCH_LINK, TOUCH_TARGET,
+  Badge, Banner, Button, Card, ChevronIcon, Collapsible, EmptyState,
+  Meter, PageHeader, SegmentedControl, SkeletonCard, TOUCH_LINK, TOUCH_TARGET,
   type BadgeTone,
 } from "@/components/ui";
 
-const RANGES = [3, 6, 12] as const;
+/** 1m is "this month so far": the tiles then answer the bank-statement question directly. */
+const RANGES = [1, 3, 6, 12] as const;
+const RANGE_KEY = "insights:months";
 
 /**
  * Two questions about the same money (backend money.go). Rent measures rent
@@ -67,7 +69,7 @@ function signed(paise: number): string {
 
 export default function InsightsPage() {
   const { token } = useAuth();
-  const [months, setMonths] = useState<number>(12);
+  const [months, setMonthsState] = useState<number>(12);
   const [view, setViewState] = useState<View>("rent");
   const [data, setData] = useState<InsightsData | null>(null);
   const [owedNow, setOwedNow] = useState<number | null>(null);
@@ -81,10 +83,21 @@ export default function InsightsPage() {
     try {
       const saved = localStorage.getItem(VIEW_KEY);
       if (saved === "rent" || saved === "money") setViewState(saved);
+      const range = Number(localStorage.getItem(RANGE_KEY));
+      if ((RANGES as readonly number[]).includes(range)) setMonthsState(range);
     } catch {
-      /* storage unavailable: Rent it is */
+      /* storage unavailable: the defaults stand */
     }
   }, []);
+
+  const setMonths = (m: number) => {
+    setMonthsState(m);
+    try {
+      localStorage.setItem(RANGE_KEY, String(m));
+    } catch {
+      /* not remembered on this device */
+    }
+  };
 
   const setView = (v: View) => {
     setViewState(v);
@@ -245,27 +258,6 @@ export default function InsightsPage() {
             )}
           </Card>
 
-          <div className="mb-4">
-            <Collapsible
-              title="Occupancy"
-              defaultOpen={false}
-              summary={latestOccupancy !== undefined ? `now ${latestOccupancy.toFixed(0)}%` : undefined}
-            >
-              <ChartScroll minWidth={Math.max(280, data.occupancy.length * 56)}>
-                <PercentLineChart
-                  data={data.occupancy.map((o) => ({ label: o.label, value: o.percentage }))}
-                  formatDetail={(i) =>
-                    `${data.occupancy[i].occupied_nights}/${data.occupancy[i].available_nights}`
-                  }
-                />
-              </ChartScroll>
-              <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
-                Measured in bed-nights against today&apos;s bed count, so a
-                mid-month move-in counts as the part of the month it filled.
-              </p>
-            </Collapsible>
-          </div>
-
           <Collapsible
             title="By room"
             defaultOpen={false}
@@ -386,6 +378,7 @@ function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; t
             return (
               <Fragment key={r.month}>
                 <tr
+                  id={`month-${r.month}`}
                   onClick={() => toggle(r.month)}
                   className="cursor-pointer border-b border-stone-50 transition duration-150 ease-out hover:bg-stone-50"
                 >
@@ -434,7 +427,13 @@ function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; t
                 {isOpen && (
                   <tr className="border-b border-stone-100 bg-stone-50/60">
                     <td colSpan={cols} className="px-4 py-3">
-                      <MonthLines detail={details[r.month]} view={view} row={r} />
+                      <MonthLines detail={details[r.month]} view={view} row={r} onClose={() => {
+                        // Closed from the foot of a long list: bring the month
+                        // back on screen, or the owner is left mid-table.
+                        setOpen(null);
+                        requestAnimationFrame(() =>
+                          document.getElementById(`month-${r.month}`)?.scrollIntoView({ block: "nearest" }));
+                      }} />
                     </td>
                   </tr>
                 )}
@@ -447,33 +446,67 @@ function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; t
   );
 }
 
+/** Lines shown before "Show all": a month of 45 rent payments is a page of its own. */
+const LINES_SHOWN = 10;
+
 function MonthLines({
-  detail, view, row,
+  detail, view, row, onClose,
 }: {
   detail: MonthDetail | "loading" | { error: string } | undefined;
   view: View;
   row: RevenuePoint;
+  onClose: () => void;
 }) {
+  const [all, setAll] = useState(false);
   if (!detail || detail === "loading") return <p className="text-sm text-stone-400">Loading {monthName(row.month)}…</p>;
   if ("error" in detail) return <p className="text-sm text-red-600">{detail.error}</p>;
 
-  const lines = detail.entries.filter((e) => VIEW_KINDS[view].includes(e.kind));
+  const kinds = VIEW_KINDS[view];
+  const lines = detail.entries.filter((e) => kinds.includes(e.kind));
   if (lines.length === 0) {
     return <p className="text-sm text-stone-400">Nothing {view === "rent" ? "collected" : "came in or went out"} in {monthName(row.month)}.</p>;
   }
-  const total = lines.reduce((s, e) => s + (KIND[e.kind].out ? -e.amount_paise : e.amount_paise), 0);
+  const value = (e: MoneyEntry) => (KIND[e.kind].out ? -e.amount_paise : e.amount_paise);
+  const total = lines.reduce((s, e) => s + value(e), 0);
+
+  // Deposits and refunds first: a month has dozens of rent payments and a
+  // handful of these, and the handful is what the owner is looking for. The
+  // server's newest-first order holds within each group.
+  const ordered = [...lines.filter((e) => e.kind !== "rent"), ...lines.filter((e) => e.kind === "rent")];
+  const shown = all ? ordered : ordered.slice(0, LINES_SHOWN);
 
   return (
     <div>
+      {/* The month's figure, already split by kind, before any line is read. */}
+      <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
+        {kinds.map((k) => {
+          const of = lines.filter((e) => e.kind === k);
+          if (of.length === 0) return null;
+          const sum = of.reduce((s, e) => s + value(e), 0);
+          return (
+            <span key={k} className="tabular-nums">
+              {KIND[k].label} <span className="text-stone-400">×{of.length}</span>{" "}
+              <span className="font-medium text-stone-700">{signed(sum)}</span>
+            </span>
+          );
+        })}
+      </div>
       <ul className="divide-y divide-stone-100">
-        {lines.map((e, i) => <MoneyLine key={`${e.stay_id}-${e.kind}-${e.date}-${i}`} entry={e} />)}
+        {shown.map((e, i) => <MoneyLine key={`${e.stay_id}-${e.kind}-${e.date}-${i}`} entry={e} />)}
       </ul>
-      <p className="mt-2 flex justify-between border-t border-stone-200 pt-2 text-xs text-stone-500">
-        <span>{lines.length} {lines.length === 1 ? "line" : "lines"}</span>
+      {ordered.length > LINES_SHOWN && (
+        <Button size="sm" variant="secondary" className="mt-2" onClick={() => setAll((v) => !v)}>
+          {all ? "Show fewer" : `Show all ${ordered.length} lines`}
+        </Button>
+      )}
+      <div className="mt-2 flex items-center justify-between border-t border-stone-200 pt-2 text-xs text-stone-500">
+        <button type="button" onClick={onClose} className={`${TOUCH_TARGET} font-medium text-indigo-600`}>
+          Close {monthName(row.month)}
+        </button>
         <span className="tabular-nums">
           {view === "rent" ? "Collected" : "Net in"}: <span className="font-semibold text-stone-800">{signed(total)}</span>
         </span>
-      </p>
+      </div>
     </div>
   );
 }

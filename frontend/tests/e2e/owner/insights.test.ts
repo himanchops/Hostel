@@ -135,7 +135,7 @@ test.describe("Insights", () => {
 
     // Tapping the month lists what makes up its figure, and they add up to it.
     await row.getByRole("button").click();
-    await expect(page.getByText("Paid from deposit")).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Paid from deposit" })).toContainText("₹3,000");
     await expect(page.getByText("Collected: ₹21,000")).toBeVisible();
     // A deposit is not rent: it is not listed in this view.
     await expect(page.getByText("Deposit", { exact: true })).toHaveCount(0);
@@ -159,7 +159,7 @@ test.describe("Insights", () => {
     await expect(page.getByText("Returned", { exact: true })).toBeVisible();
     await expect(page.getByText("Net in: ₹17,000")).toBeVisible();
     // The deposit that paid rent moved no money, so it is not a line here.
-    await expect(page.getByText("Paid from deposit")).toHaveCount(0);
+    await expect(page.getByRole("listitem").filter({ hasText: "Paid from deposit" })).toHaveCount(0);
 
     // Opening the page again keeps the view the owner last used.
     await page.reload();
@@ -233,34 +233,64 @@ test.describe("Insights", () => {
     await expect(empty).toContainText("0%");
   });
 
-  test("occupancy folds away and unmounts its chart", async ({ page, request }) => {
-    const { token } = await seedYear(request, `${RUN_ID}-fold`);
+  test("a busy month leads with its totals and shows ten lines until asked", async ({ page, request }) => {
+    const { token } = await createOwner(request, `${RUN_ID}-busy`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { bedId } = await createSiteRoomBed(request, token, `${RUN_ID}-busy`);
+    const tenant = await createTenantViaApi(request, token, { name: "Busy Tenant", phone: phone() });
+    const stayRes = await request.post(`${BASE}/api/stays`, {
+      headers: auth,
+      data: {
+        tenant_id: tenant.id, bed_id: bedId, rent_amount: 100000, deposit_amount: 50000,
+        rent_cycle: "monthly", start_date: isoDate(firstOf(0)),
+      },
+    });
+    const stay = await stayRes.json();
+    // Twelve ₹1,000 rent payments and one deposit, all on the 1st.
+    for (let i = 0; i < 12; i++) {
+      await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
+        headers: auth, data: { amount: 100000, payment_type: "cash", payment_date: isoDate(firstOf(0)) },
+      });
+    }
+    await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
+      headers: auth, data: { amount: 50000, payment_type: "cash", kind: "deposit", payment_date: isoDate(firstOf(0)) },
+    });
+
     await loginAs(page, token);
     await page.goto("/insights");
+    await page.getByRole("button", { name: "All money" }).click();
+    await monthRow(page, firstOf(0)).getByRole("button").click();
 
-    const occupancy = page.getByRole("button", { name: /Occupancy/ });
-    await expect(occupancy).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByRole("img", { name: /Occupancy by month/i })).toHaveCount(0);
+    // The deposit leads, ahead of a dozen rent payments.
+    const lines = page.getByRole("listitem");
+    await expect(lines).toHaveCount(10);
+    await expect(lines.first()).toContainText("Deposit");
+    await expect(page.getByText("×12")).toBeVisible();
 
-    await occupancy.click();
-    await expect(page.getByRole("img", { name: /Occupancy by month/i })).toBeVisible();
+    await page.getByRole("button", { name: "Show all 13 lines" }).click();
+    await expect(lines).toHaveCount(13);
 
-    // Folded content is unmounted, not just hidden — a chart left measuring a
-    // zero-width container caches a broken layout.
-    await occupancy.click();
-    await expect(page.getByRole("img", { name: /Occupancy by month/i })).toHaveCount(0);
+    await page.getByRole("button", { name: `Close ${monthName(firstOf(0))}` }).click();
+    await expect(lines).toHaveCount(0);
   });
 
-  test("range picker refetches and narrows the window", async ({ page, request }) => {
+  test("range picker narrows the window, down to this month, and is remembered", async ({ page, request }) => {
     const { token } = await seedYear(request, `${RUN_ID}-range`);
     await loginAs(page, token);
     await page.goto("/insights");
 
     await expect(page.getByText(`${monthName(firstOf(-11))} to ${monthName(firstOf(0))}`)).toBeVisible();
     await page.getByRole("button", { name: "3m" }).click();
-    await expect(page.getByRole("button", { name: "3m" })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText(`${monthName(firstOf(-2))} to ${monthName(firstOf(0))}`)).toBeVisible();
     await expect(monthRow(page, firstOf(-3))).toHaveCount(0);
+
+    // 1m is this month alone: the tiles become this month's figures.
+    await page.getByRole("button", { name: "1m" }).click();
+    await expect(page.getByText(`${monthName(firstOf(0))} to ${monthName(firstOf(0))}`)).toBeVisible();
+    await expect(page.getByText("Rent collected").locator("..")).toContainText("₹8,000");
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "1m" })).toHaveAttribute("aria-pressed", "true");
   });
 
   /**
