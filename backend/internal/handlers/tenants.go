@@ -45,7 +45,7 @@ func (h *TenantHandler) respondTenant(c echo.Context, status int, t *models.Tena
 // side has no way to tell a tenant who can sign in from one who never could.
 const tenantCols = `id, owner_id, name, phone, email, id_proof_url, photo_url,
 	address, emergency_contact_name, emergency_contact_phone,
-	workplace, aadhaar_number, id_proof_front_url, id_proof_back_url,
+	workplace, aadhaar_number, id_proof_front_url, id_proof_back_url, notes,
 	(password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
 	is_approved, created_at, updated_at`
 
@@ -58,6 +58,7 @@ type tenantRequest struct {
 	EmergencyContactPhone *string `json:"emergency_contact_phone"`
 	Workplace             *string `json:"workplace"`
 	AadhaarNumber         *string `json:"aadhaar_number"`
+	Notes                 *string `json:"notes"`
 	IDProofURL            *string `json:"id_proof_url"`
 	IDProofFrontURL       *string `json:"id_proof_front_url"`
 	IDProofBackURL        *string `json:"id_proof_back_url"`
@@ -148,13 +149,13 @@ func (h *TenantHandler) Create(c echo.Context) error {
 		`INSERT INTO tenants (owner_id, name, phone, email,
 			address, emergency_contact_name, emergency_contact_phone,
 			workplace, aadhaar_number, id_proof_url, id_proof_front_url, id_proof_back_url, photo_url,
-			is_approved, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, $14, $14)
+			notes, is_approved, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, $15, $15)
 		 RETURNING `+tenantCols,
 		ownerID, req.Name, req.Phone, req.Email,
 		req.Address, req.EmergencyContactName, req.EmergencyContactPhone,
 		req.Workplace, req.AadhaarNumber, req.IDProofURL, req.IDProofFrontURL, req.IDProofBackURL, req.PhotoURL,
-		time.Now(),
+		req.Notes, time.Now(),
 	).StructScan(&tenant)
 	if err != nil {
 		return serverError(c, err, "failed to create tenant")
@@ -468,14 +469,15 @@ func (h *TenantHandler) Update(c echo.Context) error {
 		     id_proof_front_url = COALESCE($10, id_proof_front_url),
 		     id_proof_back_url = COALESCE($11, id_proof_back_url),
 		     photo_url = COALESCE($12, photo_url),
-		     updated_at = $13
-		 WHERE id = $14 AND owner_id = $15
+		     notes = $13,
+		     updated_at = $14
+		 WHERE id = $15 AND owner_id = $16
 		 RETURNING `+tenantCols,
 		req.Name, req.Phone, req.Email,
 		req.Address, req.EmergencyContactName, req.EmergencyContactPhone,
 		req.Workplace, req.AadhaarNumber,
 		req.IDProofURL, req.IDProofFrontURL, req.IDProofBackURL, req.PhotoURL,
-		time.Now(), tenantID, ownerID,
+		req.Notes, time.Now(), tenantID, ownerID,
 	).StructScan(&tenant)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))

@@ -14,7 +14,7 @@ LOCAL_DB := postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable
 # See docs/DEPLOYMENT.md, "Future migrations".
 DATABASE_URL ?= $(LOCAL_DB)
 
-.PHONY: dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset seed-hostel seed-hostel-dry verify-backend verify-frontend import-data import-data-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
+.PHONY: dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset seed-hostel seed-hostel-dry verify-backend verify-frontend import-notebook import-notebook-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -86,18 +86,6 @@ verify-backend:
 # Frontend unit tests (pure functions in src/lib) — no browser, no dev server.
 verify-frontend:
 	cd frontend && npm run test:unit
-
-# Bulk-import tenants/stays/payments from a JSON file (see docs/import-prompt.md)
-# Usage: make import-data OWNER=you@example.com FILE=ledger.json
-import-data:
-	@test -n "$(OWNER)" || (echo "Error: OWNER=<email> required" && exit 1)
-	@test -n "$(FILE)" || (echo "Error: FILE=<path.json> required" && exit 1)
-	cd backend && go run ./cmd/import --owner $(OWNER) --file ../$(FILE)
-
-import-data-dry:
-	@test -n "$(OWNER)" || (echo "Error: OWNER=<email> required" && exit 1)
-	@test -n "$(FILE)" || (echo "Error: FILE=<path.json> required" && exit 1)
-	cd backend && go run ./cmd/import --owner $(OWNER) --file ../$(FILE) --dry-run
 
 # Storage smoke test — uploads a single file through whichever backend STORAGE_BACKEND points to.
 # Smoke-test the object store. Usage: make storage-check FILE=path/to/image.png
@@ -176,6 +164,25 @@ seed-hostel-dry:
 seed-hostel:
 	@test -n "$$HOSTEL_PASSWORD" || (echo "Error: export HOSTEL_PASSWORD=... first" && exit 1)
 	python3 scripts/seed-chopra.py
+
+# Import tenants from the paper notebook into the REAL account, through the
+# API. The data is a JSON file under .hostel-import/ (gitignored: real names,
+# phones and Aadhaar numbers, and this repo is public). Credentials come from
+# .hostel-credentials.env, as for seed-hostel.
+#
+# Every check runs before the first write; it asks "yes" before writing, and
+# reads every tenant back afterwards. Re-running skips phones already there.
+#
+#   make import-notebook-dry FILE=.hostel-import/notebook-2026-10.json
+#   make import-notebook     FILE=.hostel-import/notebook-2026-10.json
+#   make import-notebook FILE=... HOSTEL_API=http://localhost:8080   # rehearse locally first
+import-notebook-dry:
+	@test -n "$(FILE)" || (echo "Error: FILE=.hostel-import/<file>.json required" && exit 1)
+	python3 scripts/import-notebook.py $(FILE) --dry-run
+
+import-notebook:
+	@test -n "$(FILE)" || (echo "Error: FILE=.hostel-import/<file>.json required" && exit 1)
+	python3 scripts/import-notebook.py $(FILE)
 
 # ── E2E ────────────────────────────────────────────────────────────────────────
 

@@ -125,6 +125,7 @@ function EditProfileForm({
   const [emergencyName, setEmergencyName] = useState(tenant.emergency_contact_name ?? "");
   const [emergencyPhone, setEmergencyPhone] = useState(tenant.emergency_contact_phone ?? "");
   const [aadhaar, setAadhaar] = useState(tenant.aadhaar_number ?? "");
+  const [notes, setNotes] = useState(tenant.notes ?? "");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [idFrontFile, setIdFrontFile] = useState<File | null>(null);
   const [idBackFile, setIdBackFile] = useState<File | null>(null);
@@ -154,6 +155,7 @@ function EditProfileForm({
         emergency_contact_name: emergencyName || undefined,
         emergency_contact_phone: emergencyPhone || undefined,
         aadhaar_number: aadhaar || undefined,
+        notes: notes.trim() || undefined,
         ...(photoUrl && { photo_url: photoUrl }),
         ...(idFrontUrl && { id_proof_front_url: idFrontUrl, id_proof_url: idFrontUrl }),
         ...(idBackUrl && { id_proof_back_url: idBackUrl }),
@@ -191,6 +193,10 @@ function EditProfileForm({
 
       <Field label="Workplace / College">
         <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} />
+      </Field>
+
+      <Field label="Notes" hint="Only you see this. Tenants never do.">
+        <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -454,10 +460,10 @@ export default function TenantDetailPage() {
           <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
             <ProfileRow label="Home address" value={tenant.address} />
             <ProfileRow label="Workplace / College" value={tenant.workplace} />
+            {/* A number with no name is still a contact: the notebook import
+                brought in many second numbers nobody labelled. */}
             <ProfileRow label="Emergency contact" value={
-              tenant.emergency_contact_name
-                ? `${tenant.emergency_contact_name}${tenant.emergency_contact_phone ? ` · ${tenant.emergency_contact_phone}` : ""}`
-                : undefined
+              [tenant.emergency_contact_name, tenant.emergency_contact_phone].filter(Boolean).join(" · ") || undefined
             } />
             <ProfileRow label="Aadhaar" value={tenant.aadhaar_number ? maskAadhaar(tenant.aadhaar_number) : undefined} />
             {(idProofFront || idProofBack) && (
@@ -471,8 +477,16 @@ export default function TenantDetailPage() {
             )}
           </div>
 
+          {tenant.notes && (
+            <div className="mt-4 border-t border-stone-100 pt-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Notes</p>
+              <p className="whitespace-pre-line text-sm text-stone-700">{tenant.notes}</p>
+            </div>
+          )}
+
           {/* No profile details placeholder */}
-          {!tenant.address && !tenant.workplace && !tenant.emergency_contact_name && !tenant.aadhaar_number && !idProofFront && (
+          {!tenant.address && !tenant.workplace && !tenant.emergency_contact_name && !tenant.emergency_contact_phone
+            && !tenant.aadhaar_number && !tenant.notes && !idProofFront && (
             <p className="text-sm text-stone-400">No additional profile details. Click &quot;Edit profile&quot; to add.</p>
           )}
         </Card>

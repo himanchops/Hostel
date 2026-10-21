@@ -35,6 +35,7 @@ export default function NewTenantPage() {
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
   const [aadhaar, setAadhaar] = useState("");
+  const [notes, setNotes] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [idFrontFile, setIdFrontFile] = useState<File | null>(null);
   const [idBackFile, setIdBackFile] = useState<File | null>(null);
@@ -80,6 +81,7 @@ export default function NewTenantPage() {
         emergency_contact_name: emergencyName || undefined,
         emergency_contact_phone: emergencyPhone || undefined,
         aadhaar_number: aadhaar || undefined,
+        notes: notes.trim() || undefined,
         ...(photoUrl && { photo_url: photoUrl }),
         ...(idFrontUrl && { id_proof_front_url: idFrontUrl, id_proof_url: idFrontUrl }),
         ...(idBackUrl && { id_proof_back_url: idBackUrl }),
@@ -149,6 +151,9 @@ export default function NewTenantPage() {
             </Field>
             <Field label="Workplace / College">
               <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="e.g. BITS Pilani" />
+            </Field>
+            <Field label="Notes" hint="Only you see this. Tenants never do.">
+              <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering: who referred them, how long they're staying, a deposit still to come" />
             </Field>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Emergency contact name">
