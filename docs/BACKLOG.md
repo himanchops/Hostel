@@ -431,6 +431,14 @@ page", and approving a registration whose phone matches an existing tenant
 offers to link them. Raised by the owner looking at a settled demo tenant
 (Oct 2026).
 
+### The tenant page's money tiles overflow on a narrow screen — S
+The three tiles (Rent paid, Stay duration, Balance) are three columns at every
+width. With a six-figure amount ("₹1,19,000") in a phone-width window, the
+figure runs out of its tile into the next. The fix is a smaller figure below
+`sm`, or letting the row wrap. Seen by the owner in the browser pane (Oct
+2026). Check the other tile rows (dashboard, Insights) at the same width
+while there.
+
 ### Explanations crowd the screens — S each, later
 The help text around Delete tenant, the vacating-notice controls and similar
 is good the first time and clutter after that. Move it behind an on-demand
