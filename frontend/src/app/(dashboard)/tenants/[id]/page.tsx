@@ -29,7 +29,9 @@ import {
   TOUCH_LINK,
   useConfirm,
   useToast,
+  SegmentedControl,
 } from "@/components/ui";
+import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { BedPicker, VacantBed } from "@/components/StayForm";
 import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
@@ -267,7 +269,7 @@ export default function TenantDetailPage() {
   const [addingPayment, setAddingPayment] = useState<number | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payKind, setPayKind] = useState<PaymentKind>("rent");
-  const [payType, setPayType] = useState("cash");
+  const [payType, setPayType] = useState<PayMethod>("cash");
   const [payDate, setPayDate] = useState(today());
   const [payNotes, setPayNotes] = useState("");
   const [payError, setPayError] = useState("");
@@ -853,15 +855,7 @@ export default function TenantDetailPage() {
                               <option value="rent">Rent</option>
                               <option value="deposit">Deposit</option>
                             </Select>
-                            <Select
-                              value={payType}
-                              onChange={(e) => setPayType(e.target.value)}
-                              aria-label="Paid by"
-                              className="w-auto"
-                            >
-                              <option value="cash">Cash</option>
-                              <option value="online">Online</option>
-                            </Select>
+                            <SegmentedControl options={PAY_METHODS} value={payType} onChange={setPayType} ariaLabel="Paid by" />
                             <Input
                               type="date"
                               value={payDate}
@@ -921,7 +915,7 @@ export default function TenantDetailPage() {
                                 {p.kind === "deposit" && <Badge tone="info" className="ml-2">Deposit</Badge>}
                                 <span className="ml-2"><PaymentStatus payment={p} audience="owner" /></span>
                               </td>
-                              <td className="py-2 capitalize text-stone-500">{p.payment_type}</td>
+                              <td className="py-2 text-stone-500">{payMethodLabel(p.payment_type)}</td>
                               <td className="py-2 text-stone-400">
                                 {p.notes || "—"}
                                 <RejectionReason payment={p} />

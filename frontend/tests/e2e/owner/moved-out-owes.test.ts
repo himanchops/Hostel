@@ -29,7 +29,7 @@ async function post(request: APIRequestContext, token: string, path: string, dat
 test.describe("A tenant who moved out still owing", () => {
   test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: true });
 
-  test("stays on Collections and in Overdue until they have paid", async ({ page, request }) => {
+  test("stays on Payments and in Overdue until they have paid", async ({ page, request }) => {
     const { token } = await createOwner(request, `moved-${RUN_ID}`);
     const auth = { Authorization: `Bearer ${token}` };
     const { bedId } = await createSiteRoomBed(request, token, `moved-${RUN_ID}`);
@@ -46,10 +46,12 @@ test.describe("A tenant who moved out still owing", () => {
 
     // ── Still on the chase list, in its own group, in the right words ──
     await loginAs(page, token);
-    await page.goto("/collections");
-    const group = page.getByRole("region", { name: "Moved out — still owes" });
-    await expect(group).toBeVisible();
-    await expect(group).toContainText("₹12,000 across 1 tenant");
+    await page.goto("/payments");
+    // Folded at the bottom: chased now and then, not every day.
+    const fold = page.getByRole("button", { name: /Moved out — still owes/ });
+    await expect(fold).toContainText("₹12,000 across 1 tenant");
+    await fold.tap();
+    const group = page.locator("section").filter({ has: fold });
     const card = group.locator("div").filter({ hasText: `Kiran ${RUN_ID}` }).first();
     await expect(card).toContainText("was in Room 1 · Bed A");
     await expect(card).toContainText("settled today");
@@ -67,12 +69,13 @@ test.describe("A tenant who moved out still owing", () => {
     expect(dash.revenue.overdue_amount).toBe(1200000);
 
     // ── A part payment goes against it, on every screen ──
-    await page.goto("/collections");
-    await group.getByRole("button", { name: "Record payment" }).tap();
+    await page.goto("/payments");
+    await fold.tap();
+    await group.getByRole("button", { name: "Record", exact: true }).tap();
     await group.getByLabel("Amount (₹)").fill("5000");
-    await group.getByRole("button", { name: "Save payment" }).tap();
+    await group.getByRole("button", { name: "Save ₹5,000" }).tap();
     await expect(page.getByText(`Recorded ₹5,000 from Kiran`)).toBeVisible();
-    await expect(group).toContainText("₹7,000 across 1 tenant");
+    await expect(fold).toContainText("₹7,000 across 1 tenant");
 
     const summary = await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth })).json();
     expect(summary.balance).toBe(700000);
@@ -80,7 +83,8 @@ test.describe("A tenant who moved out still owing", () => {
     // ── Paid off: gone ──
     await post(request, token, `/api/stays/${stay.id}/payments`, { amount: 700000, payment_type: "online" });
     await page.reload();
-    await expect(page.getByText("Everyone is paid up 🎉")).toBeVisible();
+    await expect(page.getByText("Nobody is due this week")).toBeVisible();
+    await expect(fold).toHaveCount(0);
     const after = await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth })).json();
     expect(after.balance).toBe(0);
   });
@@ -102,8 +106,8 @@ test.describe("A tenant who moved out still owing", () => {
     await post(request, token, `/api/stays/${stay.id}/settlement`, { refund_paise: preview.refund_paise, adjustments: [] });
 
     await loginAs(page, token);
-    await page.goto("/collections");
-    await expect(page.getByText("Everyone is paid up 🎉")).toBeVisible();
+    await page.goto("/payments");
+    await expect(page.getByText("Nobody is due this week")).toBeVisible();
     await expect(page.getByText("Moved out — still owes")).toHaveCount(0);
   });
 });

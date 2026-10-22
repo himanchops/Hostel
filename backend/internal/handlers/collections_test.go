@@ -82,12 +82,10 @@ func TestCycleStart_MonthEndClamping(t *testing.T) {
 // Moved in 2026-02-20 on ₹7,500/month, paid three months. By August 11 six
 // cycles are due, so ₹22,500 is outstanding, and the money has been owed since
 // the fourth cycle began on May 20 — 83 days.
-func TestBuildCollections_BalanceAndDaysOverdue(t *testing.T) {
+func TestPayeeRow_BalanceAndDaysOverdue(t *testing.T) {
 	const rent = 750000
 
-	got := buildCollections([]collectionStayRow{
-		stay(rent, "monthly", date(2026, time.February, 20), 3*rent),
-	}, collectionsToday)
+	got := []CollectionRow{payeeRow(stay(rent, "monthly", date(2026, time.February, 20), 3*rent), collectionsToday)}
 
 	if len(got) != 1 {
 		t.Fatalf("got %d rows, want 1", len(got))
@@ -102,12 +100,12 @@ func TestBuildCollections_BalanceAndDaysOverdue(t *testing.T) {
 
 // Paying half of the cycle you are behind on does not restart the clock. The
 // tenant still owes that cycle, so it is still the one being counted from.
-func TestBuildCollections_PartPaymentDoesNotClearACycle(t *testing.T) {
+func TestPayeeRow_PartPaymentDoesNotClearACycle(t *testing.T) {
 	const rent = 750000
 	start := date(2026, time.February, 20)
 
-	threePaid := buildCollections([]collectionStayRow{stay(rent, "monthly", start, 3*rent)}, collectionsToday)
-	threeAndAHalf := buildCollections([]collectionStayRow{stay(rent, "monthly", start, 3*rent+rent/2)}, collectionsToday)
+	threePaid := []CollectionRow{payeeRow(stay(rent, "monthly", start, 3*rent), collectionsToday)}
+	threeAndAHalf := []CollectionRow{payeeRow(stay(rent, "monthly", start, 3*rent+rent/2), collectionsToday)}
 
 	if threeAndAHalf[0].DaysSinceDue != threePaid[0].DaysSinceDue {
 		t.Errorf("a part payment moved the overdue clock: %d vs %d",
@@ -118,19 +116,17 @@ func TestBuildCollections_PartPaymentDoesNotClearACycle(t *testing.T) {
 		t.Errorf("BalancePaise = %d, want %d", threeAndAHalf[0].BalancePaise, want)
 	}
 	// And paying the whole cycle does move it — to June 20, 52 days back.
-	fourPaid := buildCollections([]collectionStayRow{stay(rent, "monthly", start, 4*rent)}, collectionsToday)
+	fourPaid := []CollectionRow{payeeRow(stay(rent, "monthly", start, 4*rent), collectionsToday)}
 	if fourPaid[0].DaysSinceDue != 52 {
 		t.Errorf("DaysSinceDue after clearing the cycle = %d, want 52", fourPaid[0].DaysSinceDue)
 	}
 }
 
 // Never paid anything: overdue since the day they moved in.
-func TestBuildCollections_NeverPaid(t *testing.T) {
+func TestPayeeRow_NeverPaid(t *testing.T) {
 	const rent = 600000
 
-	got := buildCollections([]collectionStayRow{
-		stay(rent, "monthly", date(2026, time.February, 20), 0),
-	}, collectionsToday)
+	got := []CollectionRow{payeeRow(stay(rent, "monthly", date(2026, time.February, 20), 0), collectionsToday)}
 
 	if got[0].BalancePaise != 6*rent {
 		t.Errorf("BalancePaise = %d, want %d (6 cycles)", got[0].BalancePaise, 6*rent)
@@ -146,12 +142,10 @@ func TestBuildCollections_NeverPaid(t *testing.T) {
 
 // Weekly and daily stays roll over inside the month, so the overdue clock has
 // to count from the right cycle boundary, not from the month.
-func TestBuildCollections_WeeklyAndDailyCycles(t *testing.T) {
+func TestPayeeRow_WeeklyAndDailyCycles(t *testing.T) {
 	// ₹2,000/week from 2026-06-15, ₹8,000 paid = 4 weeks. By Aug 11, 9 cycles
 	// are due. The 5th cycle began on Jul 13 — 29 days back.
-	weekly := buildCollections([]collectionStayRow{
-		stay(200000, "weekly", date(2026, time.June, 15), 800000),
-	}, collectionsToday)
+	weekly := []CollectionRow{payeeRow(stay(200000, "weekly", date(2026, time.June, 15), 800000), collectionsToday)}
 	if weekly[0].BalancePaise != 1000000 {
 		t.Errorf("weekly BalancePaise = %d, want 1000000", weekly[0].BalancePaise)
 	}
@@ -160,9 +154,7 @@ func TestBuildCollections_WeeklyAndDailyCycles(t *testing.T) {
 	}
 
 	// ₹500/night from Aug 9, nothing paid: nights of the 9th, 10th and 11th.
-	daily := buildCollections([]collectionStayRow{
-		stay(50000, "daily", date(2026, time.August, 9), 0),
-	}, collectionsToday)
+	daily := []CollectionRow{payeeRow(stay(50000, "daily", date(2026, time.August, 9), 0), collectionsToday)}
 	if daily[0].BalancePaise != 150000 {
 		t.Errorf("daily BalancePaise = %d, want 150000", daily[0].BalancePaise)
 	}
@@ -171,9 +163,10 @@ func TestBuildCollections_WeeklyAndDailyCycles(t *testing.T) {
 	}
 }
 
-// The list is a chase list, so anyone who does not owe money must not be on it
-// — including tenants paid exactly up to date and tenants paying ahead.
-func TestBuildCollections_ExcludesEveryoneWhoDoesNotOwe(t *testing.T) {
+// Anyone who does not owe money owes nothing on their row — including tenants
+// paid exactly up to date and tenants paying ahead — so they never land under
+// Overdue.
+func TestPayeeRow_NothingOwedWhenPaidUpOrAhead(t *testing.T) {
 	const rent = 750000
 	start := date(2026, time.February, 20) // 6 cycles due by today
 
@@ -188,71 +181,28 @@ func TestBuildCollections_ExcludesEveryoneWhoDoesNotOwe(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := buildCollections([]collectionStayRow{tt.row}, collectionsToday); len(got) != 0 {
-				t.Errorf("got %d rows, want 0 (balance %d)", len(got), got[0].BalancePaise)
+			got := payeeRow(tt.row, collectionsToday)
+			if got.BalancePaise != 0 || got.DaysSinceDue != 0 || (got.DueState != nil && *got.DueState == dueOverdue) {
+				t.Errorf("owes %d, %d days, %s; want nothing owed", got.BalancePaise, got.DaysSinceDue, deref(got.DueState))
 			}
 		})
 	}
 
 	// One paise short is still a debt, though.
 	short := stay(rent, "monthly", start, 6*rent-1)
-	if got := buildCollections([]collectionStayRow{short}, collectionsToday); len(got) != 1 || got[0].BalancePaise != 1 {
-		t.Errorf("owing one paise should appear with balance 1, got %+v", got)
-	}
-}
-
-// Biggest debt at the top, because that is the order the owner works in.
-func TestBuildCollections_SortedByBalanceThenAge(t *testing.T) {
-	small := stay(500000, "monthly", date(2026, time.July, 1), 500000) // owes 500000
-	small.TenantName = "Small debt"
-	big := stay(750000, "monthly", date(2026, time.February, 20), 0) // owes 4500000
-	big.TenantName = "Big debt"
-	middle := stay(600000, "monthly", date(2026, time.May, 5), 600000) // owes 1800000
-	middle.TenantName = "Middle debt"
-
-	got := buildCollections([]collectionStayRow{small, middle, big}, collectionsToday)
-
-	want := []string{"Big debt", "Middle debt", "Small debt"}
-	if len(got) != len(want) {
-		t.Fatalf("got %d rows, want %d", len(got), len(want))
-	}
-	for i, name := range want {
-		if got[i].TenantName != name {
-			t.Errorf("row %d is %q, want %q", i, got[i].TenantName, name)
-		}
-	}
-	if got[0].BalancePaise != 4500000 || got[1].BalancePaise != 1800000 || got[2].BalancePaise != 500000 {
-		t.Errorf("balances out of order: %d, %d, %d",
-			got[0].BalancePaise, got[1].BalancePaise, got[2].BalancePaise)
-	}
-
-	// Equal debts: the one owed longest goes first. Both owe ₹5,000 — one is a
-	// month behind on a big rent, the other four months behind on a small one.
-	recent := stay(500000, "monthly", date(2026, time.June, 1), 1000000)
-	recent.TenantName = "Recent"
-	longStanding := stay(250000, "monthly", date(2026, time.February, 20), 1000000)
-	longStanding.TenantName = "Long-standing"
-
-	tied := buildCollections([]collectionStayRow{recent, longStanding}, collectionsToday)
-	if tied[0].BalancePaise != tied[1].BalancePaise {
-		t.Fatalf("fixture is not actually tied: %d vs %d", tied[0].BalancePaise, tied[1].BalancePaise)
-	}
-	if tied[0].DaysSinceDue != 52 || tied[1].DaysSinceDue != 10 {
-		t.Errorf("ages = %d and %d, want 52 and 10", tied[0].DaysSinceDue, tied[1].DaysSinceDue)
-	}
-	if tied[0].TenantName != "Long-standing" {
-		t.Errorf("tie broken toward %q, want the older debt first", tied[0].TenantName)
+	if got := payeeRow(short, collectionsToday); got.BalancePaise != 1 || *got.DueState != dueOverdue {
+		t.Errorf("owing one paise should be overdue with balance 1, got %d %s", got.BalancePaise, *got.DueState)
 	}
 }
 
 // A stay with no bed assigned (deposit collected, room not allocated yet) still
-// owes rent and still belongs on the list — the page renders it without a bed.
-func TestBuildCollections_NullableFieldsPassThrough(t *testing.T) {
+// owes rent and still has a row — the page renders it without a bed.
+func TestPayeeRow_NullableFieldsPassThrough(t *testing.T) {
 	row := stay(600000, "monthly", date(2026, time.May, 5), 600000)
 	row.BedName = sql.NullString{}
 	row.LastPaymentDate = nullStr("2026-05-05")
 
-	got := buildCollections([]collectionStayRow{row}, collectionsToday)
+	got := []CollectionRow{payeeRow(row, collectionsToday)}
 
 	if len(got) != 1 {
 		t.Fatalf("got %d rows, want 1", len(got))
@@ -335,4 +285,48 @@ func TestBuildMovedOut(t *testing.T) {
 	if total != 700000 {
 		t.Errorf("movedOutTotal = %d, want 700000 (550000 + 150000)", total)
 	}
+}
+
+// The Payments screen lists everyone, owing or not, soonest due first — and
+// says when each is due with the same dueFor the grid uses, so a tile and a
+// row can never disagree about a date.
+func TestBuildPayees_SoonestDueFirst(t *testing.T) {
+	behind := stay(650000, "monthly", date(2026, time.June, 5), 650000*2) // paid Jun, Jul; Aug due 5 Aug
+	behind.StayID, behind.TenantName = 1, "Behind"
+	soon := stay(500000, "monthly", date(2026, time.July, 14), 500000) // paid Jul; Aug due 14 Aug
+	soon.StayID, soon.TenantName = 2, "Soon"
+	ahead := stay(800000, "monthly", date(2026, time.July, 1), 800000*4) // paid Jul–Oct; in credit
+	ahead.StayID, ahead.TenantName = 3, "Ahead"
+	ahead.LastPaymentType = nullStr("online")
+
+	rows := buildPayees([]collectionStayRow{ahead, soon, behind}, collectionsToday)
+	if len(rows) != 3 {
+		t.Fatalf("got %d rows, want all three active stays", len(rows))
+	}
+
+	want := []struct {
+		name, date, state string
+		balance, due      int64
+		days              int
+	}{
+		{"Behind", "2026-08-05", dueOverdue, 650000, 650000, 6},
+		{"Soon", "2026-08-14", dueUpcoming, 0, 500000, 0},
+		{"Ahead", "2026-11-01", duePaidAhead, 0, 800000, 0},
+	}
+	for i, w := range want {
+		r := rows[i]
+		if r.TenantName != w.name || *r.DueDate != w.date || *r.DueState != w.state ||
+			r.BalancePaise != w.balance || *r.DuePaise != w.due || r.DaysSinceDue != w.days {
+			t.Errorf("row %d: got %s due %s %s, owes ₹%d, next ₹%d, %d days; want %s due %s %s, owes ₹%d, next ₹%d, %d days",
+				i, r.TenantName, *r.DueDate, *r.DueState, r.BalancePaise/100, *r.DuePaise/100, r.DaysSinceDue,
+				w.name, w.date, w.state, w.balance/100, w.due/100, w.days)
+		}
+	}
+	if rows[2].LastPaymentType == nil || *rows[2].LastPaymentType != "online" {
+		t.Errorf("last payment type = %v, want online, so the form can prefill it", rows[2].LastPaymentType)
+	}
+	if rows[0].LastPaymentType != nil {
+		t.Errorf("a stay with no recorded type should send none, got %s", *rows[0].LastPaymentType)
+	}
+
 }

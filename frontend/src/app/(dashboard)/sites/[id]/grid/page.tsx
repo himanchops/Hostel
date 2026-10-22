@@ -35,7 +35,9 @@ import {
   HOVER_REVEAL,
   TOUCH_TARGET,
   TOUCH_LINK,
+  SegmentedControl,
 } from "@/components/ui";
+import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { EndStayDialog } from "@/components/EndStayDialog";
 import {
@@ -578,7 +580,7 @@ function OccupiedPanel({
   // Payment form
   const [amount, setAmount] = useState("");
   const [payKind, setPayKind] = useState<PaymentKind>("rent");
-  const [payType, setPayType] = useState("cash");
+  const [payType, setPayType] = useState<PayMethod>("cash");
   const [payDate, setPayDate] = useState(today());
   const [notes, setNotes] = useState("");
   const [payError, setPayError] = useState("");
@@ -723,10 +725,7 @@ function OccupiedPanel({
               <option value="rent">Rent</option>
               <option value="deposit">Deposit</option>
             </Select>
-            <Select value={payType} onChange={(e) => setPayType(e.target.value)} aria-label="Paid by">
-              <option value="cash">Cash</option>
-              <option value="online">Online</option>
-            </Select>
+            <SegmentedControl options={PAY_METHODS} value={payType} onChange={setPayType} ariaLabel="Paid by" />
             <Input
               type="date"
               value={payDate}
@@ -763,7 +762,7 @@ function OccupiedPanel({
                     <span className="ml-2"><PaymentStatus payment={p} audience="owner" /></span>
                   </p>
                   <p className="text-xs tabular-nums text-stone-400">
-                    {p.payment_type} · {p.payment_date.slice(0, 10)}
+                    {payMethodLabel(p.payment_type)} · {p.payment_date.slice(0, 10)}
                     {p.notes ? ` · ${p.notes}` : ""}
                   </p>
                   <RejectionReason payment={p} />

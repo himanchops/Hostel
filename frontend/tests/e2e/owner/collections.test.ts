@@ -63,8 +63,8 @@ async function seedOverdueStay(
   return { tenant, stay, start, secondCycle, today };
 }
 
-test.describe("Collections", () => {
-  test("GET /api/collections returns exact balance and overdue age", async ({ request }) => {
+test.describe("Payments: who owes", () => {
+  test("the board returns exact balance and overdue age", async ({ request }) => {
     const { token } = await createOwner(request, `coll-api-${RUN_ID}`);
 
     // ₹5,000/month, four cycles due (₹20,000), one month paid → ₹15,000 owed.
@@ -75,11 +75,11 @@ test.describe("Collections", () => {
       paid: 500000,
     });
 
-    const res = await request.get(`${BASE}/api/collections`, {
+    const res = await request.get(`${BASE}/api/payments/board`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status()).toBe(200);
-    const rows = await res.json();
+    const rows = (await res.json()).stays;
 
     expect(rows).toHaveLength(1);
     const row = rows[0];
@@ -92,9 +92,11 @@ test.describe("Collections", () => {
 
     // One cycle is paid, so the debt runs from the start of the second cycle.
     expect(row.days_since_due).toBe(daysBetween(secondCycle, today));
+    expect(row.due_state).toBe("overdue");
+    expect(row.due_date).toBe(isoDate(secondCycle));
   });
 
-  test("a tenant who is paid up is not on the list", async ({ request }) => {
+  test("a tenant who is paid up owes nothing", async ({ request }) => {
     const { token } = await createOwner(request, `coll-paid-${RUN_ID}`);
 
     // Four cycles due, four cycles paid.
@@ -105,11 +107,13 @@ test.describe("Collections", () => {
       paid: 2000000,
     });
 
-    const res = await request.get(`${BASE}/api/collections`, {
+    const res = await request.get(`${BASE}/api/payments/board`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status()).toBe(200);
-    expect(await res.json()).toEqual([]);
+    const [row] = (await res.json()).stays;
+    expect(row.balance_paise).toBe(0);
+    expect(row.due_state).not.toBe("overdue");
   });
 
   test("owner records a payment from the list and the row clears", async ({ page, request }) => {
@@ -119,10 +123,11 @@ test.describe("Collections", () => {
     await seedOverdueStay(request, token, { name, phone, rent: 500000, paid: 500000 });
 
     await loginAs(page, token);
-    await page.goto("/collections");
+    await page.goto("/payments");
 
     // The row, with the outstanding amount — not the rent, not the total billed.
-    await expect(page.getByText(name)).toBeVisible();
+    // (The seeded payment is also under "Recorded this week", entered today.)
+    await expect(page.getByRole("link", { name }).first()).toBeVisible();
     await expect(page.getByText("₹15,000", { exact: true })).toBeVisible();
 
     // The nudge is a wa.me deep link, opened by the owner — never sent by us.
@@ -136,13 +141,14 @@ test.describe("Collections", () => {
     );
 
     // Record the payment inline: the amount is prefilled with the whole balance.
-    await page.getByRole("button", { name: "Record payment" }).click();
+    await page.getByRole("button", { name: "Record", exact: true }).click();
     await expect(page.getByLabel("Amount (₹)")).toHaveValue("15000");
-    await page.getByRole("button", { name: "Save payment" }).click();
+    await page.getByRole("button", { name: "Save ₹15,000" }).click();
 
-    // Debt cleared → off the list entirely.
-    await expect(page.getByText("Everyone is paid up 🎉")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(name)).toHaveCount(0);
+    // Debt cleared → off the overdue list, and listed as recorded instead.
+    await expect(page.getByText(`Recorded ₹15,000 from UI`)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("heading", { name: "Overdue" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Recorded this week" })).toContainText(name);
   });
 
   test("a tenant with an unusable phone offers a fix instead of a nudge", async ({ page, request }) => {
@@ -156,7 +162,7 @@ test.describe("Collections", () => {
     });
 
     await loginAs(page, token);
-    await page.goto("/collections");
+    await page.goto("/payments");
 
     await expect(page.getByText(name)).toBeVisible();
     await expect(page.getByRole("link", { name: "Nudge" })).toHaveCount(0);

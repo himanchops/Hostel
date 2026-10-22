@@ -67,14 +67,14 @@ test.describe("When the session ends", () => {
   test("on a cold load, signing in goes back to where you were", async ({ page, request }) => {
     const { owner } = await createOwner(request, `ended-c-${RUN_ID}`);
 
-    await page.goto("/collections?from=bookmark");
-    await expect(page).toHaveURL(/\/login\?next=%2Fcollections%3Ffrom%3Dbookmark$/);
+    await page.goto("/payments?from=bookmark");
+    await expect(page).toHaveURL(/\/login\?next=%2Fpayments%3Ffrom%3Dbookmark$/);
     await expect(page.getByText("Sign in to carry on where you were.")).toBeVisible();
 
     await page.getByLabel("Email").fill(owner.email);
     await page.getByLabel("Password").fill("testpassword123");
     await page.getByRole("button", { name: "Sign in" }).tap();
-    await expect(page).toHaveURL(/\/collections\?from=bookmark$/);
+    await expect(page).toHaveURL(/\/payments\?from=bookmark$/);
   });
 
   test("next never leaves the site", async ({ page, request }) => {

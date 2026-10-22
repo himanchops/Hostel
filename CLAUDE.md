@@ -149,7 +149,14 @@ Key conventions to carry forward:
   Insights cannot drift.
 - **When rent is due comes from `dueFor`** (`handlers/due.go`): the oldest
   cycle not fully paid, via `paidThrough`. Screens word it with `lib/due.ts`
-  and never work out a due date themselves.
+  and never work out a due date themselves. "Due soon" is one window,
+  `DUE_SOON_DAYS` (`dueSoon`), shared by the grid's amber tiles and the
+  Payments screen's "Due this week".
+- **The owner's word for money that arrived online is "UPI".** The stored
+  `payment_type` stays `online`; every label goes through `payMethodLabel` /
+  `PAY_METHODS` (`lib/payMethod.ts`), and every record form uses the same
+  Cash / UPI buttons. The screen once called Collections is **Payments**
+  (`/payments`, data from `GET /api/payments/board`).
 - **Rent can change partway through a stay** (migration 011). Anything that
   bills rent goes through `rentSchedule.billed` (`handlers/rent.go`), never
   `rent_amount × cycles`, which reprices every month already lived. There were

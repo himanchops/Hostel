@@ -260,8 +260,10 @@ func buildBed(row gridRow, today time.Time) GridBed {
 	}
 
 	due := dueFor(sched, startDate, row.RentCycle.String, row.TotalPaid, today)
-	dueDate := due.Date.Format("2006-01-02")
-	bed.DueDate, bed.DuePaise, bed.DueState = &dueDate, &due.Paise, &due.State
+	if due.State != "" {
+		dueDate := due.Date.Format("2006-01-02")
+		bed.DueDate, bed.DuePaise, bed.DueState = &dueDate, &due.Paise, &due.State
+	}
 
 	bed.Status = computeBedStatus(balance, currentRent, noticeDate, expectedEnd, today)
 	return bed

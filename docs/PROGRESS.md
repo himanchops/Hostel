@@ -2583,9 +2583,99 @@ waits to be designed with quicker payment recording.
 Vercel and Render both reported their deploys successful at 13:53 UTC. No
 migration.
 
-**Next:** the owner picks between the move-out flow redesign and "Due this
-week" plus quicker payment recording (designed together, at his request). The
-rest of `docs/BACKLOG.md` → "round two" follows, one at a time.
+**Next:** "Due this week" and quicker payment recording, designed together at
+his request; see "Payments" below.
+
+---
+
+## Payments: due this week, recorded in a few taps (Oct 2026)
+
+Recording a payment, the thing the owner does most, was three screens deep
+for anyone paying on time: Collections listed only people who owed, so a
+tenant paying on their due day had no row. Payments arrive at all hours, by
+UPI at the reception's code or cash in hand, and his mother enters them when
+she visits, from memory. The screen is built for that.
+
+**Collections is now Payments** (`/payments`). "Collections" did not say what
+it held to someone seeing it cold. The old page, its `/api/collections`
+endpoint and its client are gone, with no redirect: nobody had bookmarked it
+yet. In order:
+- **"Who paid?"** search, by name or room, over every open stay, for anyone
+  not on the lists (paying early, a second month).
+- A banner when tenants have sent payment proofs from the portal, linking to
+  Pending's proofs tab (`/pending?tab=payments`).
+- **Overdue**, oldest first: amount owed, "Overdue since 15 Oct", Nudge.
+- **Due this week**: due today or within 7 days (`dueSoon`, the same window
+  as the grid's amber tiles), "Due Sat, 25 Oct". No nudge, since nothing is
+  owed yet.
+- **Recorded this week**: payments *entered* in the last 7 days, with how and
+  when they were paid, latest paid first. It answers "did I already put that
+  in?". Ordered by entry time at first, a batch typed in one sitting looked
+  shuffled, since each line shows the date paid.
+- **Moved out — still owes**, unchanged but folded.
+
+Each of the two lists shows 5 rows, with its count in the heading and "Show
+all N" beneath, so a long Overdue list cannot push Due this week off the
+screen. He asked for each list in its own scroll box; we chose this instead,
+because a scroll area inside a scrolling page traps the finger on an iPad and
+hides that there is more. An empty list is left out, and the subtitle says
+so: "Nobody overdue · 3 due this week", or "2 overdue · none due this week".
+With nothing due at all, one card says "Nobody is due this week".
+
+Recording opens in the row with everything prefilled: what they owe (or the
+rent coming due), Cash or UPI as they paid last time, and **Today** /
+**Yesterday** / **Another day** as taps, since entries are often a day late.
+The note hides behind "+ Note". The button says the amount ("Save ₹7,000").
+After saving, the row moves to Recorded and the next one is right there.
+
+**"Online" is "UPI" everywhere** the owner sees it: every record form (all
+three now use the same Cash / UPI buttons), the dashboard, the tenant ledger,
+the bed panel and Insights. Labels come from `lib/payMethod.ts`; the stored
+value is still `online`, so nothing recorded changed.
+
+The dashboard's "Needs attention" gains "N tenants due to pay this week",
+linking to Payments; the list lives in one place. The nav's red count is now
+who is behind (overdue or moved out owing), not who is due today.
+
+**Backend:** `GET /api/payments/board` (`collections.go` → `GetBoard`) sends
+every open stay as a `CollectionRow` (built by `payeeRow`) with
+`due_date`/`due_paise`/`due_state` from `dueFor` and `last_payment_type`,
+plus the moved-out rows, payments entered in the last 7 days, and the
+pending-proof count. It replaces `GET /api/collections`.
+
+**Fixed on the way:** a rent-free bed read as "overdue since move-in" on ₹0
+(since #43: a red date on its grid tile, and it would have topped Overdue).
+`dueFor` now returns nothing due when the rent at the due date is zero, and
+the grid, tenant summary and board send no due fields for it.
+
+Left out at his call, to build later: deposits still owed as rows, an undo on
+recorded payments, and any new work on the moved-out section.
+
+### Verification
+
+- `TestBuildPayees_SoonestDueFirst`: behind, due soon and paid-ahead stays
+  in that order, with exact dates, amounts, days and last payment type. The
+  old `buildCollections` tests now run against `payeeRow`, and `TestDueFor`
+  covers the rent-free bed.
+- `tests/unit/due.test.ts`: the 7-day window (today counts, day 8 does not,
+  overdue never), weekday wording, and the UPI label.
+- `owner/payments.test.ts` (7 tests). At iPad portrait with touch: nobody
+  overdue, nothing due this week, nobody due at all (search and recording
+  still work), and eight overdue, where five show, Due this week starts on
+  the first screen, Show all / Show fewer work, and recording one brings the
+  sixth up. Also: the two lists and what is on neither;
+  recording a due-this-week payment as UPI dated yesterday, checked in the
+  API, and "Recorded this week" in paid-date order; search by name and room,
+  with a note; the proof banner opening Pending on its proofs tab, and the
+  dashboard line. Four tests that read `/api/collections` now read the board.
+- `collections.test.ts`, `moved-out-owes.test.ts`, `touch-targets.test.ts`,
+  `responsive.test.ts`, `account.test.ts` and `session-ended.test.ts` moved
+  to the new name and buttons.
+- Checked by eye on the local demo at 768×1024, 1024×768 and 375×812. On a
+  phone the amount and buttons wrap under the name.
+- The touch-target test caught the proof banner at 40px; a linked `Banner`
+  now carries `TOUCH_TARGET` everywhere.
+- Full suite: 141 e2e and 59 unit tests pass, plus `go test ./...`.
 
 ---
 

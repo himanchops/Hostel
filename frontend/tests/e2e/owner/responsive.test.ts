@@ -47,7 +47,7 @@ test.describe("Responsive shell", () => {
     const seeded = await createSiteRoomBed(request, token, RUN_ID);
     siteId = seeded.siteId;
 
-    // A tenant who owes money, so /collections has rows to lay out rather than
+    // A tenant who owes money, so /payments has rows to lay out rather than
     // an empty state — the empty state fits anywhere.
     const tenant = await createTenantViaApi(request, token, {
       name: `Responsive Tenant ${RUN_ID}`,
@@ -78,7 +78,7 @@ test.describe("Responsive shell", () => {
 
     const paths = [
       "/dashboard",
-      "/collections",
+      "/payments",
       "/sites",
       `/sites/${siteId}`,
       `/sites/${siteId}/grid`,
@@ -124,12 +124,12 @@ test.describe("Responsive shell", () => {
     await page.goto("/dashboard");
 
     const nav = page.getByRole("navigation", { name: "Primary" });
-    await nav.getByRole("link", { name: "Collections" }).click();
+    await nav.getByRole("link", { name: "Payments" }).click();
 
-    await expect(page).toHaveURL(/\/collections$/);
-    await expect(nav.getByRole("link", { name: "Collections" })).toHaveAttribute("aria-current", "page");
+    await expect(page).toHaveURL(/\/payments$/);
+    await expect(nav.getByRole("link", { name: "Payments" })).toHaveAttribute("aria-current", "page");
     // The page's own heading is still the one naming the page.
-    await expect(page.getByRole("heading", { name: "Collections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
   });
 
   test("the account menu opens and signs out from a phone", async ({ page }) => {

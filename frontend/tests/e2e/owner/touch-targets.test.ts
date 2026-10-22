@@ -106,7 +106,7 @@ for (const device of [
         for (const f of await smallTargets(page)) failures.push(`${label}: ${f}`);
       };
 
-      for (const path of ["/dashboard", "/sites", `/sites/${siteId}`, "/tenants", "/tenants/new", "/collections", "/pending", "/account", "/insights"]) {
+      for (const path of ["/dashboard", "/sites", `/sites/${siteId}`, "/tenants", "/tenants/new", "/payments", "/pending", "/account", "/insights"]) {
         await page.goto(path);
         await page.waitForLoadState("networkidle");
         await check(path);
@@ -117,9 +117,9 @@ for (const device of [
       await expect(page.getByTestId("bed-chip").first()).toBeVisible();
       await check("site, room open");
 
-      await page.goto("/collections");
-      await page.getByRole("button", { name: "Record payment" }).first().tap();
-      await check("/collections, recording");
+      await page.goto("/payments");
+      await page.getByRole("button", { name: "Record", exact: true }).first().tap();
+      await check("/payments, recording");
 
       await page.goto("/pending");
       await page.getByRole("button", { name: /Payment Proofs/ }).tap();

@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import {
   dashboardApi,
+  paymentsBoardApi,
   DashboardData,
   VacatingTenant,
   formatCurrency,
   formatDay,
 } from "@/lib/api";
+import { dueSoon, localToday } from "@/lib/due";
+import { payMethodLabel } from "@/lib/payMethod";
 import {
   AlertIcon,
   Badge,
@@ -52,9 +55,16 @@ export default function DashboardPage() {
   const { owner, token } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dueThisWeek, setDueThisWeek] = useState(0);
 
   useEffect(() => {
     if (!token) return;
+    // Who to expect money from, as Payments lists them. A count, not a second
+    // list: the list lives on Payments, where each row can be recorded.
+    paymentsBoardApi
+      .get(token)
+      .then((b) => setDueThisWeek(b.stays.filter((r) => dueSoon(r, localToday())).length))
+      .catch(() => {});
     dashboardApi
       .get(token)
       .then(setData)
@@ -76,7 +86,7 @@ export default function DashboardPage() {
       {/* One place for everything waiting on the owner, rather than a stack of
           competing banners. */}
       {!loading && alerts &&
-        (alerts.pending_tenants > 0 || alerts.pending_payments > 0 || alerts.departures_due > 0) && (
+        (alerts.pending_tenants > 0 || alerts.pending_payments > 0 || alerts.departures_due > 0 || dueThisWeek > 0) && (
         <Card title="Needs attention" className="mb-6">
           <div className="divide-y divide-stone-100">
             {alerts.pending_tenants > 0 && (
@@ -87,9 +97,17 @@ export default function DashboardPage() {
                 label={`pending registration${alerts.pending_tenants !== 1 ? "s" : ""} awaiting approval`}
               />
             )}
+            {dueThisWeek > 0 && (
+              <AttentionRow
+                href="/payments"
+                count={dueThisWeek}
+                tone="warning"
+                label={`${dueThisWeek === 1 ? "tenant" : "tenants"} due to pay this week`}
+              />
+            )}
             {alerts.pending_payments > 0 && (
               <AttentionRow
-                href="/pending"
+                href="/pending?tab=payments"
                 count={alerts.pending_payments}
                 tone="info"
                 label={`payment proof${alerts.pending_payments !== 1 ? "s" : ""} awaiting approval`}
@@ -168,11 +186,11 @@ export default function DashboardPage() {
                 ? (rev?.moved_out_owed ?? 0) > 0
                   // Named, because it is money from people who no longer
                   // live here and an owner reading "overdue" expects rooms.
-                  ? `incl. ${formatCurrency(rev!.moved_out_owed)} from tenants who moved out · chase it from Collections →`
-                  : "chase it from Collections →"
+                  ? `incl. ${formatCurrency(rev!.moved_out_owed)} from tenants who moved out · chase it from Payments →`
+                  : "chase it from Payments →"
                 : undefined
             }
-            href={(rev?.overdue_amount ?? 0) > 0 ? "/collections" : undefined}
+            href={(rev?.overdue_amount ?? 0) > 0 ? "/payments" : undefined}
           />
         </div>
       )}
@@ -274,7 +292,7 @@ export default function DashboardPage() {
                         </p>
                         <p className="text-xs tabular-nums text-stone-400">{p.payment_date}</p>
                         <Badge tone={p.payment_type === "cash" ? "neutral" : "success"}>
-                          {p.payment_type}
+                          {payMethodLabel(p.payment_type)}
                         </Badge>
                         {/* Listed, because the money arrived — but labelled,
                             because "Collected this month" leaves it out. */}

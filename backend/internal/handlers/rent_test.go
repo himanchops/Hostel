@@ -103,14 +103,11 @@ func TestDuesForSchedule_SettlementBillsEachCycleAtItsRent(t *testing.T) {
 	}
 }
 
-func TestBuildCollections_RaisedRentDatesTheDebtFromTheFirstShortCycle(t *testing.T) {
-	rows := buildCollections([]collectionStayRow{{
+func TestPayeeRow_RaisedRentDatesTheDebtFromTheFirstShortCycle(t *testing.T) {
+	rows := []CollectionRow{payeeRow(collectionStayRow{
 		StayID: 1, TenantName: "Raised", RentAmount: 550000, RentCycle: "monthly",
 		StartDate: raiseStart, TotalPaid: 2000000, Schedule: raised,
-	}}, raiseToday)
-	if len(rows) != 1 {
-		t.Fatalf("got %d rows, want 1", len(rows))
-	}
+	}, raiseToday)}
 	// Owes ₹26,000 − ₹20,000; behind since 6 Sep, the first cycle not covered.
 	if rows[0].BalancePaise != 600000 {
 		t.Errorf("balance = %d, want 600000", rows[0].BalancePaise)

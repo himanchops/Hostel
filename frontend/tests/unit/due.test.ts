@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { dueChip, dueLine, daysUntil } from "../../src/lib/due";
+import { dueChip, dueLine, daysUntil, dueSoon, dueWeekday } from "../../src/lib/due";
+import { payMethodLabel } from "../../src/lib/payMethod";
 
 const today = "2026-10-21";
 
@@ -27,4 +28,25 @@ test("a tile shows a date only when it is worth acting on", () => {
 test("days until counts calendar days across a month end", () => {
   expect(daysUntil("2026-11-02", "2026-10-30")).toBe(3);
   expect(daysUntil("2026-10-21", "2026-10-21")).toBe(0);
+});
+
+test("due this week is today and the seven days after, never the overdue", () => {
+  expect(dueSoon({ due_date: "2026-10-21", due_state: "due_today" }, today)).toBe(true);
+  expect(dueSoon({ due_date: "2026-10-28", due_state: "upcoming" }, today)).toBe(true);
+  expect(dueSoon({ due_date: "2026-10-29", due_state: "upcoming" }, today)).toBe(false);
+  // Overdue has its own list, above this one.
+  expect(dueSoon({ due_date: "2026-10-15", due_state: "overdue" }, today)).toBe(false);
+  expect(dueSoon({ due_date: "2026-10-25", due_state: "paid_ahead" }, today)).toBe(false);
+  expect(dueSoon({}, today)).toBe(false);
+});
+
+test("a date this week reads with its weekday", () => {
+  expect(dueWeekday("2026-10-24")).toBe("Sat, 24 Oct");
+  expect(dueWeekday("2026-11-02")).toBe("Mon, 2 Nov");
+});
+
+test("money that arrived online is labelled UPI", () => {
+  expect(payMethodLabel("online")).toBe("UPI");
+  expect(payMethodLabel("cash")).toBe("Cash");
+  expect(payMethodLabel(undefined)).toBe("");
 });

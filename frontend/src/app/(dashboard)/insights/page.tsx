@@ -8,6 +8,7 @@ import {
   type InsightsData, type MoneyEntry, type MoneyEntryKind, type MonthDetail,
   type RevenuePoint, type RoomInsight,
 } from "@/lib/api";
+import { payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import {
   Badge, Banner, Button, Card, ChevronIcon, Collapsible, EmptyState,
@@ -229,8 +230,8 @@ export default function InsightsPage() {
                 <Tile
                   label="Still owed now"
                   value={owedNow === null ? "—" : formatCurrency(owedNow)}
-                  note={owedNow ? "chase it from Collections →" : "nobody is behind"}
-                  href={owedNow ? "/collections" : undefined}
+                  note={owedNow ? "chase it from Payments →" : "nobody is behind"}
+                  href={owedNow ? "/payments" : undefined}
                 />
                 <Tile
                   label="Occupancy this month"
@@ -243,7 +244,7 @@ export default function InsightsPage() {
                 <Tile
                   label="Money in, net"
                   value={signed(sum((r) => r.net_in_paise))}
-                  note="rent and deposits, cash and online, less refunds"
+                  note="rent and deposits, cash and UPI, less refunds"
                 />
                 {/* Net, not "in": a month where people only left would read ₹0
                     while ₹30,900 of deposits went back out. */}
@@ -552,7 +553,7 @@ function MoneyLine({ entry: e }: { entry: MoneyEntry }) {
       </span>
       <span className="col-span-2 col-start-2 flex items-center gap-2 text-xs text-stone-400 sm:contents">
         <Badge tone={kind.tone}>{kind.label}</Badge>
-        <span className="capitalize sm:w-14">{e.payment_type ?? ""}</span>
+        <span className="sm:w-14">{payMethodLabel(e.payment_type)}</span>
         {place && <span className="sm:hidden">{place}</span>}
       </span>
     </li>

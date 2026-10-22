@@ -25,6 +25,14 @@ export function dueDay(date: string): string {
   return `${d} ${MONTHS[m - 1]}`;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Fri, 24 Oct" — a date in the coming week reads best with its weekday. */
+export function dueWeekday(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ${dueDay(date)}`;
+}
+
 /** Whole days from `today` to `date`, both "YYYY-MM-DD". */
 export function daysUntil(date: string, today: string): number {
   const utc = (s: string) => {
@@ -51,8 +59,17 @@ export function dueLine(due: Due): { text: string; tone: "danger" | "warning" | 
   }
 }
 
-/** How close is close enough to put a date on a grid tile. */
-export const TILE_DUE_DAYS = 7;
+/**
+ * How close is close enough to act on: a date on a grid tile, and a row in
+ * the Payments screen's "Due this week".
+ */
+export const DUE_SOON_DAYS = 7;
+
+/** Due today, or paid up now with the next rent due within the week. */
+export function dueSoon(due: Due, today: string): boolean {
+  if (due.due_state === "due_today") return true;
+  return due.due_state === "upcoming" && !!due.due_date && daysUntil(due.due_date, today) <= DUE_SOON_DAYS;
+}
 
 /**
  * The few words a grid tile has room for, or null. A tile shows a date only
@@ -63,14 +80,19 @@ export function dueChip(due: Due, today: string): { text: string; tone: "danger"
   if (!due.due_date || !due.due_state) return null;
   if (due.due_state === "overdue") return { text: `due ${dueDay(due.due_date)}`, tone: "danger" };
   if (due.due_state === "due_today") return { text: "due today", tone: "warning" };
-  if (due.due_state === "upcoming" && daysUntil(due.due_date, today) <= TILE_DUE_DAYS) {
-    return { text: `due ${dueDay(due.due_date)}`, tone: "warning" };
-  }
+  if (dueSoon(due, today)) return { text: `due ${dueDay(due.due_date)}`, tone: "warning" };
   return null;
 }
 
 /** Today in the owner's own timezone, as "YYYY-MM-DD". */
 export function localToday(): string {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Yesterday in the owner's own timezone, as "YYYY-MM-DD". */
+export function localYesterday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
