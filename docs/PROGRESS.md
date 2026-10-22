@@ -2677,6 +2677,13 @@ recorded payments, and any new work on the moved-out section.
   now carries `TOUCH_TARGET` everywhere.
 - Full suite: 141 e2e and 59 unit tests pass, plus `go test ./...`.
 
+**Production, 22 Oct 2026: live.** PR #45 was merged as `bb4a901`, and
+Vercel and Render both reported their deploys successful at 09:58 UTC.
+`/payments` serves and `/collections` is gone (404). No migration.
+
+**Next:** the rest of `docs/BACKLOG.md` → "round two", one at a time, in the
+owner's order.
+
 ---
 
 ## Architecture Notes
