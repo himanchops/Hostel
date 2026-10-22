@@ -1,4 +1,4 @@
-import type { DueState } from "./due";
+import type { Due, DueState } from "./due";
 import { shrinkImage } from "@/lib/shrinkImage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -654,14 +654,17 @@ export const dashboardApi = {
   get: (token: string) => request<DashboardData>("/api/dashboard", {}, token),
 };
 
-// ─── Collections ─────────────────────────────────────────────────────────────
+// ─── Collections and the Payments screen ─────────────────────────────────────
 
 /**
- * One tenant who owes money. Note `balance_paise` is what they OWE, so it is
- * positive — the opposite sign from the grid's balance, and the same as the
- * tenant summary's. Rows with nothing outstanding never reach the client.
+ * One tenant's stay as the Payments screen lists it. Note `balance_paise` is
+ * what they OWE, so it is never negative — the opposite sign from the grid's
+ * balance, and the same as the tenant summary's. `/api/collections` sends only
+ * rows that owe; the board sends every open stay, with 0 for the paid up.
+ *
+ * The due fields (`Due`) come from the backend's dueFor, on active rows only.
  */
-export interface CollectionRow {
+export interface CollectionRow extends Due {
   stay_id: number;
   tenant_id: number;
   tenant_name: string;
@@ -671,7 +674,7 @@ export interface CollectionRow {
   bed_name: string | null;
   rent_amount: number;   // paise
   rent_cycle: "monthly" | "weekly" | "daily";
-  balance_paise: number; // paise owed, always > 0
+  balance_paise: number; // paise owed, 0 when paid up
   /** For a moved-out row, days since the settlement that left them owing. */
   days_since_due: number;
   last_payment_date: string | null;
@@ -682,10 +685,28 @@ export interface CollectionRow {
   moved_out: boolean;
   /** When a moved-out tenant left. Absent on active rows. */
   end_date?: string;
+  /** How their last rent arrived, to prefill the next. Absent if never paid. */
+  last_payment_type?: "cash" | "online";
 }
 
 export const collectionsApi = {
   list: (token: string) => request<CollectionRow[]>("/api/collections", {}, token),
+};
+
+/** Everything the Payments screen shows, in one request. */
+export interface PaymentsBoard {
+  /** Every open stay, soonest due first: overdue, then today, then ahead. */
+  stays: CollectionRow[];
+  /** Left, settled short, still owe. */
+  moved_out: CollectionRow[];
+  /** Payments entered in the last seven days, newest entry first. */
+  recorded: RecentPayment[];
+  /** Portal proofs waiting for approval. */
+  pending_proofs: number;
+}
+
+export const paymentsBoardApi = {
+  get: (token: string) => request<PaymentsBoard>("/api/payments/board", {}, token),
 };
 
 // ─── Insights ────────────────────────────────────────────────────────────────

@@ -46,6 +46,12 @@ type CollectionRow struct {
 	// left.
 	MovedOut bool    `json:"moved_out"`
 	EndDate  *string `json:"end_date,omitempty"`
+	// When rent is due (dueFor) and how they paid last, for the Payments
+	// screen's due-this-week list and its prefilled form. Active rows only.
+	DueDate         *string `json:"due_date,omitempty"`
+	DuePaise        *int64  `json:"due_paise,omitempty"`
+	DueState        *string `json:"due_state,omitempty"`
+	LastPaymentType *string `json:"last_payment_type,omitempty"`
 }
 
 // settledOwed is what a tenant still owes on a settled stay.
@@ -203,6 +209,7 @@ type collectionStayRow struct {
 	StartDate       time.Time      `db:"start_date"`
 	TotalPaid       int64          `db:"total_paid"`
 	LastPaymentDate sql.NullString `db:"last_payment_date"`
+	LastPaymentType sql.NullString `db:"last_payment_type"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -245,8 +252,8 @@ func cycleStart(startDate time.Time, n int, cycle string) time.Time {
 	}
 }
 
-// buildCollections turns active stays into the chase list: everyone with an
-// outstanding balance, biggest debt first.
+// payeeRow is one active stay as the Payments screen and Collections show it:
+// what they owe now (never below zero), since when, and when rent is next due.
 //
 // DaysSinceDue is measured from the start of the FIRST UNPAID cycle, not from
 // the current one — a tenant three cycles behind has been overdue since the
@@ -254,45 +261,59 @@ func cycleStart(startDate time.Time, n int, cycle string) time.Time {
 // in the nudge message). Payments clear cycles oldest first, each at the rent
 // it was billed at, so a part-payment does not clear the cycle it was made
 // against.
+func payeeRow(s collectionStayRow, today time.Time) CollectionRow {
+	sched := s.schedule()
+	cycles := cyclesElapsed(s.StartDate, today, s.RentCycle)
+	balance := sched.billed(s.StartDate, s.RentCycle, 0, cycles) - s.TotalPaid
+	if balance < 0 {
+		balance = 0 // in credit: owes nothing, and the page never shows a negative
+	}
+
+	due := dueFor(sched, s.StartDate, s.RentCycle, s.TotalPaid, today)
+	daysSinceDue := int(dateOnly(today).Sub(due.Date).Hours() / 24)
+	if daysSinceDue < 0 || balance == 0 {
+		daysSinceDue = 0
+	}
+	dueDate, dueState := due.Date.Format("2006-01-02"), due.State
+
+	row := CollectionRow{
+		StayID:       s.StayID,
+		TenantID:     s.TenantID,
+		TenantName:   s.TenantName,
+		Phone:        s.Phone,
+		SiteName:     s.SiteName,
+		RoomName:     s.RoomName,
+		RentAmount:   s.RentAmount,
+		RentCycle:    s.RentCycle,
+		BalancePaise: balance,
+		DaysSinceDue: daysSinceDue,
+		DueDate:      &dueDate,
+		DuePaise:     &due.Paise,
+		DueState:     &dueState,
+	}
+	if s.BedName.Valid {
+		name := s.BedName.String
+		row.BedName = &name
+	}
+	if s.LastPaymentDate.Valid {
+		date := s.LastPaymentDate.String
+		row.LastPaymentDate = &date
+	}
+	if s.LastPaymentType.Valid {
+		kind := s.LastPaymentType.String
+		row.LastPaymentType = &kind
+	}
+	return row
+}
+
+// buildCollections turns active stays into the chase list: everyone with an
+// outstanding balance, biggest debt first.
 func buildCollections(stays []collectionStayRow, today time.Time) []CollectionRow {
 	rows := make([]CollectionRow, 0, len(stays))
-
 	for _, s := range stays {
-		sched := s.schedule()
-		cycles := cyclesElapsed(s.StartDate, today, s.RentCycle)
-		balance := sched.billed(s.StartDate, s.RentCycle, 0, cycles) - s.TotalPaid
-		if balance <= 0 {
-			continue // paid up, or in credit — not a collections problem
+		if row := payeeRow(s, today); row.BalancePaise > 0 {
+			rows = append(rows, row)
 		}
-
-		paidCycles := sched.paidThrough(s.StartDate, s.RentCycle, s.TotalPaid, cycles)
-		dueSince := cycleStart(s.StartDate, paidCycles+1, s.RentCycle)
-		daysSinceDue := int(today.Sub(dueSince).Hours() / 24)
-		if daysSinceDue < 0 {
-			daysSinceDue = 0
-		}
-
-		row := CollectionRow{
-			StayID:       s.StayID,
-			TenantID:     s.TenantID,
-			TenantName:   s.TenantName,
-			Phone:        s.Phone,
-			SiteName:     s.SiteName,
-			RoomName:     s.RoomName,
-			RentAmount:   s.RentAmount,
-			RentCycle:    s.RentCycle,
-			BalancePaise: balance,
-			DaysSinceDue: daysSinceDue,
-		}
-		if s.BedName.Valid {
-			name := s.BedName.String
-			row.BedName = &name
-		}
-		if s.LastPaymentDate.Valid {
-			date := s.LastPaymentDate.String
-			row.LastPaymentDate = &date
-		}
-		rows = append(rows, row)
 	}
 
 	// Biggest debt first; ties broken by who has been waiting longest, so the
@@ -306,6 +327,23 @@ func buildCollections(stays []collectionStayRow, today time.Time) []CollectionRo
 	return rows
 }
 
+// buildPayees is every active stay, owing or not, soonest due first: the
+// oldest arrears at the top, then today's, then the week ahead. The Payments
+// screen groups them by DueState and searches the rest for "Who paid?".
+func buildPayees(stays []collectionStayRow, today time.Time) []CollectionRow {
+	rows := make([]CollectionRow, 0, len(stays))
+	for _, s := range stays {
+		rows = append(rows, payeeRow(s, today))
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if *rows[i].DueDate != *rows[j].DueDate {
+			return *rows[i].DueDate < *rows[j].DueDate
+		}
+		return rows[i].TenantName < rows[j].TenantName
+	})
+	return rows
+}
+
 // GetCollections lists every active stay with money outstanding, then every
 // tenant who moved out still owing — active rows first, each group biggest
 // debt first. The page splits the two on MovedOut.
@@ -313,12 +351,27 @@ func (h *CollectionsHandler) GetCollections(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 	today := time.Now().Truncate(24 * time.Hour)
 
+	stays, err := loadOpenStays(h.db, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to fetch collections")
+	}
+	movedOut, err := loadMovedOut(h.db, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to fetch moved-out balances")
+	}
+
+	return c.JSON(http.StatusOK, append(buildCollections(stays, today), buildMovedOut(movedOut, today)...))
+}
+
+// loadOpenStays fetches every active stay's billing inputs, rent schedules
+// included.
+func loadOpenStays(db *sqlx.DB, ownerID int64) ([]collectionStayRow, error) {
 	// Payment totals come from correlated subqueries, not a JOIN: joining
 	// stays to payments yields one row per payment and multiplies the
 	// per-stay figures by the payment count (the bug Phase 12a was written
 	// after — see docs/PROGRESS.md).
 	var stays []collectionStayRow
-	err := h.db.Select(&stays, `
+	err := db.Select(&stays, `
 		SELECT
 			s.id           AS stay_id,
 			s.rent_amount,
@@ -339,7 +392,14 @@ func (h *CollectionsHandler) GetCollections(c echo.Context) error {
 			(
 				SELECT TO_CHAR(MAX(p.payment_date), 'YYYY-MM-DD') FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
-			) AS last_payment_date
+			) AS last_payment_date,
+			-- How the last rent arrived, so the next one is prefilled the same.
+			(
+				SELECT p.payment_type::text FROM payments p
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
+				ORDER BY p.payment_date DESC, p.created_at DESC
+				LIMIT 1
+			) AS last_payment_type
 		FROM stays s
 		JOIN tenants t            ON t.id = s.tenant_id
 		LEFT JOIN beds b          ON b.id = s.bed_id
@@ -349,24 +409,98 @@ func (h *CollectionsHandler) GetCollections(c echo.Context) error {
 		  AND s.end_date IS NULL
 	`, ownerID)
 	if err != nil {
-		return serverError(c, err, "failed to fetch collections")
+		return nil, err
 	}
 	ids := make([]int64, len(stays))
 	for i := range stays {
 		ids[i] = stays[i].StayID
 	}
-	schedules, err := rentSchedules(h.db, ids)
+	schedules, err := rentSchedules(db, ids)
 	if err != nil {
-		return serverError(c, err, "failed to fetch rent schedules")
+		return nil, err
 	}
 	for i := range stays {
 		stays[i].Schedule = schedules[stays[i].StayID]
 	}
+	return stays, nil
+}
 
+// PaymentsBoard is everything the Payments screen shows, in one request.
+type PaymentsBoard struct {
+	// Stays is every active stay, soonest due first (buildPayees). The page
+	// lists the overdue and those due within the week, and searches the rest.
+	Stays []CollectionRow `json:"stays"`
+	// MovedOut is the settled-short list Collections always had.
+	MovedOut []CollectionRow `json:"moved_out"`
+	// Recorded is every payment entered in the last seven days, newest entry
+	// first — "did I already put that in?" is a question about when it was
+	// typed, not the date typed on it.
+	Recorded []RecentPayment `json:"recorded"`
+	// PendingProofs counts payments tenants sent from the portal that are
+	// waiting for a yes or no.
+	PendingProofs int `json:"pending_proofs"`
+}
+
+// recordedDays is how far back "Recorded this week" reaches.
+const recordedDays = 7
+
+// GetBoard serves GET /api/payments/board.
+func (h *CollectionsHandler) GetBoard(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	today := time.Now().Truncate(24 * time.Hour)
+
+	stays, err := loadOpenStays(h.db, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to fetch open stays")
+	}
 	movedOut, err := loadMovedOut(h.db, ownerID)
 	if err != nil {
 		return serverError(c, err, "failed to fetch moved-out balances")
 	}
 
-	return c.JSON(http.StatusOK, append(buildCollections(stays, today), buildMovedOut(movedOut, today)...))
+	recorded := []RecentPayment{}
+	err = h.db.Select(&recorded, `
+		SELECT
+			p.id,
+			t.id                 AS tenant_id,
+			p.amount,
+			p.payment_type::text AS payment_type,
+			p.kind::text         AS kind,
+			TO_CHAR(p.payment_date, 'YYYY-MM-DD') AS payment_date,
+			t.name               AS tenant_name,
+			COALESCE(b.name, 'Unassigned') AS bed_name,
+			COALESCE(r.name, '')           AS room_name,
+			COALESCE(hs.name, '')          AS site_name
+		FROM payments p
+		JOIN stays s        ON s.id = p.stay_id
+		JOIN tenants t      ON t.id = s.tenant_id
+		LEFT JOIN beds b         ON b.id = s.bed_id
+		LEFT JOIN rooms r        ON r.id = b.room_id
+		LEFT JOIN hostel_sites hs ON hs.id = r.site_id
+		WHERE t.owner_id = $1
+		  AND p.is_approved = true
+		  AND p.created_at >= NOW() - make_interval(days => $2)
+		ORDER BY p.created_at DESC, p.id DESC
+	`, ownerID, recordedDays)
+	if err != nil {
+		return serverError(c, err, "failed to fetch recorded payments")
+	}
+
+	var pending int
+	err = h.db.Get(&pending, `
+		SELECT COUNT(*) FROM payments p
+		JOIN stays s   ON s.id = p.stay_id
+		JOIN tenants t ON t.id = s.tenant_id
+		WHERE t.owner_id = $1 AND p.is_approved = false AND p.rejected_at IS NULL
+	`, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to count pending payments")
+	}
+
+	return c.JSON(http.StatusOK, PaymentsBoard{
+		Stays:         buildPayees(stays, today),
+		MovedOut:      buildMovedOut(movedOut, today),
+		Recorded:      recorded,
+		PendingProofs: pending,
+	})
 }

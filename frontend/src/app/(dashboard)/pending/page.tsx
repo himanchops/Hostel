@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import {
   tenantsApi,
@@ -373,11 +374,25 @@ function ReviewDrawer({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// useSearchParams needs a Suspense boundary, or the build bails out of
+// prerendering the page.
 export default function PendingPage() {
+  return (
+    <Suspense>
+      <PendingQueue />
+    </Suspense>
+  );
+}
+
+function PendingQueue() {
   const { token, owner } = useAuth();
   const confirm = useConfirm();
   const toast = useToast();
-  const [tab, setTab] = useState<"registrations" | "payments">("registrations");
+  // Payments and the dashboard link straight to the proofs with ?tab=payments.
+  const params = useSearchParams();
+  const [tab, setTab] = useState<"registrations" | "payments">(() =>
+    params.get("tab") === "payments" ? "payments" : "registrations",
+  );
 
   const [pending, setPending] = useState<Tenant[]>([]);
   const [regLoading, setRegLoading] = useState(true);

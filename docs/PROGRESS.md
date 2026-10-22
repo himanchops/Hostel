@@ -2583,9 +2583,78 @@ waits to be designed with quicker payment recording.
 Vercel and Render both reported their deploys successful at 13:53 UTC. No
 migration.
 
-**Next:** the owner picks between the move-out flow redesign and "Due this
-week" plus quicker payment recording (designed together, at his request). The
-rest of `docs/BACKLOG.md` → "round two" follows, one at a time.
+**Next:** "Due this week" and quicker payment recording, designed together at
+his request; see "Payments" below.
+
+---
+
+## Payments: due this week, recorded in a few taps (Oct 2026)
+
+Recording a payment, the thing the owner does most, was three screens deep
+for anyone paying on time: Collections listed only people who owed, so a
+tenant paying on their due day had no row. Payments arrive at all hours, by
+UPI at the reception's code or cash in hand, and his mother enters them when
+she visits, from memory. The screen is built for that.
+
+**Collections is now Payments** (`/payments`; `/collections` redirects, in
+`next.config.ts`). "Collections" did not say what it held to someone seeing it
+cold. In order:
+- **"Who paid?"** search, by name or room, over every open stay, for anyone
+  not on the lists (paying early, a second month).
+- A banner when tenants have sent payment proofs from the portal, linking to
+  Pending's proofs tab (`/pending?tab=payments`).
+- **Overdue**, oldest first: amount owed, "Overdue since 15 Oct", Nudge.
+- **Due this week**: due today or within 7 days (`dueSoon`, the same window
+  as the grid's amber tiles), "Due Sat, 25 Oct". No nudge, since nothing is
+  owed yet.
+- **Recorded this week**: payments *entered* in the last 7 days, newest first,
+  with how and when they were paid. It answers "did I already put that in?".
+- **Moved out — still owes**, unchanged but folded.
+
+Recording opens in the row with everything prefilled: what they owe (or the
+rent coming due), Cash or UPI as they paid last time, and **Today** /
+**Yesterday** / **Another day** as taps, since entries are often a day late.
+The note hides behind "+ Note". The button says the amount ("Save ₹7,000").
+After saving, the row moves to Recorded and the next one is right there.
+
+**"Online" is "UPI" everywhere** the owner sees it: every record form (all
+three now use the same Cash / UPI buttons), the dashboard, the tenant ledger,
+the bed panel and Insights. Labels come from `lib/payMethod.ts`; the stored
+value is still `online`, so nothing recorded changed.
+
+The dashboard's "Needs attention" gains "N tenants due to pay this week",
+linking to Payments; the list lives in one place. The nav's red count is now
+who is behind (overdue or moved out owing), not who is due today.
+
+**Backend:** `GET /api/payments/board` (`collections.go` → `GetBoard`) sends
+every open stay as a `CollectionRow` with `due_date`/`due_paise`/`due_state`
+from `dueFor` and `last_payment_type`, plus the moved-out rows, payments
+entered in the last 7 days, and the pending-proof count. `payeeRow` builds a
+row once for both this and `/api/collections`, which is unchanged apart from
+carrying the same new fields.
+
+Left out at his call, to build later: deposits still owed as rows, an undo on
+recorded payments, and any new work on the moved-out section.
+
+### Verification
+
+- `TestBuildPayees_SoonestDueFirst`: behind, due soon and paid-ahead stays
+  in that order, with exact dates, amounts, days and last payment type, and
+  Collections is the owing subset.
+- `tests/unit/due.test.ts`: the 7-day window (today counts, day 8 does not,
+  overdue never), weekday wording, and the UPI label.
+- `owner/payments.test.ts` (3 tests): the two lists and what is on neither;
+  recording a due-this-week payment as UPI dated yesterday, checked in the
+  API; search by name and room, with a note; `/collections` redirecting, the
+  proof banner opening Pending on its proofs tab, and the dashboard line.
+- `collections.test.ts`, `moved-out-owes.test.ts`, `touch-targets.test.ts`,
+  `responsive.test.ts`, `account.test.ts` and `session-ended.test.ts` moved
+  to the new name and buttons.
+- Checked by eye on the local demo at 768×1024, 1024×768 and 375×812. On a
+  phone the amount and buttons wrap under the name.
+- The touch-target test caught the proof banner at 40px; a linked `Banner`
+  now carries `TOUCH_TARGET` everywhere.
+- Full suite: 137 e2e and 59 unit tests pass, plus `go test ./...`.
 
 ---
 

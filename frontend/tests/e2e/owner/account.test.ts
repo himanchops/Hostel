@@ -75,9 +75,9 @@ test.describe("Owner account", () => {
     const fresh = await page.evaluate(() => localStorage.getItem("hostel_token"));
     expect(fresh).not.toBe(token);
     expect((await me(request, fresh!)).status()).toBe(200);
-    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Collections" }).click();
-    await expect(page.getByRole("heading", { name: "Collections" })).toBeVisible();
-    await expect(page).toHaveURL(/\/collections$/);
+    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Payments" }).click();
+    await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
+    await expect(page).toHaveURL(/\/payments$/);
 
     // The old password no longer works; the new one does.
     expect((await login(request, owner.email, PASSWORD)).status()).toBe(401);

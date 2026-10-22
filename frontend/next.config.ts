@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
     // nothing to forget on the next deploy. Locally it is simply undefined.
     NEXT_PUBLIC_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? "",
   },
+  // Collections became Payments (Oct 2026). Bookmarks and home-screen icons
+  // still point at the old name; the query string carries over on its own.
+  async redirects() {
+    return [{ source: "/collections", destination: "/payments", permanent: false }];
+  },
 };
 
 export default nextConfig;

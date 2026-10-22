@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
-import { ApiError, collectionsApi, tenantsApi } from "@/lib/api";
+import { ApiError, paymentsBoardApi, tenantsApi } from "@/lib/api";
 import {
   BuildingIcon,
   Button,
@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
-  const [collectionsCount, setCollectionsCount] = useState(0);
+  const [behindCount, setBehindCount] = useState(0);
   // Stores the route the menu was opened on rather than a bare boolean, so a
   // navigation closes it for free. Resetting it from an effect instead would
   // mean a setState during render's commit — the thing react-hooks warns about.
@@ -62,7 +62,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!token) return;
     tenantsApi.list(token, true).then((t) => setPendingCount(t.length)).catch(() => {});
-    collectionsApi.list(token).then((rows) => setCollectionsCount(rows.length)).catch(() => {});
+    // The red count is who is behind — overdue, or moved out owing — not who
+    // is merely due today, which the page lists under "Due this week".
+    paymentsBoardApi.get(token)
+      .then((b) => setBehindCount(b.stays.filter((r) => r.due_state === "overdue").length + b.moved_out.length))
+      .catch(() => {});
   }, [token, pathname]);
 
   useEffect(() => {
@@ -87,9 +91,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems: NavItem[] = [
     { label: "Dashboard", href: "/dashboard", icon: GridIcon },
-    // Collections sits second: it is the daily loop — rent day, who hasn't
-    // paid, chase them.
-    { label: "Collections", href: "/collections", icon: RupeeIcon, count: collectionsCount, tone: "danger" },
+    // Payments sits second: it is the daily loop — who paid, who is due, who
+    // to chase. It was "Collections", a word that did not say what it held.
+    { label: "Payments", href: "/payments", icon: RupeeIcon, count: behindCount, tone: "danger" },
     { label: "Insights", href: "/insights", icon: ChartIcon },
     { label: "Sites", href: "/sites", icon: BuildingIcon },
     { label: "Tenants", href: "/tenants", icon: UsersIcon },

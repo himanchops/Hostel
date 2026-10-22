@@ -119,10 +119,11 @@ test.describe("Collections", () => {
     await seedOverdueStay(request, token, { name, phone, rent: 500000, paid: 500000 });
 
     await loginAs(page, token);
-    await page.goto("/collections");
+    await page.goto("/payments");
 
     // The row, with the outstanding amount — not the rent, not the total billed.
-    await expect(page.getByText(name)).toBeVisible();
+    // (The seeded payment is also under "Recorded this week", entered today.)
+    await expect(page.getByRole("link", { name }).first()).toBeVisible();
     await expect(page.getByText("₹15,000", { exact: true })).toBeVisible();
 
     // The nudge is a wa.me deep link, opened by the owner — never sent by us.
@@ -136,13 +137,14 @@ test.describe("Collections", () => {
     );
 
     // Record the payment inline: the amount is prefilled with the whole balance.
-    await page.getByRole("button", { name: "Record payment" }).click();
+    await page.getByRole("button", { name: "Record", exact: true }).click();
     await expect(page.getByLabel("Amount (₹)")).toHaveValue("15000");
-    await page.getByRole("button", { name: "Save payment" }).click();
+    await page.getByRole("button", { name: "Save ₹15,000" }).click();
 
-    // Debt cleared → off the list entirely.
-    await expect(page.getByText("Everyone is paid up 🎉")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(name)).toHaveCount(0);
+    // Debt cleared → off the overdue list, and listed as recorded instead.
+    await expect(page.getByText(`Recorded ₹15,000 from UI`)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("heading", { name: "Overdue" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Recorded this week" })).toContainText(name);
   });
 
   test("a tenant with an unusable phone offers a fix instead of a nudge", async ({ page, request }) => {
@@ -156,7 +158,7 @@ test.describe("Collections", () => {
     });
 
     await loginAs(page, token);
-    await page.goto("/collections");
+    await page.goto("/payments");
 
     await expect(page.getByText(name)).toBeVisible();
     await expect(page.getByRole("link", { name: "Nudge" })).toHaveCount(0);

@@ -192,6 +192,8 @@ func main() {
 
 	// Collections
 	api.GET("/collections", collectionsHandler.GetCollections)
+	// Payments: who is overdue, who is due this week, what was just recorded
+	api.GET("/payments/board", collectionsHandler.GetBoard)
 
 	// Grid
 	api.GET("/sites/:siteId/grid", gridHandler.GetGrid)

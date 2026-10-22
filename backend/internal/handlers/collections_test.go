@@ -336,3 +336,52 @@ func TestBuildMovedOut(t *testing.T) {
 		t.Errorf("movedOutTotal = %d, want 700000 (550000 + 150000)", total)
 	}
 }
+
+// The Payments screen lists everyone, owing or not, soonest due first — and
+// says when each is due with the same dueFor the grid uses, so a tile and a
+// row can never disagree about a date.
+func TestBuildPayees_SoonestDueFirst(t *testing.T) {
+	behind := stay(650000, "monthly", date(2026, time.June, 5), 650000*2) // paid Jun, Jul; Aug due 5 Aug
+	behind.StayID, behind.TenantName = 1, "Behind"
+	soon := stay(500000, "monthly", date(2026, time.July, 14), 500000) // paid Jul; Aug due 14 Aug
+	soon.StayID, soon.TenantName = 2, "Soon"
+	ahead := stay(800000, "monthly", date(2026, time.July, 1), 800000*4) // paid Jul–Oct; in credit
+	ahead.StayID, ahead.TenantName = 3, "Ahead"
+	ahead.LastPaymentType = nullStr("online")
+
+	rows := buildPayees([]collectionStayRow{ahead, soon, behind}, collectionsToday)
+	if len(rows) != 3 {
+		t.Fatalf("got %d rows, want all three active stays", len(rows))
+	}
+
+	want := []struct {
+		name, date, state string
+		balance, due      int64
+		days              int
+	}{
+		{"Behind", "2026-08-05", dueOverdue, 650000, 650000, 6},
+		{"Soon", "2026-08-14", dueUpcoming, 0, 500000, 0},
+		{"Ahead", "2026-11-01", duePaidAhead, 0, 800000, 0},
+	}
+	for i, w := range want {
+		r := rows[i]
+		if r.TenantName != w.name || *r.DueDate != w.date || *r.DueState != w.state ||
+			r.BalancePaise != w.balance || *r.DuePaise != w.due || r.DaysSinceDue != w.days {
+			t.Errorf("row %d: got %s due %s %s, owes ₹%d, next ₹%d, %d days; want %s due %s %s, owes ₹%d, next ₹%d, %d days",
+				i, r.TenantName, *r.DueDate, *r.DueState, r.BalancePaise/100, *r.DuePaise/100, r.DaysSinceDue,
+				w.name, w.date, w.state, w.balance/100, w.due/100, w.days)
+		}
+	}
+	if rows[2].LastPaymentType == nil || *rows[2].LastPaymentType != "online" {
+		t.Errorf("last payment type = %v, want online, so the form can prefill it", rows[2].LastPaymentType)
+	}
+	if rows[0].LastPaymentType != nil {
+		t.Errorf("a stay with no recorded type should send none, got %s", *rows[0].LastPaymentType)
+	}
+
+	// Collections is the same rows, owing only.
+	owed := buildCollections([]collectionStayRow{ahead, soon, behind}, collectionsToday)
+	if len(owed) != 1 || owed[0].TenantName != "Behind" {
+		t.Errorf("collections = %v, want only Behind", owed)
+	}
+}

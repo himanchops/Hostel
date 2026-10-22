@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BadgeTone } from "./Badge";
+import { TOUCH_TARGET } from "./touch";
 
 /**
  * Tinted attention strip — the dashboard's "N registrations awaiting approval"
@@ -31,9 +32,10 @@ export function Banner({
 }) {
   const classes = `flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition duration-150 ease-out ${TONES[tone]} ${className}`.trim();
 
+  // A linked banner is a tap target like any other (touch-targets.test.ts).
   if (href) {
     return (
-      <Link href={href} className={classes}>
+      <Link href={href} className={`${classes} ${TOUCH_TARGET}`}>
         {children}
       </Link>
     );

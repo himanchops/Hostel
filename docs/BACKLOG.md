@@ -336,7 +336,8 @@ registrations that were rejected.
   date"; moving the date nine days swung a settlement by ₹9,000. Adjustments
   never appear as a line, so the visible sum reads 18,000 − 22,000 = 5,500.
 - A brand-new owner is greeted "Welcome back".
-- Payment type is "Online", not "UPI". The nudge says "at your convenience" to
+- ~~Payment type is "Online", not "UPI".~~ ✅ every screen says UPI (Oct 2026,
+  `lib/payMethod.ts`; the stored value is still `online`). The nudge says "at your convenience" to
   someone 70 days late and carries no UPI handle.
 - The registration-link panel promises "or a QR code pointing to it" and the app
   never makes one; the Copy button failed outright.
@@ -393,11 +394,13 @@ query.
 ### A tenant row opens only from its "View →" link — S
 The whole row on `/tenants` should open the tenant.
 
-### Recording a payment is three screens deep — M
+### ~~Recording a payment is three screens deep~~ ✅ done on `payments-screen` (Oct 2026)
 Tenants → tenant → Record payment, and this is the most frequent thing he
-does. Two shorter paths exist and are hard to find: Collections (only lists
-people who owe) and the grid's bed drawer. Wants a quick path from anywhere,
-e.g. a global "Record payment" with a name search.
+does. Collections became **Payments**: overdue, then due within 7 days, each
+recorded in place with everything prefilled, plus "Who paid?" search for
+anyone else. See `docs/PROGRESS.md` → "Payments". Left for later, at his
+call: deposits still owed as rows, an undo, and new work on the moved-out
+section (kept as it was, folded).
 
 ### "They're staying" does not cancel a vacating notice on the iPad — S, bug
 He recorded a notice, then tried to withdraw it with the "they're staying"
@@ -423,9 +426,9 @@ The bed panel and tenant page have their one line, and grid tiles show a date
 when someone is behind ("due 15 Oct", red) or due within 7 days (amber). The
 owner trimmed the design before it was built: a red tile shows the date too,
 not only the amount, and the line drops the repeated "every month on the
-31st". **The "Due this week" dashboard list is deferred**, to be designed
-together with "Recording a payment is three screens deep": he has thoughts on
-both. The original proposal:
+31st". **"Due this week" became part of the Payments screen** (Oct 2026), with
+a one-line count on the dashboard instead of a second list. The original
+proposal:
 
 The owner wants to see at a glance when rent is due for a tenant. The app
 already bills on each stay's anchor day (move-in day of the month; the 31st
