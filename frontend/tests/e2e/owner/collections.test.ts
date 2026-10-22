@@ -63,8 +63,8 @@ async function seedOverdueStay(
   return { tenant, stay, start, secondCycle, today };
 }
 
-test.describe("Collections", () => {
-  test("GET /api/collections returns exact balance and overdue age", async ({ request }) => {
+test.describe("Payments: who owes", () => {
+  test("the board returns exact balance and overdue age", async ({ request }) => {
     const { token } = await createOwner(request, `coll-api-${RUN_ID}`);
 
     // ₹5,000/month, four cycles due (₹20,000), one month paid → ₹15,000 owed.
@@ -75,11 +75,11 @@ test.describe("Collections", () => {
       paid: 500000,
     });
 
-    const res = await request.get(`${BASE}/api/collections`, {
+    const res = await request.get(`${BASE}/api/payments/board`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status()).toBe(200);
-    const rows = await res.json();
+    const rows = (await res.json()).stays;
 
     expect(rows).toHaveLength(1);
     const row = rows[0];
@@ -92,9 +92,11 @@ test.describe("Collections", () => {
 
     // One cycle is paid, so the debt runs from the start of the second cycle.
     expect(row.days_since_due).toBe(daysBetween(secondCycle, today));
+    expect(row.due_state).toBe("overdue");
+    expect(row.due_date).toBe(isoDate(secondCycle));
   });
 
-  test("a tenant who is paid up is not on the list", async ({ request }) => {
+  test("a tenant who is paid up owes nothing", async ({ request }) => {
     const { token } = await createOwner(request, `coll-paid-${RUN_ID}`);
 
     // Four cycles due, four cycles paid.
@@ -105,11 +107,13 @@ test.describe("Collections", () => {
       paid: 2000000,
     });
 
-    const res = await request.get(`${BASE}/api/collections`, {
+    const res = await request.get(`${BASE}/api/payments/board`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status()).toBe(200);
-    expect(await res.json()).toEqual([]);
+    const [row] = (await res.json()).stays;
+    expect(row.balance_paise).toBe(0);
+    expect(row.due_state).not.toBe("overdue");
   });
 
   test("owner records a payment from the list and the row clears", async ({ page, request }) => {

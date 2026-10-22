@@ -81,8 +81,8 @@ test.describe("Tenant portal", () => {
     expect(queued.amount).toBe(700000);
 
     // ── Unapproved money must not move any figure ──
-    const before = await request.get(`${BASE}/api/collections`, { headers: oAuth });
-    const owedBefore = (await before.json())[0].balance_paise;
+    const before = await request.get(`${BASE}/api/payments/board`, { headers: oAuth });
+    const owedBefore = (await before.json()).stays[0].balance_paise;
     expect(owedBefore).toBe(1400000); // two cycles billed, nothing approved yet
 
     // ── Approving it is what makes it count ──
@@ -92,8 +92,8 @@ test.describe("Tenant portal", () => {
     });
     expect(approve.status()).toBeLessThan(300);
 
-    const after = await request.get(`${BASE}/api/collections`, { headers: oAuth });
-    const rows = await after.json();
+    const after = await request.get(`${BASE}/api/payments/board`, { headers: oAuth });
+    const rows = (await after.json()).stays;
     expect(rows[0].balance_paise).toBe(owedBefore - 700000);
   });
 

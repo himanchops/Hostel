@@ -2596,9 +2596,10 @@ tenant paying on their due day had no row. Payments arrive at all hours, by
 UPI at the reception's code or cash in hand, and his mother enters them when
 she visits, from memory. The screen is built for that.
 
-**Collections is now Payments** (`/payments`; `/collections` redirects, in
-`next.config.ts`). "Collections" did not say what it held to someone seeing it
-cold. In order:
+**Collections is now Payments** (`/payments`). "Collections" did not say what
+it held to someone seeing it cold. The old page, its `/api/collections`
+endpoint and its client are gone, with no redirect: nobody had bookmarked it
+yet. In order:
 - **"Who paid?"** search, by name or room, over every open stay, for anyone
   not on the lists (paying early, a second month).
 - A banner when tenants have sent payment proofs from the portal, linking to
@@ -2607,8 +2608,10 @@ cold. In order:
 - **Due this week**: due today or within 7 days (`dueSoon`, the same window
   as the grid's amber tiles), "Due Sat, 25 Oct". No nudge, since nothing is
   owed yet.
-- **Recorded this week**: payments *entered* in the last 7 days, newest first,
-  with how and when they were paid. It answers "did I already put that in?".
+- **Recorded this week**: payments *entered* in the last 7 days, with how and
+  when they were paid, latest paid first. It answers "did I already put that
+  in?". Ordered by entry time at first, a batch typed in one sitting looked
+  shuffled, since each line shows the date paid.
 - **Moved out — still owes**, unchanged but folded.
 
 Recording opens in the row with everything prefilled: what they owe (or the
@@ -2627,11 +2630,15 @@ linking to Payments; the list lives in one place. The nav's red count is now
 who is behind (overdue or moved out owing), not who is due today.
 
 **Backend:** `GET /api/payments/board` (`collections.go` → `GetBoard`) sends
-every open stay as a `CollectionRow` with `due_date`/`due_paise`/`due_state`
-from `dueFor` and `last_payment_type`, plus the moved-out rows, payments
-entered in the last 7 days, and the pending-proof count. `payeeRow` builds a
-row once for both this and `/api/collections`, which is unchanged apart from
-carrying the same new fields.
+every open stay as a `CollectionRow` (built by `payeeRow`) with
+`due_date`/`due_paise`/`due_state` from `dueFor` and `last_payment_type`,
+plus the moved-out rows, payments entered in the last 7 days, and the
+pending-proof count. It replaces `GET /api/collections`.
+
+**Fixed on the way:** a rent-free bed read as "overdue since move-in" on ₹0
+(since #43: a red date on its grid tile, and it would have topped Overdue).
+`dueFor` now returns nothing due when the rent at the due date is zero, and
+the grid, tenant summary and board send no due fields for it.
 
 Left out at his call, to build later: deposits still owed as rows, an undo on
 recorded payments, and any new work on the moved-out section.
@@ -2639,14 +2646,16 @@ recorded payments, and any new work on the moved-out section.
 ### Verification
 
 - `TestBuildPayees_SoonestDueFirst`: behind, due soon and paid-ahead stays
-  in that order, with exact dates, amounts, days and last payment type, and
-  Collections is the owing subset.
+  in that order, with exact dates, amounts, days and last payment type. The
+  old `buildCollections` tests now run against `payeeRow`, and `TestDueFor`
+  covers the rent-free bed.
 - `tests/unit/due.test.ts`: the 7-day window (today counts, day 8 does not,
   overdue never), weekday wording, and the UPI label.
 - `owner/payments.test.ts` (3 tests): the two lists and what is on neither;
   recording a due-this-week payment as UPI dated yesterday, checked in the
-  API; search by name and room, with a note; `/collections` redirecting, the
-  proof banner opening Pending on its proofs tab, and the dashboard line.
+  API, and "Recorded this week" in paid-date order; search by name and room,
+  with a note; the proof banner opening Pending on its proofs tab, and the
+  dashboard line. Four tests that read `/api/collections` now read the board.
 - `collections.test.ts`, `moved-out-owes.test.ts`, `touch-targets.test.ts`,
   `responsive.test.ts`, `account.test.ts` and `session-ended.test.ts` moved
   to the new name and buttons.

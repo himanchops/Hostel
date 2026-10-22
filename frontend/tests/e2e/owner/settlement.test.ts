@@ -440,8 +440,8 @@ test.describe("Settlement", () => {
     const summary = await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth })).json();
     expect(summary.total_paid).toBe(2550000);
     expect(summary.balance).toBe(850000);
-    const collections = await (await request.get(`${BASE}/api/collections`, { headers: auth })).json();
-    expect(collections.find((r: { stay_id: number }) => r.stay_id === stay.id).balance_paise).toBe(850000);
+    const board = await (await request.get(`${BASE}/api/payments/board`, { headers: auth })).json();
+    expect(board.stays.find((r: { stay_id: number }) => r.stay_id === stay.id).balance_paise).toBe(850000);
 
     // A kind that is neither is refused rather than quietly filed as rent.
     const bad = await request.post(`${BASE}/api/stays/${stay.id}/payments`, {

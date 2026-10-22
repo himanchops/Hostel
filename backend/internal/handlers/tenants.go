@@ -680,9 +680,10 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 		if s.EndDate == nil {
 			// One open stay per tenant (idx_stays_active_tenant), so this is set
 			// at most once.
-			due := dueFor(sched, start, s.RentCycle, s.TotalPaid, today)
-			d := due.Date.Format("2006-01-02")
-			summary.DueDate, summary.DuePaise, summary.DueState = &d, &due.Paise, &due.State
+			if due := dueFor(sched, start, s.RentCycle, s.TotalPaid, today); due.State != "" {
+				d := due.Date.Format("2006-01-02")
+				summary.DueDate, summary.DuePaise, summary.DueState = &d, &due.Paise, &due.State
+			}
 		}
 		summary.Balance += expected - s.TotalPaid
 	}

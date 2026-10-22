@@ -191,7 +191,6 @@ func main() {
 	api.GET("/insights/months/:month", insightsHandler.GetMonth)
 
 	// Collections
-	api.GET("/collections", collectionsHandler.GetCollections)
 	// Payments: who is overdue, who is due this week, what was just recorded
 	api.GET("/payments/board", collectionsHandler.GetBoard)
 

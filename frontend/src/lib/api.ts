@@ -654,13 +654,12 @@ export const dashboardApi = {
   get: (token: string) => request<DashboardData>("/api/dashboard", {}, token),
 };
 
-// ─── Collections and the Payments screen ─────────────────────────────────────
+// ─── The Payments screen ─────────────────────────────────────────────────────
 
 /**
  * One tenant's stay as the Payments screen lists it. Note `balance_paise` is
  * what they OWE, so it is never negative — the opposite sign from the grid's
- * balance, and the same as the tenant summary's. `/api/collections` sends only
- * rows that owe; the board sends every open stay, with 0 for the paid up.
+ * balance, and the same as the tenant summary's: 0 when paid up or ahead.
  *
  * The due fields (`Due`) come from the backend's dueFor, on active rows only.
  */
@@ -688,10 +687,6 @@ export interface CollectionRow extends Due {
   /** How their last rent arrived, to prefill the next. Absent if never paid. */
   last_payment_type?: "cash" | "online";
 }
-
-export const collectionsApi = {
-  list: (token: string) => request<CollectionRow[]>("/api/collections", {}, token),
-};
 
 /** Everything the Payments screen shows, in one request. */
 export interface PaymentsBoard {

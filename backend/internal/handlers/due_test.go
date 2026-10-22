@@ -73,6 +73,12 @@ func TestDueFor(t *testing.T) {
 			wantDate: date(2026, time.November, 1), wantPaise: 500000, wantState: dueUpcoming,
 		},
 	}
+	// A rent-free bed: nothing is ever due, so no date and no state, rather
+	// than "overdue since move-in" on ₹0.
+	if got := dueFor(flat(date(2026, time.June, 1), 0), date(2026, time.June, 1), "monthly", 0, today); got.State != "" {
+		t.Errorf("rent-free: got %s %s, want nothing due", got.Date.Format("2 Jan 2006"), got.State)
+	}
+
 	for _, c := range cases {
 		got := dueFor(c.sched, c.start, "monthly", c.paid, today)
 		if !got.Date.Equal(c.wantDate) || got.Paise != c.wantPaise || got.State != c.wantState {

@@ -14,6 +14,9 @@ import "time"
 //	upcoming    paid up to now; the next cycle begins on Date
 //	paid_ahead  paid past the cycle billed now; nothing is due until Date
 //
+// A stay with no rent to pay (a rent-free bed) has nothing due, ever: dueFor
+// returns the zero rentDue, State "", and callers send no due fields.
+//
 // Date is always the start of the oldest cycle not fully paid. Behind, that is
 // the day they fell behind; square or ahead, it is the day the next payment
 // falls due. Paise is what is still owed on that one cycle: less than a full
@@ -43,6 +46,9 @@ func dueFor(sched rentSchedule, start time.Time, cycle string, totalPaid int64, 
 	paid := sched.paidThrough(start, cycle, totalPaid, billed+240)
 
 	date := cycleStart(start, paid+1, cycle)
+	if sched.at(date) <= 0 {
+		return rentDue{}
+	}
 	credit := totalPaid - sched.billed(start, cycle, 0, paid)
 	due := rentDue{Date: date, Paise: sched.at(date) - credit}
 

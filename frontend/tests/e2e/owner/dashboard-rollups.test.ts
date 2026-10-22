@@ -72,9 +72,9 @@ test.describe("Dashboard roll-ups", () => {
     expect((await farOut.json()).error).toContain("in the future");
 
     const dashboard = await (await request.get(`${BASE}/api/dashboard`, { headers: auth })).json();
-    const rows: { balance_paise: number }[] =
-      await (await request.get(`${BASE}/api/collections`, { headers: auth })).json();
-    const owedInCollections = rows.reduce((sum, r) => sum + r.balance_paise, 0);
+    const board: { stays: { balance_paise: number }[]; moved_out: { balance_paise: number }[] } =
+      await (await request.get(`${BASE}/api/payments/board`, { headers: auth })).json();
+    const owedInCollections = [...board.stays, ...board.moved_out].reduce((sum, r) => sum + r.balance_paise, 0);
 
     // M4: (₹10,000 − ₹1,000) in the bed + (₹15,000 − ₹7,500) without one.
     expect(owedInCollections).toBe(1650000);

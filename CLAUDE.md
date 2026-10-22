@@ -156,7 +156,7 @@ Key conventions to carry forward:
   `payment_type` stays `online`; every label goes through `payMethodLabel` /
   `PAY_METHODS` (`lib/payMethod.ts`), and every record form uses the same
   Cash / UPI buttons. The screen once called Collections is **Payments**
-  (`/payments`); `/collections` redirects.
+  (`/payments`, data from `GET /api/payments/board`).
 - **Rent can change partway through a stay** (migration 011). Anything that
   bills rent goes through `rentSchedule.billed` (`handlers/rent.go`), never
   `rent_amount × cycles`, which reprices every month already lived. There were

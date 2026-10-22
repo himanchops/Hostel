@@ -116,6 +116,12 @@ test.describe("Payments", () => {
     const recorded = page.getByRole("region", { name: "Recorded this week" });
     await expect(recorded).toContainText(`Soon Tenant ${runId}`);
     await expect(recorded).toContainText(`UPI · paid ${day(localYesterday())}`);
+    // Latest paid first, whatever order they were typed in: yesterday's, then
+    // the seed's three, paid 10, about 27 and 40 days ago.
+    await expect(recorded.getByRole("listitem")).toHaveText([
+      new RegExp(`Soon Tenant ${runId}`), new RegExp(`Ahead Tenant ${runId}`),
+      new RegExp(`Soon Tenant ${runId}`), new RegExp(`Behind Tenant ${runId}`),
+    ]);
     await expect(page.getByRole("heading", { name: "Due this week" })).toHaveCount(0);
 
     const auth = { Authorization: `Bearer ${token}` };
@@ -149,7 +155,7 @@ test.describe("Payments", () => {
     await expect(page.getByText("1 match")).toBeVisible();
   });
 
-  test("the old address, the dashboard and portal proofs all lead here", async ({ page, request }) => {
+  test("portal proofs and the dashboard lead here", async ({ page, request }) => {
     const runId = `${RUN_ID}-links`;
     const { token, ids } = await seed(request, runId);
     const auth = { Authorization: `Bearer ${token}` };
@@ -168,8 +174,7 @@ test.describe("Payments", () => {
     expect(proof.ok(), await proof.text()).toBeTruthy();
 
     await loginAs(page, token);
-    await page.goto("/collections");
-    await expect(page).toHaveURL(/\/payments$/);
+    await page.goto("/payments");
 
     await page.getByRole("link", { name: /1 payment sent from the tenant portal to approve/ }).click();
     await expect(page).toHaveURL(/\/pending\?tab=payments$/);
