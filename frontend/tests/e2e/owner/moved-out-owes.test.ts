@@ -83,7 +83,7 @@ test.describe("A tenant who moved out still owing", () => {
     // ── Paid off: gone ──
     await post(request, token, `/api/stays/${stay.id}/payments`, { amount: 700000, payment_type: "online" });
     await page.reload();
-    await expect(page.getByText("Nobody is due this week").first()).toBeVisible();
+    await expect(page.getByText("Nobody is due this week")).toBeVisible();
     await expect(fold).toHaveCount(0);
     const after = await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth })).json();
     expect(after.balance).toBe(0);
@@ -107,7 +107,7 @@ test.describe("A tenant who moved out still owing", () => {
 
     await loginAs(page, token);
     await page.goto("/payments");
-    await expect(page.getByText("Nobody is due this week").first()).toBeVisible();
+    await expect(page.getByText("Nobody is due this week")).toBeVisible();
     await expect(page.getByText("Moved out — still owes")).toHaveCount(0);
   });
 });

@@ -2614,6 +2614,14 @@ yet. In order:
   shuffled, since each line shows the date paid.
 - **Moved out — still owes**, unchanged but folded.
 
+Each of the two lists shows 5 rows, with its count in the heading and "Show
+all N" beneath, so a long Overdue list cannot push Due this week off the
+screen. He asked for each list in its own scroll box; we chose this instead,
+because a scroll area inside a scrolling page traps the finger on an iPad and
+hides that there is more. An empty list is left out, and the subtitle says
+so: "Nobody overdue · 3 due this week", or "2 overdue · none due this week".
+With nothing due at all, one card says "Nobody is due this week".
+
 Recording opens in the row with everything prefilled: what they owe (or the
 rent coming due), Cash or UPI as they paid last time, and **Today** /
 **Yesterday** / **Another day** as taps, since entries are often a day late.
@@ -2651,7 +2659,11 @@ recorded payments, and any new work on the moved-out section.
   covers the rent-free bed.
 - `tests/unit/due.test.ts`: the 7-day window (today counts, day 8 does not,
   overdue never), weekday wording, and the UPI label.
-- `owner/payments.test.ts` (3 tests): the two lists and what is on neither;
+- `owner/payments.test.ts` (7 tests). At iPad portrait with touch: nobody
+  overdue, nothing due this week, nobody due at all (search and recording
+  still work), and eight overdue, where five show, Due this week starts on
+  the first screen, Show all / Show fewer work, and recording one brings the
+  sixth up. Also: the two lists and what is on neither;
   recording a due-this-week payment as UPI dated yesterday, checked in the
   API, and "Recorded this week" in paid-date order; search by name and room,
   with a note; the proof banner opening Pending on its proofs tab, and the
@@ -2663,7 +2675,7 @@ recorded payments, and any new work on the moved-out section.
   phone the amount and buttons wrap under the name.
 - The touch-target test caught the proof banner at 40px; a linked `Banner`
   now carries `TOUCH_TARGET` everywhere.
-- Full suite: 137 e2e and 59 unit tests pass, plus `go test ./...`.
+- Full suite: 141 e2e and 59 unit tests pass, plus `go test ./...`.
 
 ---
 

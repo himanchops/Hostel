@@ -185,3 +185,118 @@ test.describe("Payments", () => {
     await expect(page).toHaveURL(/\/payments$/);
   });
 });
+
+type Kind = "behind" | "soon" | "ahead";
+
+/**
+ * One owner with the given tenants, each in a bed of their own:
+ *   behind  moved in 40 days ago, paid one month: overdue
+ *   soon    paid up, next rent due in about three days: due this week
+ *   ahead   paid three months ahead: on neither list
+ */
+async function seedKinds(request: APIRequestContext, runId: string, kinds: [string, Kind][]) {
+  const { token } = await createOwner(request, runId);
+  const auth = { Authorization: `Bearer ${token}` };
+  const { siteId, roomId, bedId } = await createSiteRoomBed(request, token, runId);
+  const now = new Date();
+  const soonStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, now.getUTCDate() + 3));
+  const plan = { behind: [daysFromToday(-40), 1], soon: [soonStart, 1], ahead: [daysFromToday(-10), 3] } as const;
+  for (const [i, [name, kind]] of kinds.entries()) {
+    let bed = bedId;
+    if (i > 0) {
+      const res = await request.post(`${BASE}/api/sites/${siteId}/rooms/${roomId}/beds`, { headers: auth, data: { name: `Bed ${i + 1}` } });
+      bed = (await res.json()).id;
+    }
+    const [start, months] = plan[kind];
+    const tenant = await createTenantViaApi(request, token, { name: `${name} ${runId}`, phone: phone() });
+    const stay = await (await request.post(`${BASE}/api/stays`, {
+      headers: auth,
+      data: { tenant_id: tenant.id, bed_id: bed, rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", start_date: iso(start) },
+    })).json();
+    const pay = await request.post(`${BASE}/api/stays/${stay.id}/payments`, {
+      headers: auth, data: { amount: 500000 * months, payment_type: "cash", payment_date: iso(start) },
+    });
+    expect(pay.ok(), await pay.text()).toBeTruthy();
+  }
+  return token;
+}
+
+test.describe("Payments when a list is empty or long", () => {
+  // The owner's iPad, held upright: the size the long-list check is about.
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: true });
+
+  test("nobody overdue: that list is left out and the subtitle says so", async ({ page, request }) => {
+    const runId = `${RUN_ID}-no-overdue`;
+    const token = await seedKinds(request, runId, [["Soon", "soon"], ["Ahead", "ahead"]]);
+    await loginAs(page, token);
+    await page.goto("/payments");
+
+    await expect(page.getByText("Nobody overdue · 1 due this week")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Due this week" })).toContainText(`Soon ${runId}`);
+    await expect(page.getByRole("region", { name: "Overdue" })).toHaveCount(0);
+    // Nobody is behind, so the tab carries no red count.
+    await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Payments", exact: true })).toBeVisible();
+  });
+
+  test("nothing due this week: only the overdue list shows", async ({ page, request }) => {
+    const runId = `${RUN_ID}-no-week`;
+    const token = await seedKinds(request, runId, [["Late", "behind"], ["Ahead", "ahead"]]);
+    await loginAs(page, token);
+    await page.goto("/payments");
+
+    await expect(page.getByText("1 overdue · none due this week")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Overdue" })).toContainText(`Late ${runId}`);
+    await expect(page.getByRole("region", { name: "Due this week" })).toHaveCount(0);
+  });
+
+  test("nobody due at all: one calm line, and recording still works", async ({ page, request }) => {
+    const runId = `${RUN_ID}-none`;
+    const token = await seedKinds(request, runId, [["Ahead", "ahead"]]);
+    await loginAs(page, token);
+    await page.goto("/payments");
+
+    // Said once, not in the subtitle as well.
+    await expect(page.getByText("Nobody is due this week")).toHaveCount(1);
+    await expect(page.getByText("Everyone staying is paid up.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Overdue" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Due this week" })).toHaveCount(0);
+    // What was entered this week is still there to check against.
+    await expect(page.getByRole("region", { name: "Recorded this week" })).toContainText(`Ahead ${runId}`);
+    // And anyone can still be found and recorded.
+    await page.getByLabel("Who paid? Search by name or room").fill("ahead");
+    await page.getByRole("button", { name: "Record", exact: true }).tap();
+    await page.getByRole("button", { name: "Save ₹5,000" }).tap();
+    await expect(page.getByText("Recorded ₹5,000 from Ahead")).toBeVisible();
+  });
+
+  test("a long overdue list shows five and keeps this week's list on screen", async ({ page, request }) => {
+    const runId = `${RUN_ID}-long`;
+    const late: [string, Kind][] = Array.from({ length: 8 }, (_, i) => [`Late ${i + 1}`, "behind"]);
+    const token = await seedKinds(request, runId, [...late, ["Soon", "soon"]]);
+    await loginAs(page, token);
+    await page.goto("/payments");
+
+    const overdue = page.getByRole("region", { name: /Overdue/ });
+    const record = overdue.getByRole("button", { name: "Record", exact: true });
+    await expect(page.getByText("8 overdue · 1 due this week")).toBeVisible();
+    await expect(overdue.getByRole("heading")).toHaveText("Overdue8");
+    await expect(record).toHaveCount(5);
+
+    // "Due this week" starts within the first screen, not eight rows down.
+    const week = page.getByRole("heading", { name: "Due this week" });
+    const box = await week.boundingBox();
+    expect(box && box.y + box.height).toBeLessThan(1024);
+
+    await overdue.getByRole("button", { name: "Show all 8" }).tap();
+    await expect(record).toHaveCount(8);
+    await overdue.getByRole("button", { name: "Show fewer" }).tap();
+    await expect(record).toHaveCount(5);
+
+    // Recording one of the five brings the sixth up.
+    await record.first().tap();
+    await overdue.getByRole("button", { name: /^Save ₹/ }).tap();
+    await expect(page.getByText("7 overdue · 1 due this week")).toBeVisible();
+    await expect(record).toHaveCount(5);
+    await expect(overdue.getByRole("button", { name: "Show all 7" })).toBeVisible();
+  });
+});

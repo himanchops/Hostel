@@ -37,7 +37,14 @@ import {
   TOUCH_LINK,
 } from "@/components/ui";
 
-/** How many of this week's recorded payments show before "Show all". */
+/**
+ * How many rows each list shows before "Show all". A month of arrears on a
+ * 45-bed hostel would otherwise push "Due this week" off the screen. Lists
+ * grow in place rather than scrolling inside a box: a scroll area inside a
+ * scrolling page traps the finger on an iPad.
+ */
+const ROWS_SHOWN = 5;
+/** Recorded lines are one line each, so more of them fit. */
 const RECORDED_SHOWN = 8;
 
 /**
@@ -122,11 +129,9 @@ export default function PaymentsPage() {
 
           {query.trim() ? (
             <Section title={`${matches.length} ${matches.length === 1 ? "match" : "matches"}`}>
-              {matches.length === 0 ? (
-                <p className="px-4 py-3 text-sm text-stone-500">Nobody staying now matches “{query.trim()}”.</p>
-              ) : (
-                matches.map(row)
-              )}
+              {matches.length === 0
+                ? [<p key="none" className="px-4 py-3 text-sm text-stone-500">Nobody staying now matches “{query.trim()}”.</p>]
+                : matches.map(row)}
             </Section>
           ) : (
             <>
@@ -146,11 +151,13 @@ export default function PaymentsPage() {
                 />
               ) : (
                 <>
+                  {/* An empty list is left out; the subtitle says "Nobody
+                      overdue" or "none due this week" in its place. */}
                   {overdue.length > 0 && (
-                    <Section title="Overdue" tone="danger">{overdue.map(row)}</Section>
+                    <Section title="Overdue" tone="danger" limit={ROWS_SHOWN}>{overdue.map(row)}</Section>
                   )}
                   {thisWeek.length > 0 && (
-                    <Section title="Due this week" tone="warning">{thisWeek.map(row)}</Section>
+                    <Section title="Due this week" tone="warning" limit={ROWS_SHOWN}>{thisWeek.map(row)}</Section>
                   )}
                 </>
               )}
@@ -181,12 +188,13 @@ export default function PaymentsPage() {
   );
 }
 
-function headline(overdue: number, thisWeek: number): string {
-  if (overdue === 0 && thisWeek === 0) return "Nobody is due this week";
-  const parts = [];
-  if (overdue > 0) parts.push(`${overdue} overdue`);
-  if (thisWeek > 0) parts.push(`${thisWeek} due this week`);
-  return parts.join(" · ");
+function headline(overdue: number, thisWeek: number): string | undefined {
+  // The empty card below says it, once.
+  if (overdue === 0 && thisWeek === 0) return undefined;
+  return [
+    overdue > 0 ? `${overdue} overdue` : "Nobody overdue",
+    thisWeek > 0 ? `${thisWeek} due this week` : "none due this week",
+  ].join(" · ");
 }
 
 /** By name or room, ignoring case and the "·" between room and bed. */
@@ -199,13 +207,34 @@ function search(stays: CollectionRow[], query: string): CollectionRow[] {
   });
 }
 
-function Section({ title, tone, children }: { title: string; tone?: "danger" | "warning"; children: React.ReactNode }) {
+function Section({
+  title, tone, limit, children,
+}: {
+  title: string;
+  tone?: "danger" | "warning";
+  /** Rows shown before "Show all"; every row when unset. */
+  limit?: number;
+  children: React.ReactNode[];
+}) {
+  const [all, setAll] = useState(false);
   const color = tone === "danger" ? "text-red-700" : tone === "warning" ? "text-amber-800" : "text-stone-700";
+  const capped = limit !== undefined && children.length > limit;
+  const id = `${title.toLowerCase().replace(/\W+/g, "-")}-heading`;
   return (
-    <section>
-      <h2 className={`mb-2 text-sm font-semibold ${color}`}>{title}</h2>
+    <section aria-labelledby={id}>
+      <h2 id={id} className={`mb-2 text-sm font-semibold ${color}`}>
+        {title}
+        {capped && <span className="ml-1.5 font-normal text-stone-500">{children.length}</span>}
+      </h2>
       <Card padding="none">
-        <div className="divide-y divide-stone-100">{children}</div>
+        <div className="divide-y divide-stone-100">{capped && !all ? children.slice(0, limit) : children}</div>
+        {capped && (
+          <div className="border-t border-stone-100 px-4 py-2">
+            <Button variant="ghost" size="sm" onClick={() => setAll(!all)} aria-expanded={all}>
+              {all ? "Show fewer" : `Show all ${children.length}`}
+            </Button>
+          </div>
+        )}
       </Card>
     </section>
   );
