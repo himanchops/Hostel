@@ -2809,6 +2809,11 @@ bug, and it wasn't about the iPad.
 - **Also fixed:** the Payments record form hand-rolled a card outline, which
   `grep ring-stone-200 src/app` now catches. It uses `Card`.
 
+
+**Production, 23 Oct 2026: live.** The owner ran migration 013 on production
+first. PR #46 was then merged as `3a2062f`, and Vercel and Render both
+reported their deploys successful at 08:24 UTC. Settling a stay is the first
+write to `refund_method`; the owner's first real move-out confirms it.
 ---
 
 ## Architecture Notes
