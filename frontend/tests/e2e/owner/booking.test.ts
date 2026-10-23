@@ -80,7 +80,7 @@ test("booking a place from Add tenant: no bed, an arrival day, and what they pai
   await page.getByRole("button", { name: "Booking" }).tap();
 
   // No bed to pick: a place is promised, not a particular bed.
-  await expect(page.getByText("Vacant beds")).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Bed", exact: true })).toHaveCount(0);
   await page.getByLabel("Monthly rent (₹)").fill("6000");
   await page.getByLabel("Deposit (₹)").fill("10000");
   await page.getByLabel("Arriving on").fill(arrives);
@@ -124,7 +124,7 @@ test("on arrival, Assign bed takes the rest of the money", async ({ page, reques
 
   await page.getByRole("button", { name: "Assign bed" }).tap();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("radio", { name: "Room 1 · Bed A" }).check();
+  await dialog.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 1 · Bed A" });
   // What's left after the ₹3,000 they paid to book, and the whole deposit.
   await expect(dialog.getByLabel("Rent still due (₹)")).toHaveValue("3000");
   await expect(dialog.getByLabel("Deposit paid (₹)")).toHaveValue("10000");
@@ -150,7 +150,7 @@ test("someone who arrives early has their rent run from the day they came", asyn
 
   await page.getByRole("button", { name: "Assign bed" }).tap();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("radio", { name: "Room 1 · Bed A" }).check();
+  await dialog.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 1 · Bed A" });
   await expect(dialog.getByLabel("Rent from")).toHaveValue(isoIn(5));
   await dialog.getByLabel("Rent from").fill(isoIn(0));
   await expect(dialog.getByLabel("Deposit paid (₹)")).toHaveValue("");

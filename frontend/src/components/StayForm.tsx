@@ -6,7 +6,7 @@ import {
   GridRoom, Site,
   today, formatDay, formatCurrency, ApiError,
 } from "@/lib/api";
-import { Button, Field, FormError, Input, SegmentedControl, Select, TOUCH_TARGET } from "@/components/ui";
+import { Button, Field, FormError, Input, SegmentedControl, Select } from "@/components/ui";
 import { PAY_METHODS, PayMethod } from "@/lib/payMethod";
 
 /**
@@ -63,6 +63,13 @@ export function stayTermsError(terms: StayTerms): string {
   return "";
 }
 
+type Cycle = "monthly" | "weekly" | "daily";
+const CYCLES: readonly { value: Cycle; label: string }[] = [
+  { value: "monthly", label: "Monthly" },
+  { value: "weekly", label: "Weekly" },
+  { value: "daily", label: "Daily" },
+];
+
 function rentLabel(cycle: string): string {
   if (cycle === "weekly") return "Weekly rent (₹)";
   if (cycle === "daily") return "Daily rent (₹)";
@@ -90,13 +97,24 @@ export function StayTermsFields({
 
   return (
     <div className={wrap}>
-      {/* Cycle comes first because it renames the field below it. */}
-      <Field label="Billing cycle">
-        <Select value={value.cycle} onChange={(e) => set({ cycle: e.target.value })}>
-          <option value="monthly">Monthly</option>
-          <option value="weekly">Weekly</option>
-          <option value="daily">Daily</option>
-        </Select>
+      {/* Cycle comes first because it renames the rent field. It is three
+          buttons rather than a dropdown: nearly always Monthly, and one tap
+          when it isn't. In the grid layout it shares a row with the date. */}
+      <div>
+        <p className="mb-1 text-[13px] font-medium text-stone-600">Billing cycle</p>
+        <SegmentedControl
+          options={CYCLES}
+          value={value.cycle as Cycle}
+          onChange={(cycle) => set({ cycle })}
+          ariaLabel="Billing cycle"
+        />
+      </div>
+      <Field label={startLabel} required>
+        <Input
+          type="date"
+          value={value.startDate}
+          onChange={(e) => set({ startDate: e.target.value })}
+        />
       </Field>
       <Field label={rentLabel(value.cycle)} required>
         <Input
@@ -114,17 +132,6 @@ export function StayTermsFields({
           placeholder="e.g. 10000"
           value={value.deposit}
           onChange={(e) => set({ deposit: e.target.value })}
-        />
-      </Field>
-      <Field
-        label={startLabel}
-        required
-        className={layout === "grid" ? "sm:col-span-2" : undefined}
-      >
-        <Input
-          type="date"
-          value={value.startDate}
-          onChange={(e) => set({ startDate: e.target.value })}
         />
       </Field>
     </div>
@@ -266,7 +273,7 @@ export function PaidTodayFields({
   const title = heading ?? (date === today() ? "Paid today" : `Paid on ${formatDay(date)}`);
 
   return (
-    <section aria-label={title} className="rounded-xl border border-stone-200 p-4">
+    <section aria-label={title} className="@container rounded-xl border border-stone-200 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-stone-800">{title}</h3>
         <Button
@@ -286,7 +293,9 @@ export function PaidTodayFields({
       ) : (
         <div className="mt-3 space-y-3">
           {hint && <p className="-mt-1 text-[13px] text-stone-500">{hint}</p>}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Sized by the section, not the screen: three across on a page,
+              two in a drawer, one on a phone. */}
+          <div className="grid grid-cols-1 gap-3 @xs:grid-cols-2 @xl:grid-cols-3">
             <Field label={rentLabel ?? firstPeriodLabel(cycle)}>
               <Input
                 type="number"
@@ -305,15 +314,15 @@ export function PaidTodayFields({
                 onChange={(e) => set({ deposit: e.target.value })}
               />
             </Field>
-          </div>
-          <div>
-            <p className="mb-1 text-[13px] font-medium text-stone-600">Paid by</p>
-            <SegmentedControl
-              options={PAY_METHODS}
-              value={value.method}
-              onChange={(method) => set({ method })}
-              ariaLabel="Paid by"
-            />
+            <div>
+              <p className="mb-1 text-[13px] font-medium text-stone-600">Paid by</p>
+              <SegmentedControl
+                options={PAY_METHODS}
+                value={value.method}
+                onChange={(method) => set({ method })}
+                ariaLabel="Paid by"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -425,8 +434,17 @@ export function BedPicker({
       .map((b) => ({ id: b.id, name: b.name, roomName: room.name, siteId: siteId! }))
   );
 
+  // A dropdown, not a list of radio buttons: the list grew with every vacant
+  // bed and was the tallest thing on Add tenant (Oct 2026).
+  const status = loadError ? null
+    : sites === null ? "Loading your sites\u2026"
+    : sites.length === 0 ? "No sites yet. Add a site with rooms and beds first."
+    : rooms === null ? "Loading beds\u2026"
+    : vacant.length === 0 ? "No vacant beds in this site."
+    : null;
+
   return (
-    <div className="space-y-3">
+    <div className={sites && sites.length > 1 ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : undefined}>
       {sites && sites.length > 1 && (
         <Field label="Site">
           <Select
@@ -440,41 +458,26 @@ export function BedPicker({
         </Field>
       )}
 
-      <div>
-        <p className="mb-1 text-[13px] font-medium text-stone-600">Vacant beds</p>
-        {loadError ? (
-          <FormError>{loadError} — reload the page to try again.</FormError>
-        ) : sites === null ? (
-          <p className="text-sm text-stone-400">Loading your sites…</p>
-        ) : sites.length === 0 ? (
-          <p className="text-sm text-stone-400">
-            No sites yet. Add a site with rooms and beds first.
-          </p>
-        ) : rooms === null ? (
-          <p className="text-sm text-stone-400">Loading beds…</p>
-        ) : vacant.length === 0 ? (
-          <p className="text-sm text-stone-400">No vacant beds in this site.</p>
-        ) : (
-          <div className="max-h-48 space-y-1.5 overflow-y-auto">
+      {loadError ? (
+        <FormError>{loadError} — reload the page to try again.</FormError>
+      ) : status ? (
+        <div>
+          <p className="mb-1 text-[13px] font-medium text-stone-600">Bed</p>
+          <p className="text-sm text-stone-400">{status}</p>
+        </div>
+      ) : (
+        <Field label="Bed">
+          <Select
+            value={value?.id ?? ""}
+            onChange={(e) => onChange(vacant.find((b) => b.id === Number(e.target.value)) ?? null)}
+          >
+            <option value="">Pick a vacant bed…</option>
             {vacant.map((b) => (
-              <label
-                key={b.id}
-                className={`${TOUCH_TARGET} flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition duration-150 ease-out hover:bg-stone-50`}
-              >
-                <input
-                  type="radio"
-                  name="bed"
-                  value={b.id}
-                  checked={value?.id === b.id}
-                  onChange={() => onChange(b)}
-                  className="accent-indigo-600"
-                />
-                <span className="text-sm text-stone-700">{b.roomName} · {b.name}</span>
-              </label>
+              <option key={b.id} value={b.id}>{b.roomName} · {b.name}</option>
             ))}
-          </div>
-        )}
-      </div>
+          </Select>
+        </Field>
+      )}
     </div>
   );
 }

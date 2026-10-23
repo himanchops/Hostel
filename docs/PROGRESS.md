@@ -2857,13 +2857,27 @@ rent, or just the deposit) and come back on the day they want, when they get a
 bed and pay the rest. The forms took only the terms, so the money was a second
 trip to the tenant page, and a booking had nowhere to go at all.
 
-**Add tenant is shorter, and asks what's happening.** It reads in the order
-of the desk: **Who** (name, phone), **Their stay** (Moving in / Booking / Just
-add), and **More about them**, folded and marked optional (email, address,
-workplace, notes, emergency contact, Aadhaar, photo and ID). Moving in is the
-default. The owner asked for less scrolling; folding the optional details
-does that without a step-by-step wizard, which would hide the money behind a
-"Next" button.
+**Add tenant is shorter, and asks what's happening.** It reads top to bottom:
+1. **Who:** name and phone.
+2. **About them:** email, workplace, address and notes.
+3. **ID and emergency contact:** Aadhaar, the emergency contact and their
+   phone, then photo and ID front and back in one row.
+4. **Their stay:** Moving in (the default), Booking, or Just add, with the money
+   last, next to the button that saves it.
+
+Only name and phone are required. The details were briefly folded away to
+shorten the form, but the owner wants them filled in every time, and a folded
+panel invites skipping them. The form is shorter in other ways instead:
+- **Pairs on the iPad:** fields sit two or three across where there is room.
+- **A bed dropdown:** it replaced a radio list that grew with every vacant bed.
+  Assign bed uses it too.
+- **A Monthly / Weekly / Daily switch:** it replaced the cycle dropdown, and
+  sits beside the start date.
+- **"Paid by" beside the amounts:** sized by its container, so it is three
+  across on a page and two in a drawer.
+
+At 768×1024 the form went from 1,941px to 1,419px with everything showing,
+27% shorter.
 
 **Paid today** (`PaidTodayFields`, `components/StayForm.tsx`) appears on
 every form that puts someone in a bed: Add tenant, a vacant bed on the grid,

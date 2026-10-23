@@ -8,7 +8,6 @@ import { tenantsApi, staysApi, uploadApi, TenantUpdateData, ApiError, formatDay,
 import {
   Button,
   Card,
-  Collapsible,
   Field,
   FileInput,
   FormError,
@@ -89,11 +88,6 @@ export default function NewTenantPage() {
   const suggested: PaidSuggestion = arrival === "booking" ? NOTHING_SUGGESTED : suggestedFromTerms(terms);
   const paidDate = arrival === "booking" ? today() : paidTodayDate(terms);
   const suffix = arrival === "later" ? "" : paidTodaySuffix(paid, suggested);
-
-  // The optional details, counted so the folded panel says what is in it.
-  const detailsFilled = [
-    email, address, workplace, notes, emergencyName, emergencyPhone, aadhaar,
-  ].filter((v) => v.trim()).length + [photoFile, idFrontFile, idBackFile].filter(Boolean).length;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -181,10 +175,11 @@ export default function NewTenantPage() {
     : arrival === "booking" ? `Add booking${suffix}`
     : "Add tenant";
 
-  // The form reads in the order things happen at the desk: who they are, what
-  // they're doing, the money. Everything optional is folded at the bottom, so
-  // the usual case fits on an iPad without a long scroll; registration from
-  // the QR link fills most of it anyway.
+  // Who they are first, in full, then their stay and the money last, beside
+  // the button that saves it. The details were briefly folded away to shorten
+  // the form; the owner wants them filled in every time, and a folded panel
+  // invites skipping them (Oct 2026). It is short instead by pairing fields
+  // on the iPad, a bed dropdown and a cycle switch.
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
@@ -192,7 +187,7 @@ export default function NewTenantPage() {
         breadcrumb={[{ label: "Tenants", href: "/tenants" }, { label: "New tenant" }]}
       />
 
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+      <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
         <Card title="Who">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Full name" required>
@@ -200,6 +195,46 @@ export default function NewTenantPage() {
             </Field>
             <Field label="Phone" required>
               <Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 9876543210" />
+            </Field>
+          </div>
+        </Card>
+
+        <Card title="About them">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Email">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
+            </Field>
+            <Field label="Workplace / College">
+              <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="e.g. BITS Pilani" />
+            </Field>
+            <Field label="Home address" className="sm:col-span-2">
+              <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="resize-none" placeholder="Permanent home address" />
+            </Field>
+            <Field label="Notes" hint="Only you see this. Tenants never do." className="sm:col-span-2">
+              <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering: who referred them, how long they're staying, a deposit still to come" />
+            </Field>
+          </div>
+        </Card>
+
+        <Card title="ID and emergency contact">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label="Aadhaar number">
+              <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} inputMode="numeric" placeholder="12-digit number" />
+            </Field>
+            <Field label="Emergency contact">
+              <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
+            </Field>
+            <Field label="Their phone">
+              <Input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="Phone number" />
+            </Field>
+            <Field label="Photo">
+              <FileInput accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
+            </Field>
+            <Field label="ID front">
+              <FileInput accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdFrontFile(e.target.files?.[0] ?? null)} />
+            </Field>
+            <Field label="ID back">
+              <FileInput accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdBackFile(e.target.files?.[0] ?? null)} />
             </Field>
           </div>
         </Card>
@@ -231,49 +266,6 @@ export default function NewTenantPage() {
             </div>
           )}
         </Card>
-
-        <Collapsible
-          title="More about them"
-          summary={detailsFilled > 0 ? `${detailsFilled} filled` : "Optional"}
-          defaultOpen={false}
-        >
-          <div className="space-y-4">
-            <Field label="Email">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
-            </Field>
-            <Field label="Home address">
-              <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="resize-none" placeholder="Permanent home address" />
-            </Field>
-            <Field label="Workplace / College">
-              <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="e.g. BITS Pilani" />
-            </Field>
-            <Field label="Notes" hint="Only you see this. Tenants never do.">
-              <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering: who referred them, how long they're staying, a deposit still to come" />
-            </Field>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Emergency contact name">
-                <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
-              </Field>
-              <Field label="Emergency contact phone">
-                <Input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="Phone number" />
-              </Field>
-            </div>
-            <Field label="Aadhaar number">
-              <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} placeholder="12-digit number" />
-            </Field>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Photo">
-                <FileInput accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
-              </Field>
-              <Field label="ID front">
-                <FileInput accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdFrontFile(e.target.files?.[0] ?? null)} />
-              </Field>
-              <Field label="ID back">
-                <FileInput accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdBackFile(e.target.files?.[0] ?? null)} />
-              </Field>
-            </div>
-          </div>
-        </Collapsible>
 
         {error && <FormError>{error}</FormError>}
 

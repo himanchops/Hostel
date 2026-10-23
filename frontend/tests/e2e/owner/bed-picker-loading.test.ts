@@ -29,7 +29,7 @@ test.describe("The bed picker on the new-tenant form", () => {
     await expect(page.getByText(/No sites yet/)).toHaveCount(0);
 
     release();
-    await expect(page.getByRole("radio", { name: "Room 1 · Bed A" })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Bed", exact: true })).toContainText("Room 1 · Bed A");
     await expect(page.getByText(/No sites yet/)).toHaveCount(0);
   });
 

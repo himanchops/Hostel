@@ -42,7 +42,7 @@ test.describe("Paid today, when adding a tenant", () => {
 
     await page.getByLabel("Full name").fill("Arjun Paid Up");
     await page.getByLabel(/^Phone/).fill("9812400001");
-    await page.getByRole("radio").first().check();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByLabel("Deposit (₹)").fill("10000");
 
@@ -73,7 +73,7 @@ test.describe("Paid today, when adding a tenant", () => {
 
     await page.getByLabel("Full name").fill("Part Payer");
     await page.getByLabel(/^Phone/).fill("9812400002");
-    await page.getByRole("radio").first().check();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByLabel("Deposit (₹)").fill("10000");
 
@@ -100,7 +100,7 @@ test.describe("Paid today, when adding a tenant", () => {
 
     await page.getByLabel("Full name").fill("Pays Later");
     await page.getByLabel(/^Phone/).fill("9812400003");
-    await page.getByRole("radio").first().check();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByRole("button", { name: "They haven’t paid yet" }).tap();
     await expect(page.getByText("Nothing is recorded.", { exact: false })).toBeVisible();
@@ -120,7 +120,7 @@ test.describe("Paid today, when adding a tenant", () => {
     const started = isoDaysAgo(5);
     await page.getByLabel("Full name").fill("Started Last Week");
     await page.getByLabel(/^Phone/).fill("9812400004");
-    await page.getByRole("radio").first().check();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByLabel("Start date").fill(started);
 

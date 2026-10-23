@@ -69,7 +69,7 @@ test.describe("The bed on the tenant profile", () => {
 
     await page.getByRole("button", { name: "Assign bed" }).tap();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("radio", { name: "Room 1 · Bed B" }).check();
+    await dialog.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 1 · Bed B" });
     await dialog.getByRole("button", { name: "They haven\u2019t paid yet" }).tap();
     await dialog.getByRole("button", { name: "Assign", exact: true }).tap();
 

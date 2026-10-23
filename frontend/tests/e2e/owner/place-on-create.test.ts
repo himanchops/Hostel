@@ -22,11 +22,11 @@ test.describe("Placing a tenant while creating them", () => {
     await page.getByLabel("Full name").fill("Placed Immediately");
     await page.getByLabel(/^Phone/).fill("9812300001");
 
-    await page.getByRole("radio").first().check();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
 
     // The rent label follows the billing cycle — the drift that made this an
     // extraction rather than a fourth copy of the same four fields.
-    await page.getByLabel("Billing cycle").selectOption("weekly");
+    await page.getByRole("button", { name: "Weekly" }).click();
     await page.getByLabel("Weekly rent (₹)").fill("2000");
     await page.getByLabel("Deposit (₹)").fill("5000");
 
@@ -82,7 +82,7 @@ test.describe("Placing a tenant while creating them", () => {
     await page.goto("/tenants/new");
     await page.getByLabel("Full name").fill("Half Finished");
     await page.getByLabel(/^Phone/).fill("9812300003");
-    await page.getByRole("radio").first().check();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
     await page.getByRole("button", { name: "Add and move in", exact: true }).click();
 
     await expect(page.getByText("Enter the rent amount.")).toBeVisible();
