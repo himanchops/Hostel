@@ -2948,6 +2948,10 @@ Full suite: 165 e2e and 67 unit tests, plus `go test ./...`. Showing the bed
 list by default exposed its rows as 36px under touch. They are now 44px
 (`touch-targets`), which also helps Assign bed and the grid.
 
+**Production, 23 Oct 2026: live.** PR #48 was merged as `8586d7a`, and
+Vercel and Render both reported their deploys successful at 09:51 UTC.
+`/tenants/new` serves and the backend's `/health` answers. No migration.
+
 ---
 
 ## Architecture Notes
