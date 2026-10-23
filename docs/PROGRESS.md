@@ -2686,6 +2686,131 @@ owner's order.
 
 ---
 
+## Moving out: one sheet, the house rules, and the owner's last word (Oct 2026)
+
+The owner found moving someone out hard to follow, and expected someone who
+is not an engineer to find it harder. Five controls each did part of it:
+- Record / Update notice
+- "End without settling" and "Settle & vacate", side by side as equals
+- "Settle deposit" for a stay that ended unsettled
+- the grid's "End stay", which freed the bed and never touched the money
+
+The settle drawer read: date, a sum, an advance dropdown, "Adjustments"
+(Deduct / Add back), then the answer.
+
+What he does at the door, in his words: they gave notice, they are leaving
+today, take off anything, hand back the rest. His rules, given before the
+build:
+- Rent is never refunded.
+- The deposit comes back only to someone who gave notice. Notice is expected
+  by the time they pay their last month's rent, and the rule isn't strict.
+- He usually takes nothing off.
+- He has the last word on every one of these.
+
+**`MoveOutSheet`** (`components/MoveOutSheet.tsx`) is now the only way out,
+labelled "Move out" on the tenant page and in the grid's bed panel. It reads
+"Settle the money" on a stay that ended with the money left for later. Top to
+bottom:
+1. **Leaving on**: Today, the date their notice gave (once it has passed), or
+   another day.
+2. **Deposit**: one line saying why, then Give it back / Keep it.
+   - "Gave notice 1 Oct, in time."
+   - "Gave notice 12 Oct, less than a month before leaving (due by 1 Oct)."
+     The deposit still comes back by default; the line is there so he can
+     decide.
+   - "No notice given, so the deposit is kept by default." A **They gave
+     notice** link records a notice nobody wrote down, and the deposit comes
+     back.
+3. **The money**, as a sum:
+   - deposit held
+   - rent still owed, with "how?" for the working
+   - "Deposit kept: no notice", when kept
+   - rent paid for after they leave, marked as kept
+   - anything taken off
+4. **Hand back** (or "*Name* owes you"): a box he can type into. A typed
+   amount is recorded as a "Changed by you" line for the difference, so the
+   settlement still adds up.
+5. **Paid back by** Cash / UPI, when something is handed back.
+
+A quiet link at the bottom, "They've left · settle the money later", ends the
+stay without the money.
+
+The house rules are one pure function, `moveOutSettlement` (`lib/settlement.ts`):
+- The deposit kept is `max(0, deposit − rent owed)`, so a tenant who owes more
+  than the deposit still owes the difference.
+- `advance_returned_paise` is always sent as 0.
+- The server checks the sum as before; nothing about it changed.
+
+**Leaving on the rent day no longer starts a new month.** It used to: rent on
+the 23rd, leaving on the 23rd, billed a whole month they would never live, and
+the demo showed it. The owner's rule is that their last paid month covers
+them up to that day. `cyclesThroughEnd` (`helpers.go`) bills every cycle that
+began *before* the leaving day, and at least one. Everything that bills an
+ended stay goes through it:
+- the settlement, via `duesForSchedule`
+- the notice deadline, via `noticeBy`
+- the tenant summary
+- Insights' `billedCycles`
+
+So the three money views cannot disagree about a leaver. Open stays are
+unchanged: rent is still due on the rent day.
+
+**"They're staying"** now cancels the notice: both dates, in one tap. It used
+to clear only the leaving date. A notice date alone keeps a bed "vacating", so
+the bed stayed orange and the button looked dead. That was the "on the iPad"
+bug, and it wasn't about the iPad.
+
+**Backend:**
+- **Migration 013:** `settlements.refund_method`, the `payment_type` enum,
+  nullable. Settle accepts `refund_method` and keeps it only when something
+  was handed back. Insights' month lines now say Cash or UPI on refunds.
+- **The preview carries the notice:** `notice_date`, `expected_end_date`,
+  `notice_by` (the start of the rent month they leave in, via `noticeBy`) and
+  `notice_on_time`.
+- **Removed:** `EndStayDialog` and `SettleStayDrawer`.
+
+### Verification
+
+- **Go:** `TestLeavingOnTheRentDay` covers the owner's example (rent and
+  leaving on the 23rd), checked across the settlement, notice deadline,
+  summary and Insights. Four older fixtures that left on a rent day were
+  updated, each saying why. `TestNoticeOnTime` covers the rent day itself, the day after, the
+  last week, never, and a 31st move-in. `TestRefundMethod` covers cash, UPI,
+  not said, a kept deposit, an owing tenant and a bad value.
+- **`tests/unit/settlement.test.ts`:** seven cases for the house rules:
+  - square
+  - owing
+  - paid ahead
+  - no notice
+  - no notice and owing more than the deposit
+  - a deduction
+  - the owner's own amount
+- **`owner/move-out.test.ts` (6 tests, iPad portrait with touch):**
+  - notice in time, paid back in cash
+  - no notice, kept, then ₹4,000 given back anyway by UPI (checks the stored
+    lines)
+  - recording a forgotten notice
+  - late notice
+  - rent paid ahead kept
+  - from the grid: settle later, then "Settle the money" on the tenant page
+  - leaving on their rent day owes nothing for the month starting then
+
+  `insights.test.ts`'s two leavers now go on the 2nd, one night into the
+  month, which keeps its figures. Those tests skip on the 1st, when the 2nd
+  is still in the future.
+- **Moved to the new sheet:** `settlement.test.ts`,
+  `tenant-profile-enrichment.test.ts` and `vacating-notice.test.ts`. The
+  last now runs on an iPad and checks both dates clear and the bed is no
+  longer vacating.
+- **Full suite:** 148 e2e and 66 unit tests, plus `go test ./...`.
+- **By eye:** screenshots of the sheet at 768×1024 via Playwright on the demo
+  (late notice; no notice with rent paid ahead). The Browser pane cuts
+  slide-in panels off at that size.
+- **Also fixed:** the Payments record form hand-rolled a card outline, which
+  `grep ring-stone-200 src/app` now catches. It uses `Card`.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

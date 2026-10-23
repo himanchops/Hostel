@@ -150,21 +150,22 @@ func TestDuesFor_MultiMonthStay(t *testing.T) {
 	}
 }
 
-// Leaving one day short of the anchor is one cycle cheaper. This is the
-// difference the owner is deciding when they pick a move-out date, so it has to
-// be exact rather than approximately right.
+// Leaving ON the rent day costs nothing more: the month they paid covers them
+// up to that day (the owner's rule, Oct 2026 — it used to bill the new month).
+// Staying one night past it starts the next month. This is the difference the
+// owner is deciding when they pick a move-out date, so it has to be exact.
 func TestDuesFor_MoveOutDateChangesTheBill(t *testing.T) {
-	dayBefore, cyclesBefore := duesFor(settleRent, "monthly", settleStart, date(2026, time.August, 14), settlePaid)
 	onAnchor, cyclesOn := duesFor(settleRent, "monthly", settleStart, date(2026, time.August, 15), settlePaid)
+	dayAfter, cyclesAfter := duesFor(settleRent, "monthly", settleStart, date(2026, time.August, 16), settlePaid)
 
-	if cyclesBefore != 5 || cyclesOn != 6 {
-		t.Fatalf("cycles = %d and %d, want 5 and 6", cyclesBefore, cyclesOn)
+	if cyclesOn != 5 || cyclesAfter != 6 {
+		t.Fatalf("cycles = %d and %d, want 5 and 6", cyclesOn, cyclesAfter)
 	}
-	if dayBefore != 0 {
-		t.Errorf("dues on 14 Aug = %d, want 0 — five cycles billed, five paid", dayBefore)
+	if onAnchor != 0 {
+		t.Errorf("dues leaving on 15 Aug, the rent day = %d, want 0 — five cycles billed, five paid", onAnchor)
 	}
-	if onAnchor != 850000 {
-		t.Errorf("dues on 15 Aug = %d, want 850000", onAnchor)
+	if dayAfter != 850000 {
+		t.Errorf("dues leaving on 16 Aug = %d, want 850000", dayAfter)
 	}
 }
 
@@ -263,7 +264,8 @@ func TestValidateAdvanceReturned(t *testing.T) {
 // clamps the anchor; the settlement inherits that, and must not skip the month.
 func TestDuesFor_MonthEndStartClamps(t *testing.T) {
 	start := date(2026, time.January, 31)
-	dues, cycles := duesFor(600000, "monthly", start, date(2026, time.February, 28), 600000)
+	// Leaving 1 Mar: February's month began on the 28th, so it is billed.
+	dues, cycles := duesFor(600000, "monthly", start, date(2026, time.March, 1), 600000)
 
 	if cycles != 2 {
 		t.Errorf("cycles = %d, want 2 — February bills on the 28th", cycles)
@@ -276,8 +278,10 @@ func TestDuesFor_MonthEndStartClamps(t *testing.T) {
 func TestDuesFor_WeeklyAndDaily(t *testing.T) {
 	start := date(2026, time.June, 3)
 
-	// 3 Jun → 1 Jul is 28 days = cycles 1..5 (day 0 is cycle 1).
-	weekly, weeks := duesFor(150000, "weekly", start, date(2026, time.July, 1), 450000)
+	// Leaving 2 Jul: weeks starting 3, 10, 17, 24 Jun and 1 Jul = 5. (Leaving
+	// on 1 Jul itself would be 4: a cycle starting on the leaving day is not
+	// billed.)
+	weekly, weeks := duesFor(150000, "weekly", start, date(2026, time.July, 2), 450000)
 	if weeks != 5 {
 		t.Errorf("weeks = %d, want 5", weeks)
 	}
@@ -285,7 +289,8 @@ func TestDuesFor_WeeklyAndDaily(t *testing.T) {
 		t.Errorf("weekly dues = %d, want 300000 (₹7,500 billed − ₹4,500 paid)", weekly)
 	}
 
-	daily, days := duesFor(40000, "daily", start, date(2026, time.June, 12), 300000)
+	// Leaving 13 Jun: the nights of 3–12 Jun = 10. The leaving day is not a night.
+	daily, days := duesFor(40000, "daily", start, date(2026, time.June, 13), 300000)
 	if days != 10 {
 		t.Errorf("days = %d, want 10", days)
 	}
@@ -476,5 +481,95 @@ func TestValidateAdjustments_Limits(t *testing.T) {
 	}
 	if err := validateAdjustments([]models.Adjustment{{Label: string(long), AmountPaise: -100}}); err == nil {
 		t.Error("an over-long label should be refused")
+	}
+}
+
+// The house rule: notice is due by the start of the rent month they leave
+// in, when they pay for it. Rent on the 15th, leaving 10 Nov: the last month
+// began 15 Oct, so notice on 15 Oct counts and 16 Oct does not.
+func TestNoticeOnTime(t *testing.T) {
+	start := date(2026, time.June, 15)
+	leaving := date(2026, time.November, 10)
+	if got := noticeBy(start, "monthly", leaving); !got.Equal(date(2026, time.October, 15)) {
+		t.Fatalf("notice due by %s, want 15 Oct", got.Format("2 Jan"))
+	}
+	day := func(m time.Month, d int) *time.Time { t := date(2026, m, d); return &t }
+	cases := []struct {
+		name   string
+		notice *time.Time
+		want   bool
+	}{
+		{"a month ahead", day(time.October, 1), true},
+		{"on the rent day", day(time.October, 15), true},
+		{"the day after", day(time.October, 16), false},
+		{"in the last week", day(time.November, 3), false},
+		{"never", nil, false},
+	}
+	for _, c := range cases {
+		if got := noticeOnTime(start, "monthly", c.notice, leaving); got != c.want {
+			t.Errorf("%s: on time = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// A 31st move-in: November has no 31st, so its rent month began 30 Nov,
+	// and leaving 5 Dec needs notice by then.
+	if got := noticeBy(date(2026, time.August, 31), "monthly", date(2026, time.December, 5)); !got.Equal(date(2026, time.November, 30)) {
+		t.Errorf("31st move-in: notice due by %s, want 30 Nov", got.Format("2 Jan"))
+	}
+}
+
+func TestRefundMethod(t *testing.T) {
+	s := func(v string) *string { return &v }
+	cases := []struct {
+		name    string
+		sent    *string
+		refund  int64
+		want    *string
+		wantErr bool
+	}{
+		{"cash handed back", s("cash"), 650000, s("cash"), false},
+		{"UPI handed back", s("online"), 650000, s("online"), false},
+		{"not said", nil, 650000, nil, false},
+		// Nothing went back, so there is no "how" to keep.
+		{"deposit kept", s("cash"), 0, nil, false},
+		{"tenant owes", s("online"), -250000, nil, false},
+		{"not a method", s("cheque"), 650000, nil, true},
+	}
+	for _, c := range cases {
+		got, err := refundMethod(c.sent, c.refund)
+		if (err != nil) != c.wantErr || deref(got) != deref(c.want) {
+			t.Errorf("%s: got %s, %v; want %s, error %v", c.name, deref(got), err, deref(c.want), c.wantErr)
+		}
+	}
+}
+
+// The owner's example: rent on the 23rd, leaving on the 23rd. The month that
+// begins that day is not theirs to pay, and the notice was due when they paid
+// their last month, on 23 Sep — and the tenant summary and Insights bill the
+// ended stay the same way.
+func TestLeavingOnTheRentDay(t *testing.T) {
+	start := date(2026, time.August, 23)
+	leaving := date(2026, time.October, 23)
+	if got := cyclesThroughEnd(start, leaving, "monthly"); got != 2 {
+		t.Errorf("billed %d months, want 2 (23 Aug and 23 Sep)", got)
+	}
+	if got := noticeBy(start, "monthly", leaving); !got.Equal(date(2026, time.September, 23)) {
+		t.Errorf("notice due by %s, want 23 Sep", got.Format("2 Jan"))
+	}
+	if dues, _ := duesFor(700000, "monthly", start, leaving, 1400000); dues != 0 {
+		t.Errorf("dues = %d, want 0: both months paid, nothing more owed", dues)
+	}
+	// Moving in and out the same day is still a stay, billed its first month.
+	if got := cyclesThroughEnd(start, start, "monthly"); got != 1 {
+		t.Errorf("same-day stay billed %d months, want 1", got)
+	}
+	ended := leaving
+	sum := summarize([]staySummaryRow{{RentAmount: 700000, RentCycle: "monthly", StartDate: start, EndDate: &ended, TotalPaid: 1400000}}, date(2026, time.November, 5))
+	if sum.TotalExpected != 1400000 {
+		t.Errorf("tenant summary billed %d, want 1400000 — the same two months", sum.TotalExpected)
+	}
+	stay := insightStay{StartDate: start, EndDate: &ended, RentCycle: "monthly"}
+	if got := billedCycles(stay, date(2026, time.November, 5)); got != 2 {
+		t.Errorf("Insights billed %d months, want 2", got)
 	}
 }

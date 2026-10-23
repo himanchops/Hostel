@@ -350,43 +350,56 @@ test.describe("Settlement", () => {
     expect((await res.json()).error).toContain("no rent paid in advance");
   });
 
-  test("owner settles from the tenant page and the stay is marked settled", async ({ page, request }) => {
+  test("owner moves a tenant out from the tenant page and the stay is marked settled", async ({ page, request }) => {
     const { token } = await createOwner(request, `settle-ui-${RUN_ID}`);
+    const auth = { Authorization: `Bearer ${token}` };
     const name = `Settle UI ${RUN_ID}`;
-    const { tenant } = await seedStayForSettlement(request, token, {
+    const { tenant, stay, today } = await seedStayForSettlement(request, token, {
       name,
       phone: `6${RUN_ID.slice(-9)}`,
       paid: 2550000,
     });
+    // Notice on the 1st of this month: their last rent month began that day,
+    // so it is in time and the deposit comes back.
+    const firstOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    await request.put(`${BASE}/api/stays/${stay.id}`, { headers: auth, data: { notice_date: isoDate(firstOfMonth) } });
 
     await loginAs(page, token);
     await page.goto(`/tenants/${tenant.id}`);
     await expect(page.getByText(name).first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Settle & vacate" }).click();
+    await page.getByRole("button", { name: "Move out" }).click();
+    const sheet = page.getByRole("dialog");
 
-    // The two computed lines, and the working behind the outstanding rent.
-    await expect(page.getByText("Deposit held")).toBeVisible();
-    await expect(page.getByText("₹17,000", { exact: true })).toBeVisible();
-    await expect(page.getByText("Rent outstanding")).toBeVisible();
-    await expect(page.getByText("4 months × ₹8,500 = ₹34,000 billed · ₹25,500 paid")).toBeVisible();
+    // The sum, and the working behind the rent still owed.
+    await expect(sheet.getByText("Gave notice", { exact: false })).toContainText("in time");
+    await expect(sheet.getByText("Deposit you hold")).toBeVisible();
+    await expect(sheet.getByText("₹17,000", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("− ₹8,500")).toBeVisible();
+    await sheet.getByRole("button", { name: "how?" }).click();
+    await expect(sheet.getByText(/4 months billed.*₹34,000 · ₹25,500 paid/)).toBeVisible();
 
-    // Deposit − dues, before any adjustment.
-    const refund = page.getByText("Refund to tenant").locator("..").locator("p").nth(1);
-    await expect(refund).toHaveText("₹8,500");
+    // Deposit − rent owed, before anything is taken off.
+    const handBack = sheet.getByLabel("Hand back (₹)");
+    await expect(handBack).toHaveValue("8500");
 
     // One deduction, typed with the comma the rest of the app renders.
-    await page.getByRole("button", { name: "+ Add adjustment" }).click();
-    await page.getByLabel("Adjustment reason").fill("Unpaid electricity");
-    await page.getByLabel("Adjustment amount").fill("1,200");
+    await sheet.getByRole("button", { name: "+ Take something off" }).click();
+    await sheet.getByLabel("Taken off for").fill("Unpaid electricity");
+    await sheet.getByLabel("Amount taken off").fill("1,200");
 
-    // The refund moves as it is typed — that is the whole point of the drawer.
-    await expect(refund).toHaveText("₹7,300");
-
-    await page.getByRole("button", { name: "Settle & vacate", exact: true }).last().click();
+    // The amount moves as it is typed.
+    await expect(handBack).toHaveValue("7300");
+    await sheet.getByRole("button", { name: "UPI" }).click();
+    await sheet.getByRole("button", { name: "Move out · hand back ₹7,300" }).click();
 
     // Toast says what happened, in money.
-    await expect(page.getByText(`Settled — ₹7,300 back to ${name}`)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Settle moved out · ₹7,300 handed back")).toBeVisible({ timeout: 5000 });
+    const [settlement] = await (await request.get(`${BASE}/api/tenants/${tenant.id}/settlements`, { headers: auth })).json();
+    expect(settlement.refund_paise).toBe(730000);
+    expect(settlement.refund_method).toBe("online");
+    // Rent is never refunded, and there was none paid ahead to keep anyway.
+    expect(settlement.advance_returned_paise).toBe(0);
 
     // The stay is now ended and badged, with the refund on the card.
     await expect(page.getByText("Settled", { exact: true })).toBeVisible();
@@ -450,12 +463,14 @@ test.describe("Settlement", () => {
     });
     expect(bad.status()).toBe(400);
 
-    // The drawer says both figures out loud, and refunds only the one received.
+    // The sheet says both figures out loud, and gives back only the one
+    // received. (No notice was given, so it starts out kept.)
     await loginAs(page, token);
     await page.goto(`/tenants/${tenant.id}`);
-    await page.getByRole("button", { name: "Settle & vacate" }).click();
-    const drawer = page.getByRole("dialog");
-    await expect(drawer.getByText(/₹17,000 agreed · ₹10,000 received/)).toBeVisible();
-    await expect(drawer.getByText("Refund to tenant").locator("..").locator("p").nth(1)).toHaveText("₹1,500");
+    await page.getByRole("button", { name: "Move out" }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText(/₹17,000 agreed · ₹10,000 received/)).toBeVisible();
+    await sheet.getByRole("button", { name: "Give it back" }).click();
+    await expect(sheet.getByLabel("Hand back (₹)")).toHaveValue("1500");
   });
 });

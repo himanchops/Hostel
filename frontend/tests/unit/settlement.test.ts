@@ -119,3 +119,58 @@ test("one of anything is singular", () => {
 test("an unknown cycle falls back to its own name", () => {
   expect(cycleCountLabel("fortnightly", 3)).toBe("3 fortnightlys");
 });
+
+// ─── The move-out sheet's house rules ────────────────────────────────────────
+//
+//   ₹10,000 deposit held. Rent is never refunded; the deposit comes back only
+//   to someone who gave notice; the owner has the last word.
+
+import { moveOutSettlement, DEPOSIT_KEPT_LABEL, CHANGED_LABEL } from "../../src/lib/settlement";
+
+test("notice given and square: the whole deposit goes back", () => {
+  expect(moveOutSettlement(1000000, 0, { returnDeposit: true, deductions: [] }))
+    .toEqual({ adjustments: [], proposed: 1000000, refund: 1000000 });
+});
+
+test("notice given, ₹2,500 rent owed: the deposit pays it and ₹7,500 goes back", () => {
+  expect(moveOutSettlement(1000000, 250000, { returnDeposit: true, deductions: [] }).refund).toBe(750000);
+});
+
+test("rent paid for after they leave is kept, not added to the refund", () => {
+  // dues −₹6,500: a month paid ahead. Still just the deposit back.
+  expect(moveOutSettlement(1000000, -650000, { returnDeposit: true, deductions: [] }).refund).toBe(1000000);
+});
+
+test("no notice: what would have come back is kept, as its own line", () => {
+  const r = moveOutSettlement(1000000, 250000, { returnDeposit: false, deductions: [] });
+  expect(r.adjustments).toEqual([{ label: DEPOSIT_KEPT_LABEL, amount_paise: -750000 }]);
+  expect(r.refund).toBe(0);
+});
+
+test("no notice and owing more than the deposit: they still owe the rest", () => {
+  // ₹12,000 owed against a ₹10,000 deposit: nothing to keep, ₹2,000 owed.
+  const r = moveOutSettlement(1000000, 1200000, { returnDeposit: false, deductions: [] });
+  expect(r.adjustments).toEqual([]);
+  expect(r.refund).toBe(-200000);
+});
+
+test("something taken off comes out of what goes back", () => {
+  const r = moveOutSettlement(1000000, 0, {
+    returnDeposit: true, deductions: [{ label: "Broken chair", amount_paise: -40000 }],
+  });
+  expect(r.refund).toBe(960000);
+});
+
+test("the owner's own amount wins, recorded as the difference", () => {
+  // Proposed ₹0 (no notice), the owner hands back ₹4,000 anyway.
+  const r = moveOutSettlement(1000000, 0, { returnDeposit: false, deductions: [], finalRefund: 400000 });
+  expect(r.proposed).toBe(0);
+  expect(r.refund).toBe(400000);
+  expect(r.adjustments).toEqual([
+    { label: DEPOSIT_KEPT_LABEL, amount_paise: -1000000 },
+    { label: CHANGED_LABEL, amount_paise: 400000 },
+  ]);
+  // Typing the proposed figure back is no change at all.
+  expect(moveOutSettlement(1000000, 0, { returnDeposit: true, deductions: [], finalRefund: 1000000 }).adjustments)
+    .toEqual([]);
+});

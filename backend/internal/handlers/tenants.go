@@ -654,15 +654,19 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 	for _, s := range stays {
 		start := dateOnly(s.StartDate)
 		until := today
+		cycles := 0
 		if s.EndDate != nil {
 			until = dateOnly(*s.EndDate)
+			cycles = cyclesThroughEnd(start, until, s.RentCycle)
+		} else {
+			cycles = cyclesElapsed(start, until, s.RentCycle)
 		}
 
 		sched := s.Schedule
 		if len(sched) == 0 {
 			sched = flatSchedule(start, s.RentAmount)
 		}
-		expected := sched.billed(start, s.RentCycle, 0, cyclesElapsed(start, until, s.RentCycle))
+		expected := sched.billed(start, s.RentCycle, 0, cycles)
 		summary.TotalPaid += s.TotalPaid
 		summary.TotalExpected += expected
 		if days := int64(until.Sub(start).Hours() / 24); days > 0 {

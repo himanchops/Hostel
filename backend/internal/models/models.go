@@ -224,6 +224,10 @@ type Settlement struct {
 	AdvanceReturnedPaise int64       `db:"advance_returned_paise" json:"advance_returned_paise"`
 	Adjustments          Adjustments `db:"adjustments" json:"adjustments"`
 	RefundPaise          int64       `db:"refund_paise" json:"refund_paise"`
-	Notes                *string     `db:"notes" json:"notes,omitempty"`
-	CreatedAt            time.Time   `db:"created_at" json:"created_at"`
+	// RefundMethod is how the refund was handed back, "cash" or "online"
+	// (shown as UPI). Nil when nothing was handed back, or for settlements
+	// recorded before migration 013.
+	RefundMethod *string   `db:"refund_method" json:"refund_method,omitempty"`
+	Notes        *string   `db:"notes" json:"notes,omitempty"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
 }

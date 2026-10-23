@@ -35,10 +35,9 @@ import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { BedPicker, VacantBed } from "@/components/StayForm";
 import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
-import { EndStayDialog } from "@/components/EndStayDialog";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { ChangeRentDialog } from "@/components/ChangeRentDialog";
-import { SettleStayDrawer } from "@/components/SettleStayDrawer";
+import { MoveOutSheet } from "@/components/MoveOutSheet";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -275,10 +274,7 @@ export default function TenantDetailPage() {
   const [payError, setPayError] = useState("");
   const [payLoading, setPayLoading] = useState(false);
 
-  // End stay date picker
-  const [endingStay, setEndingStay] = useState<number | null>(null);
-
-  // Settle & vacate drawer
+  // Moving out (or settling the money for a stay that already ended)
   const [settlingStay, setSettlingStay] = useState<number | null>(null);
   // Recording (or amending) a notice — the plan to leave, not the leaving.
   const [noticeStay, setNoticeStay] = useState<Stay | null>(null);
@@ -591,7 +587,6 @@ export default function TenantDetailPage() {
             const rentPaid = approved.filter((p) => p.kind === "rent").reduce((s, p) => s + p.amount, 0);
             const depositPaid = approved.filter((p) => p.kind === "deposit").reduce((s, p) => s + p.amount, 0);
             const deposit = depositSummary(stay.deposit_amount, stayPayments === undefined ? undefined : depositPaid);
-            const isEndingThis = endingStay === stay.id;
             const settlement = settlements[stay.id];
             const open = expanded === stay.id;
             const ledgerId = `ledger-${stay.id}`;
@@ -686,7 +681,7 @@ export default function TenantDetailPage() {
                     one of them settles a deposit, which cannot be undone (UX
                     audit, touch targets). Everyday actions sit on the left;
                     the two that end the stay sit apart on the right. */}
-                {(active ? !isEndingThis : !settlement) && (
+                {(active || !settlement) && (
                   <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-4 py-2">
                     {active && unassigned && (
                       <Button variant="secondary" size="sm" onClick={() => setAssigningStay(stay.id)}>
@@ -704,18 +699,10 @@ export default function TenantDetailPage() {
                       </Button>
                     )}
                     <div className="ml-auto flex flex-wrap items-center gap-2">
-                      {/* Kept alongside settling: not every move-out needs the
-                          money ceremony, and forcing one would push owners
-                          back to ending stays from the grid. */}
-                      {active && (
-                        <Button variant="ghost" size="sm" onClick={() => setEndingStay(stay.id)}>
-                          End without settling
-                        </Button>
-                      )}
-                      {/* A stay ended from the grid, or with "End without
-                          settling", still has a deposit to account for. */}
+                      {/* One way out. A stay that ended with the money left
+                          for later still has a deposit to account for. */}
                       <Button variant="secondary" size="sm" onClick={() => setSettlingStay(stay.id)}>
-                        {active ? "Settle & vacate" : "Settle deposit"}
+                        {active ? "Move out" : "Settle the money"}
                       </Button>
                     </div>
                   </div>
@@ -960,23 +947,6 @@ export default function TenantDetailPage() {
         </Button>
       </section>
 
-      {/* Ending a stay is the same dialog the grid uses, so a departure
-          recorded late is billed to the day it happened either way. */}
-      {token && (
-        <EndStayDialog
-          open={endingStay !== null}
-          stayId={endingStay}
-          token={token}
-          tenantName={tenant?.name}
-          onEnded={(updated) => {
-            setStays((prev) => prev.map((s) => (s.id === updated.id ? withPlace(updated, s) : s)));
-            setEndingStay(null);
-            loadSummary();
-          }}
-          onClose={() => setEndingStay(null)}
-        />
-      )}
-
       {token && (
         <RecordNoticeDialog
           open={noticeStay !== null}
@@ -1006,15 +976,16 @@ export default function TenantDetailPage() {
         />
       )}
 
-      {/* Settle & vacate — the money reckoning, which also ends the stay. */}
+      {/* Moving out — the same sheet the grid opens, so a departure is
+          dated and settled the same way from either place. */}
       {token && (
-        <SettleStayDrawer
+        <MoveOutSheet
           open={settlingStay !== null}
           stayId={settlingStay}
           token={token}
           tenantName={tenant?.name}
-          onSettled={(settlement) => {
-            setSettlements((prev) => ({ ...prev, [settlement.stay_id]: settlement }));
+          onDone={({ settlement }) => {
+            if (settlement) setSettlements((prev) => ({ ...prev, [settlement.stay_id]: settlement }));
             setSettlingStay(null);
             reloadStays();
             loadSummary();

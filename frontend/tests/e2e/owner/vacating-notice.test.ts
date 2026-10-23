@@ -53,6 +53,10 @@ async function gridBed(request: APIRequestContext, auth: Record<string, string>,
 }
 
 test.describe("Recording a vacating notice", () => {
+  // The owner's iPad, upright, with touch: where "They're staying" was
+  // reported as doing nothing.
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: true });
+
   test("an owner can record one — the capability that was portal-only", async ({ page, request }) => {
     const { token } = await createOwner(request, `${RUN_ID}-owner`);
     const { tenant, stay } = await seedStay(request, token, "owner", "Leaving Soon");
@@ -137,17 +141,26 @@ test.describe("Recording a vacating notice", () => {
     await page.getByRole("button", { name: "Update notice" }).click();
     // The explicit control, not an emptied date box — clearing a date input
     // is unreliable, and this is the path a real owner takes.
-    await page.getByRole("button", { name: "They're staying" }).click();
-    await page.getByRole("button", { name: "Save" }).click();
+    // One tap cancels the whole notice. It used to clear only the leaving
+    // date, and the notice date alone kept the bed orange (the owner's report:
+    // "nothing happened" on the iPad).
+    await page.getByRole("button", { name: "They're staying" }).tap();
+    await expect(page.getByText("Notice cancelled · they're staying")).toBeVisible();
     await expect(page.getByText(/Was due to leave/)).toHaveCount(0);
+    await expect(page.getByText(/^Notice \d/)).toHaveCount(0);
 
     const after = await request.get(`${BASE}/api/dashboard`, { headers: auth }).then((r) => r.json());
     expect(after.alerts.departures_due).toBe(0);
 
-    // And the stay is still open, still occupying the bed.
-    expect((await gridBed(request, auth, siteId, bedId)).status).not.toBe("departure_due");
+    // And the stay is still open, its bed back to plain occupied: not
+    // departure due, and not vacating either.
+    const bed = await gridBed(request, auth, siteId, bedId);
+    expect(bed.status).not.toBe("departure_due");
+    expect(bed.status).not.toBe("vacating_soon");
     const s = await request.get(`${BASE}/api/stays/${stay.id}`, { headers: auth }).then((r) => r.json());
     expect(s.end_date ?? null).toBeNull();
+    expect(s.notice_date ?? null).toBeNull();
+    expect(s.expected_end_date ?? null).toBeNull();
   });
 
   test("an expected departure before the stay began is refused", async ({ request }) => {
