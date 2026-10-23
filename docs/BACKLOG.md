@@ -484,18 +484,27 @@ nothing at a glance. Options to put to the owner:
 Lean: "Empty now", possibly with occupancy % covering the history. Raised by
 the owner looking at 1m on production (Oct 2026).
 
-### Adding a tenant can't record what they paid up front — S
+### ~~Adding a tenant can't record what they paid up front~~ ✅ done (Oct 2026)
 Reported 23 Oct 2026. New tenants usually pay the first rent, and often the
-deposit, on the day they arrive. The new-tenant form (and approving a
-registration) takes the rent and deposit *terms* only. The money has to be
-recorded afterwards, from the tenant page or Payments, as a separate step
-that is easy to forget. Without it, a guest who paid for their nights up
-front shows as owing from the first morning.
+deposit, on the day they arrive, but the forms took only the terms. All three
+forms that put someone in a bed now have "Paid today", and a booking (paid to
+hold a place, bed on arrival) is its own choice on Add tenant. See
+PROGRESS.md → "Paid today, and bookings".
 
-Proposed: optional "Paid today" fields on the form: rent (prefilled with one
-cycle), deposit (prefilled with the agreed deposit), Cash / UPI. They record
-real payments dated the start day, through the same path as any other
-payment. Talk it through before building.
+### "Arriving soon": bookings due in the next few days — S
+Raised 23 Oct 2026, for later. Bookings show on the tenant page and, within a
+week of arriving, on Payments as due. A short list of who is arriving soon
+(dashboard or Payments) would help plan beds. The owner held it back because
+he worries about crowding the screens.
+
+### A "Leaving on" date when someone moves in — S
+Raised 23 Oct 2026, for later. Some stays are short and agreed up front: a
+guest for five nights, or someone who says at the door they're here for one
+month. The forms could take a "Leaving on" date with the terms. That would
+fill in Paid today as the whole stay (nights × rate for a daily guest), and a
+guest paid up to that date would stop showing as owing every morning. The
+owner thought it might apply to any stay, not only daily ones. Open: whether a
+nightly guest is priced per night or as one amount for the stay.
 
 ### A tenant who comes back has no obvious way back in — S/M
 A returning tenant can be given a new stay today, but only from Sites → grid →

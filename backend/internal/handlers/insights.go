@@ -69,6 +69,7 @@ type insightStay struct {
 	RentCycle  string     `db:"rent_cycle"`
 	StartDate  time.Time  `db:"start_date"`
 	EndDate    *time.Time `db:"end_date"`
+	Booking    bool       `db:"booking"` // never had a bed: see endedCycles
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -155,7 +156,7 @@ func billedCycles(s insightStay, asOf time.Time) int {
 		return 0
 	}
 	if s.EndDate != nil && !asOf.Before(dateOnly(*s.EndDate)) {
-		return cyclesThroughEnd(s.StartDate, *s.EndDate, s.RentCycle)
+		return endedCycles(s.StartDate, *s.EndDate, s.RentCycle, s.Booking)
 	}
 	return cyclesElapsed(dateOnly(s.StartDate), asOf, s.RentCycle)
 }
@@ -360,7 +361,8 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	var stays []insightStay
 	err := h.db.Select(&stays, `
 		SELECT s.id AS stay_id, COALESCE(r.id, 0) AS room_id,
-		       s.rent_amount, s.rent_cycle, s.start_date, s.end_date
+		       s.rent_amount, s.rent_cycle, s.start_date, s.end_date,
+		       s.bed_id IS NULL AS booking
 		FROM stays s
 		JOIN tenants t   ON t.id = s.tenant_id
 		LEFT JOIN beds b ON b.id = s.bed_id

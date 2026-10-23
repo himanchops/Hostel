@@ -573,3 +573,51 @@ func TestLeavingOnTheRentDay(t *testing.T) {
 		t.Errorf("Insights billed %d months, want 2", got)
 	}
 }
+
+// A booking: ₹3,000 paid on 23 Oct to hold a place from 1 Nov at ₹6,000, plus
+// a ₹5,000 deposit, and they never came. Nobody slept there, so nothing is
+// billed; the ₹3,000 is rent paid ahead and the deposit is still held. The
+// house rules keep both by default (the sheet's moveOutSettlement), and the
+// owner can hand any of it back.
+func TestCancelledBooking_BillsNothing(t *testing.T) {
+	booking := settleStay()
+	booking.Booking = true
+	booking.RentAmount = 600000
+	booking.StartDate = date(2026, time.November, 1)
+	booking.TotalPaid = 300000
+	booking.DepositHeld = 500000
+
+	// Cancelled after the day they were due, and before it.
+	for _, end := range []time.Time{date(2026, time.November, 3), date(2026, time.October, 28)} {
+		got, err := settlementDate(booking, end.Format("2006-01-02"), date(2026, time.November, 3))
+		if err != nil {
+			t.Fatalf("cancelling on %s: %v", end.Format("2 Jan"), err)
+		}
+		p := (&SettlementHandler{}).previewFor(booking, got)
+		if p.DuesPaise != -300000 || p.CyclesBilled != 0 || p.AdvancePaise != 300000 {
+			t.Errorf("cancelled %s: dues/cycles/advance = %d/%d/%d, want -300000/0/300000",
+				end.Format("2 Jan"), p.DuesPaise, p.CyclesBilled, p.AdvancePaise)
+		}
+	}
+
+	// The same dates on a stay that had a bed are a typo, and still refused.
+	if _, err := settlementDate(settleStay(), "2026-03-01", date(2026, time.August, 11)); err == nil {
+		t.Error("a move-out before the move-in should still be refused for a real stay")
+	}
+
+	// The tenant page and Insights agree it was never billed.
+	if got := endedCycles(booking.StartDate, booking.StartDate, "monthly", true); got != 0 {
+		t.Errorf("endedCycles = %d for a booking, want 0", got)
+	}
+	if got := endedCycles(booking.StartDate, booking.StartDate, "monthly", false); got != 1 {
+		t.Errorf("endedCycles = %d for a same-day stay with a bed, want 1", got)
+	}
+	ended := booking.StartDate
+	sum := summarize([]staySummaryRow{{
+		RentAmount: 600000, RentCycle: "monthly", StartDate: booking.StartDate,
+		EndDate: &ended, Booking: true, TotalPaid: 300000,
+	}}, date(2026, time.November, 5))
+	if sum.TotalExpected != 0 {
+		t.Errorf("tenant summary billed %d for a cancelled booking, want 0", sum.TotalExpected)
+	}
+}

@@ -499,9 +499,11 @@ export const staysApi = {
      * Three different dates, and they mean three different things:
      * notice_date is when they told you, expected_end_date is when they say
      * they are going, end_date is when they actually went. Only the last one
-     * ends the stay. null clears a field.
+     * ends the stay. null clears a field. start_date moves the move-in day,
+     * as when someone who booked arrives early or late.
      */
     data: {
+      start_date?: string;
       end_date?: string | null;
       notice_date?: string | null;
       expected_end_date?: string | null;

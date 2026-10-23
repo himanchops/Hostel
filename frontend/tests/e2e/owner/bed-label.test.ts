@@ -64,15 +64,17 @@ test.describe("The bed on the tenant profile", () => {
 
     await loginAs(page, token);
     await page.goto(`/tenants/${tenant.id}`);
-    await expect(page.getByText("Bed unassigned")).toBeVisible();
+    // A stay with no bed is a booking: someone holding a place.
+    await expect(page.getByText(/no bed yet|Arrives/)).toBeVisible();
 
     await page.getByRole("button", { name: "Assign bed" }).tap();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("radio", { name: "Room 1 · Bed B" }).check();
+    await dialog.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 1 · Bed B" });
+    await dialog.getByRole("button", { name: "They haven\u2019t paid yet" }).tap();
     await dialog.getByRole("button", { name: "Assign", exact: true }).tap();
 
     await expect(page.getByText("Bed assigned", { exact: true }).first()).toBeVisible(); // the toast
     await expect(page.getByText("Room 1 · Bed B")).toBeVisible();
-    await expect(page.getByText("Bed unassigned")).toHaveCount(0);
+    await expect(page.getByText(/no bed yet|Arrives/)).toHaveCount(0);
   });
 });

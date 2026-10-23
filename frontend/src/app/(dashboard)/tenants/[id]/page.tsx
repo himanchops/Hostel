@@ -33,7 +33,11 @@ import {
 } from "@/components/ui";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
-import { BedPicker, VacantBed } from "@/components/StayForm";
+import {
+  BedPicker, VacantBed,
+  PaidTodayFields, PaidToday, PaidSuggestion, emptyPaidToday,
+  paidTodayError, paidTodaySuffix, recordPaidToday,
+} from "@/components/StayForm";
 import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { ChangeRentDialog } from "@/components/ChangeRentDialog";
@@ -67,21 +71,63 @@ function IdLink({ label, url }: { label: string; url?: string | null }) {
 // ─── Assign-bed modal ────────────────────────────────────────────────────────
 
 function AssignBedModal({
-  stayId, token, onAssigned, onClose,
+  stay, token, onAssigned, onClose,
 }: {
-  stayId: number; token: string; onAssigned: (stay: Stay) => void; onClose: () => void;
+  stay: Stay;
+  token: string;
+  /** `paid` is " · ₹3,000 paid" or ""; `missed` names a payment not recorded. */
+  onAssigned: (paid: string, missed: string) => void;
+  onClose: () => void;
 }) {
   const [bed, setBed] = useState<VacantBed | null>(null);
+  // Usually a booking arriving. Rent runs from the day they booked for, which
+  // the owner moves when they come early or late.
+  const booked = stay.start_date.slice(0, 10);
+  const [rentFrom, setRentFrom] = useState(booked);
+  // What is still owed on the first rent period and the deposit, once the
+  // stay's payments arrive: what they paid to book counts towards both.
+  const [suggested, setSuggested] = useState<PaidSuggestion | null>(null);
+  const [paid, setPaid] = useState<PaidToday>(emptyPaidToday());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    staysApi.payments(token, stay.id)
+      .then((ps) => {
+        if (cancelled) return;
+        const sum = (kind: PaymentKind) =>
+          ps.filter((p) => p.is_approved && p.kind === kind).reduce((n, p) => n + p.amount, 0);
+        const left = (agreed: number, got: number) => {
+          const rest = Math.max(0, agreed - got);
+          return rest > 0 ? String(rest / 100) : "";
+        };
+        setSuggested({
+          rent: left(stay.rent_amount, sum("rent")),
+          deposit: left(stay.deposit_amount, sum("deposit")),
+        });
+      })
+      .catch(() => {
+        // Without the payments there is no honest suggestion; the boxes start
+        // empty and the owner types what arrived.
+        if (!cancelled) setSuggested({ rent: "", deposit: "" });
+      });
+    return () => { cancelled = true; };
+  }, [token, stay.id, stay.rent_amount, stay.deposit_amount]);
+
+  const money = suggested ?? { rent: "", deposit: "" };
+
   async function handleAssign() {
     if (!bed) return;
+    const invalid = !rentFrom ? "Pick the day rent runs from." : paidTodayError(paid, money);
+    if (invalid) { setError(invalid); return; }
     setError("");
     setLoading(true);
     try {
-      const updated = await staysApi.assignBed(token, stayId, { bed_id: bed.id });
-      onAssigned(updated);
+      if (rentFrom !== booked) await staysApi.update(token, stay.id, { start_date: rentFrom });
+      await staysApi.assignBed(token, stay.id, { bed_id: bed.id });
+      const missed = await recordPaidToday(token, stay.id, paid, money, today());
+      onAssigned(missed ? "" : paidTodaySuffix(paid, money), missed);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to assign bed");
     } finally {
@@ -97,17 +143,30 @@ function AssignBedModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button disabled={!bed} loading={loading} onClick={handleAssign}>
-            {loading ? "Assigning…" : "Assign"}
+          <Button disabled={!bed || !suggested} loading={loading} onClick={handleAssign}>
+            {loading ? "Assigning…" : `Assign${paidTodaySuffix(paid, money)}`}
           </Button>
         </>
       }
     >
-      <div className="mb-4">
+      <div className="space-y-4">
         <BedPicker token={token} value={bed} onChange={setBed} />
+        <Field label="Rent from" hint={rentFrom === booked ? "The day they booked for." : `Booked for ${formatDay(booked)}.`}>
+          <Input type="date" value={rentFrom} onChange={(e) => setRentFrom(e.target.value)} className="w-auto" />
+        </Field>
+        {suggested && (
+          <PaidTodayFields
+            value={paid}
+            onChange={setPaid}
+            suggested={suggested}
+            date={today()}
+            cycle={stay.rent_cycle}
+            rentLabel="Rent still due (₹)"
+            hint="Filled in with what's left after anything they paid to book."
+          />
+        )}
+        {error && <FormError>{error}</FormError>}
       </div>
-
-      {error && <FormError>{error}</FormError>}
     </Modal>
   );
 }
@@ -276,12 +335,13 @@ export default function TenantDetailPage() {
 
   // Moving out (or settling the money for a stay that already ended)
   const [settlingStay, setSettlingStay] = useState<number | null>(null);
+  const [settlingBooking, setSettlingBooking] = useState(false);
   // Recording (or amending) a notice — the plan to leave, not the leaving.
   const [noticeStay, setNoticeStay] = useState<Stay | null>(null);
   const [rentStay, setRentStay] = useState<Stay | null>(null);
 
   // Assign bed modal
-  const [assigningStay, setAssigningStay] = useState<number | null>(null);
+  const [assigningStay, setAssigningStay] = useState<Stay | null>(null);
 
   // Portal password — the only way a hand-typed tenant ever reaches /my.
   const [settingPassword, setSettingPassword] = useState(false);
@@ -526,7 +586,12 @@ export default function TenantDetailPage() {
           </Card>
           <Card className="text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Stay duration</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-stone-900">{summary.duration_days}d</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-stone-900">
+              {/* Someone who has only booked has stayed no nights yet. */}
+              {summary.duration_days === 0 && stays.some((s) => !s.end_date && s.bed_id == null)
+                ? "Not arrived"
+                : `${summary.duration_days}d`}
+            </p>
           </Card>
           <Card className={`col-span-2 text-center sm:col-span-1 ${summary.balance <= 0 ? "bg-paid-50" : "bg-overdue-50"}`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Balance</p>
@@ -582,6 +647,10 @@ export default function TenantDetailPage() {
           {stays.map((stay) => {
             const active = !stay.end_date;
             const unassigned = stay.bed_id == null;
+            // An open stay with no bed is a booking: someone holding a place
+            // until the day they arrive. One that ended with no bed was
+            // cancelled, and billed nothing (endedCycles, helpers.go).
+            const booked = active && unassigned;
             const stayPayments = payments[stay.id];
             // Rent and deposit are different money: "Paid" is rent, the same
             // figure as the summary above, and the deposit gets its own line.
@@ -602,11 +671,11 @@ export default function TenantDetailPage() {
                 <div className="flex items-start justify-between gap-3 px-4 py-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={active ? "success" : "neutral"}>
-                        {active ? "Active" : "Ended"}
+                      <Badge tone={active ? (booked ? "info" : "success") : "neutral"}>
+                        {active ? (booked ? "Booked" : "Active") : unassigned ? "Booking cancelled" : "Ended"}
                       </Badge>
                       {settlement && <Badge tone="info">Settled</Badge>}
-                      {active && stay.expected_end_date && (
+                      {active && !booked && stay.expected_end_date && (
                         <Badge
                           tone={
                             stay.expected_end_date.slice(0, 10) < today()
@@ -619,13 +688,21 @@ export default function TenantDetailPage() {
                             : `Leaving ${stay.expected_end_date.slice(0, 10)}`}
                         </Badge>
                       )}
-                      {active && stay.notice_date && !stay.expected_end_date && (
+                      {active && !booked && stay.notice_date && !stay.expected_end_date && (
                         <Badge tone="warning">
                           Notice {stay.notice_date.slice(0, 10)}
                         </Badge>
                       )}
-                      {unassigned ? (
-                        <Badge tone="warning">Bed unassigned</Badge>
+                      {booked ? (
+                        // A promise of a place, not a particular bed. The
+                        // owner gives one when they arrive.
+                        <span className="text-sm font-medium text-stone-700">
+                          {stay.start_date.slice(0, 10) > today()
+                            ? `Arrives ${formatDay(stay.start_date)}`
+                            : `Was due ${formatDay(stay.start_date)} · no bed yet`}
+                        </span>
+                      ) : unassigned ? (
+                        active ? <Badge tone="warning">Bed unassigned</Badge> : null
                       ) : (
                         // The room and bed as the grid names them. This used
                         // to print the database id ("Bed #31"), and five of
@@ -685,8 +762,8 @@ export default function TenantDetailPage() {
                     the two that end the stay sit apart on the right. */}
                 {(active || !settlement) && (
                   <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-4 py-2">
-                    {active && unassigned && (
-                      <Button variant="secondary" size="sm" onClick={() => setAssigningStay(stay.id)}>
+                    {booked && (
+                      <Button variant="secondary" size="sm" onClick={() => setAssigningStay(stay)}>
                         Assign bed
                       </Button>
                     )}
@@ -695,7 +772,7 @@ export default function TenantDetailPage() {
                         Change rent
                       </Button>
                     )}
-                    {active && (
+                    {active && !booked && (
                       <Button variant="secondary" size="sm" onClick={() => setNoticeStay(stay)}>
                         {stay.notice_date || stay.expected_end_date ? "Update notice" : "Record notice"}
                       </Button>
@@ -703,8 +780,12 @@ export default function TenantDetailPage() {
                     <div className="ml-auto flex flex-wrap items-center gap-2">
                       {/* One way out. A stay that ended with the money left
                           for later still has a deposit to account for. */}
-                      <Button variant="secondary" size="sm" onClick={() => setSettlingStay(stay.id)}>
-                        {active ? "Move out" : "Settle the money"}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => { setSettlingStay(stay.id); setSettlingBooking(booked); }}
+                      >
+                        {booked ? "Cancel booking" : active ? "Move out" : "Settle the money"}
                       </Button>
                     </div>
                   </div>
@@ -983,6 +1064,7 @@ export default function TenantDetailPage() {
       {token && (
         <MoveOutSheet
           open={settlingStay !== null}
+          booking={settlingBooking}
           stayId={settlingStay}
           token={token}
           tenantName={tenant?.name}
@@ -1009,14 +1091,16 @@ export default function TenantDetailPage() {
       {/* Assign bed modal */}
       {assigningStay !== null && token && (
         <AssignBedModal
-          stayId={assigningStay}
+          stay={assigningStay}
           token={token}
-          onAssigned={() => {
+          onAssigned={(paidSuffix, missed) => {
             // Refetched rather than patched: the bed just changed, and its
             // name comes only from the list.
             reloadStays();
+            loadSummary();
             setAssigningStay(null);
-            toast.success("Bed assigned");
+            if (missed) toast.error(`Bed assigned. ${missed}`);
+            else toast.success(`Bed assigned${paidSuffix}`);
           }}
           onClose={() => setAssigningStay(null)}
         />

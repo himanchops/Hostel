@@ -8,7 +8,7 @@ import {
 import { dueDay, localToday } from "@/lib/due";
 import { PAY_METHODS, PayMethod } from "@/lib/payMethod";
 import {
-  moveOutSettlement, parseRupees, cycleCountLabel, advanceHeld, depositLine,
+  moveOutSettlement, parseRupees, cycleCountLabel, advanceHeld, depositLine, BOOKING_KEPT_LABEL,
 } from "@/lib/settlement";
 import {
   Button, Drawer, Field, FormError, Input, SegmentedControl, Skeleton, useToast,
@@ -27,6 +27,13 @@ import {
  * moveOutSettlement): rent is never refunded, and the deposit comes back only
  * to someone who gave notice. Every one of those is a proposal. The owner has
  * the last word, and the amount handed back is a box they can type into.
+ *
+ * With `booking`, the same sheet cancels a booking: someone who paid to hold
+ * a place and is not coming. There is no leaving day or notice to ask about.
+ * Nothing is billed for a stay that never had a bed (endedCycles, helpers.go),
+ * so what they paid towards rent is rent paid ahead, kept by the same rule as
+ * any advance, and the deposit is kept by default. The owner can still hand
+ * any of it back by typing over the amount.
  */
 
 type Leaving = "today" | "said" | "other";
@@ -35,6 +42,7 @@ let nextId = 1;
 
 export function MoveOutSheet({
   open,
+  booking = false,
   stayId,
   token,
   tenantName,
@@ -42,6 +50,8 @@ export function MoveOutSheet({
   onClose,
 }: {
   open: boolean;
+  /** Cancelling a booking rather than moving someone out. */
+  booking?: boolean;
   stayId: number | null;
   token: string;
   tenantName?: string;
@@ -93,7 +103,9 @@ export function MoveOutSheet({
   }, [open, stayId, today]);
 
   const said = preview?.expected_end_date && preview.expected_end_date < today ? preview.expected_end_date : null;
-  const endDate = leaving === "today" ? today : leaving === "said" && said ? said : otherDate;
+  // A booking ends the day it is cancelled, even before the day they were due:
+  // the server dates it that day, start and end alike.
+  const endDate = booking ? today : leaving === "today" ? today : leaving === "said" && said ? said : otherDate;
 
   const load = useCallback(async (date: string, signal: { cancelled: boolean }) => {
     if (stayId === null) return;
@@ -120,6 +132,7 @@ export function MoveOutSheet({
     return () => { signal.cancelled = true; };
   }, [open, stayId, endDate, load]);
 
+  const keptLabel = booking ? BOOKING_KEPT_LABEL : undefined;
   const parsedDeductions: Adjustment[] = deductions.flatMap((d) => {
     const paise = parseRupees(d.amount);
     return paise !== null && d.label.trim() ? [{ label: d.label.trim(), amount_paise: -paise }] : [];
@@ -130,7 +143,7 @@ export function MoveOutSheet({
 
   const proposed = preview
     ? moveOutSettlement(preview.deposit_paise, preview.dues_paise, {
-        returnDeposit: returnDeposit ?? false, deductions: parsedDeductions,
+        returnDeposit: returnDeposit ?? false, deductions: parsedDeductions, keptLabel,
       }).proposed
     : 0;
   const owes = proposed < 0;
@@ -139,7 +152,7 @@ export function MoveOutSheet({
   const final = typedPaise === null ? undefined : owes ? -typedPaise : typedPaise;
   const sum = preview
     ? moveOutSettlement(preview.deposit_paise, preview.dues_paise, {
-        returnDeposit: returnDeposit ?? false, deductions: parsedDeductions, finalRefund: final,
+        returnDeposit: returnDeposit ?? false, deductions: parsedDeductions, finalRefund: final, keptLabel,
       })
     : null;
   const refund = sum?.refund ?? 0;
@@ -170,11 +183,12 @@ export function MoveOutSheet({
         refund_method: sum.refund > 0 ? method : undefined,
         notes: notes.trim() || undefined,
       });
-      const did = ended ? "settled" : "moved out";
+      const who = booking ? `${first}\u2019s booking` : first;
+      const did = booking ? "cancelled" : ended ? "settled" : "moved out";
       toast.success(
-        sum.refund > 0 ? `${first} ${did} · ${formatCurrency(sum.refund)} handed back`
-          : sum.refund < 0 ? `${first} ${did} · owes ${formatCurrency(-sum.refund)}`
-          : `${first} ${did}`,
+        sum.refund > 0 ? `${who} ${did} · ${formatCurrency(sum.refund)} handed back`
+          : sum.refund < 0 ? `${who} ${did} · owes ${formatCurrency(-sum.refund)}`
+          : `${who} ${did}`,
       );
       onDone({ settlement });
     } catch (err) {
@@ -200,7 +214,8 @@ export function MoveOutSheet({
     }
   }
 
-  const action = ended ? "Settle" : "Move out";
+  const action = booking ? "Cancel booking" : ended ? "Settle" : "Move out";
+  const title = booking ? "Cancel booking" : ended ? "Settle the money" : "Move out";
   const label = refund > 0 ? `${action} · hand back ${formatCurrency(refund)}`
     : refund < 0 ? `${action} · they owe ${formatCurrency(-refund)}`
     : action;
@@ -209,14 +224,14 @@ export function MoveOutSheet({
     <Drawer
       open={open}
       onClose={onClose}
-      title={tenantName ? `${ended ? "Settle the money" : "Move out"} · ${tenantName}` : ended ? "Settle the money" : "Move out"}
+      title={tenantName ? `${title} · ${tenantName}` : title}
       width="lg"
       footer={
         <div className="space-y-2">
           <Button className="w-full" onClick={handleSettle} loading={saving} disabled={blocked}>
             {saving ? "Saving…" : label}
           </Button>
-          {!ended && (
+          {!ended && !booking && (
             <Button variant="ghost" size="sm" className="w-full" onClick={handleLater} disabled={saving || !preview}>
               They&apos;ve left · settle the money later
             </Button>
@@ -236,8 +251,8 @@ export function MoveOutSheet({
         )
       ) : (
         <div className="space-y-5">
-          {/* 1. The day they leave */}
-          <section>
+          {/* 1. The day they leave. A booking has none: it ends today. */}
+          {!booking && <section>
             <h3 className="mb-1.5 text-[13px] font-medium text-stone-600">{ended ? "Left on" : "Leaving on"}</h3>
             {ended ? (
               <p className="text-sm text-stone-800">{dueDay(preview.end_date)}</p>
@@ -266,16 +281,20 @@ export function MoveOutSheet({
                 )}
               </div>
             )}
-          </section>
+          </section>}
 
           {/* 2. The notice, and so the deposit */}
           <section className="space-y-2">
-            <h3 className="text-[13px] font-medium text-stone-600">Deposit</h3>
-            {(() => {
+            <h3 className="text-[13px] font-medium text-stone-600">{booking ? "What they paid" : "Deposit"}</h3>
+            {booking ? (
+              <p className="text-sm text-stone-700">
+                They&apos;re not coming, so what they paid is kept by default. Change the amount below to hand some back.
+              </p>
+            ) : (() => {
               const n = noticeLine(preview, addingNotice ? noticeDate : "");
               return <p className={`text-sm ${n.tone}`}>{n.text}</p>;
             })()}
-            {!preview.notice_date && !addingNotice && (
+            {!booking && !preview.notice_date && !addingNotice && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -342,10 +361,14 @@ export function MoveOutSheet({
                 they leave: {formatCurrency(preview.total_expected)} · {formatCurrency(preview.total_paid)} paid
               </p>
             )}
-            {kept < 0 && <Line label="Deposit kept: no notice" value={`− ${formatCurrency(-kept)}`} tone="danger" />}
+            {kept < 0 && (
+              <Line label={booking ? "Deposit kept: booking cancelled" : "Deposit kept: no notice"} value={`− ${formatCurrency(-kept)}`} tone="danger" />
+            )}
             {advance > 0 && (
               <p className="text-xs tabular-nums text-stone-500">
-                {formatCurrency(advance)} of rent paid for after they leave is kept. Rent isn&apos;t refunded.
+                {booking
+                  ? <>{formatCurrency(advance)} of rent paid to book is kept. Rent isn&apos;t refunded.</>
+                  : <>{formatCurrency(advance)} of rent paid for after they leave is kept. Rent isn&apos;t refunded.</>}
               </p>
             )}
 

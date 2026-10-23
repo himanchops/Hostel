@@ -24,7 +24,8 @@ test.describe("Tenant notes", () => {
     await page.getByRole("textbox", { name: "Phone*", exact: true }).fill(phone());
     await page.getByLabel("Workplace / College").fill("Night Canteen");
     await page.getByLabel("Notes").fill("Work staff.\nTheir uncle is the reference contact.");
-    await page.getByRole("button", { name: "Create tenant" }).click();
+    await page.getByRole("button", { name: "Just add" }).click();
+    await page.getByRole("button", { name: "Add tenant" }).click();
 
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     // Both lines, as typed: a note is often a list.

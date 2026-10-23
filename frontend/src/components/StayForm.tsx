@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
-  gridApi, sitesApi,
+  gridApi, sitesApi, staysApi,
   GridRoom, Site,
-  today, ApiError,
+  today, formatDay, formatCurrency, ApiError,
 } from "@/lib/api";
-import { Field, FormError, Input, Select } from "@/components/ui";
+import { Button, Field, FormError, Input, SegmentedControl, Select } from "@/components/ui";
+import { PAY_METHODS, PayMethod } from "@/lib/payMethod";
 
 /**
  * The two halves of "put this person in that bed", shared by every screen that
@@ -62,6 +63,13 @@ export function stayTermsError(terms: StayTerms): string {
   return "";
 }
 
+type Cycle = "monthly" | "weekly" | "daily";
+const CYCLES: readonly { value: Cycle; label: string }[] = [
+  { value: "monthly", label: "Monthly" },
+  { value: "weekly", label: "Weekly" },
+  { value: "daily", label: "Daily" },
+];
+
 function rentLabel(cycle: string): string {
   if (cycle === "weekly") return "Weekly rent (₹)";
   if (cycle === "daily") return "Daily rent (₹)";
@@ -72,11 +80,14 @@ export function StayTermsFields({
   value,
   onChange,
   layout = "stack",
+  startLabel = "Start date",
 }: {
   value: StayTerms;
   onChange: (next: StayTerms) => void;
   /** "grid" pairs the fields two-up; "stack" suits a narrow drawer. */
   layout?: "stack" | "grid";
+  /** "Arriving on" for a booking. */
+  startLabel?: string;
 }) {
   const set = (patch: Partial<StayTerms>) => onChange({ ...value, ...patch });
   const wrap =
@@ -86,13 +97,24 @@ export function StayTermsFields({
 
   return (
     <div className={wrap}>
-      {/* Cycle comes first because it renames the field below it. */}
-      <Field label="Billing cycle">
-        <Select value={value.cycle} onChange={(e) => set({ cycle: e.target.value })}>
-          <option value="monthly">Monthly</option>
-          <option value="weekly">Weekly</option>
-          <option value="daily">Daily</option>
-        </Select>
+      {/* Cycle comes first because it renames the rent field. It is three
+          buttons rather than a dropdown: nearly always Monthly, and one tap
+          when it isn't. In the grid layout it shares a row with the date. */}
+      <div>
+        <p className="mb-1 text-[13px] font-medium text-stone-600">Billing cycle</p>
+        <SegmentedControl
+          options={CYCLES}
+          value={value.cycle as Cycle}
+          onChange={(cycle) => set({ cycle })}
+          ariaLabel="Billing cycle"
+        />
+      </div>
+      <Field label={startLabel} required>
+        <Input
+          type="date"
+          value={value.startDate}
+          onChange={(e) => set({ startDate: e.target.value })}
+        />
       </Field>
       <Field label={rentLabel(value.cycle)} required>
         <Input
@@ -112,18 +134,224 @@ export function StayTermsFields({
           onChange={(e) => set({ deposit: e.target.value })}
         />
       </Field>
-      <Field
-        label="Start date"
-        required
-        className={layout === "grid" ? "sm:col-span-2" : undefined}
-      >
-        <Input
-          type="date"
-          value={value.startDate}
-          onChange={(e) => set({ startDate: e.target.value })}
-        />
-      </Field>
     </div>
+  );
+}
+
+// ─── Paid today ───────────────────────────────────────────────────────────────
+
+/**
+ * What they handed over. Nearly everyone pays the first rent, and usually the
+ * deposit, the day they move in; someone booking a place pays something to
+ * hold it and the rest on arrival. Before this the forms took only the terms,
+ * and the money was a second visit to the tenant page that was easy to forget.
+ *
+ * Each amount starts at a suggestion — one rent period and the agreed deposit
+ * on a move-in, nothing on a booking, what's still owed on arrival — and
+ * follows it until the owner types over it. Each becomes an ordinary payment,
+ * recorded through the same endpoint as any other.
+ */
+export interface PaidToday {
+  /** Rupees as typed, or null to follow the suggestion. */
+  rent: string | null;
+  /** Rupees as typed, or null to follow the suggestion. */
+  deposit: string | null;
+  method: PayMethod;
+  /** "They haven't paid yet": nothing is recorded. */
+  none: boolean;
+}
+
+/** What the two boxes start at, in rupees as a form holds them. */
+export interface PaidSuggestion {
+  rent: string;
+  deposit: string;
+}
+
+export function emptyPaidToday(): PaidToday {
+  return { rent: null, deposit: null, method: "cash", none: false };
+}
+
+/** A move-in: one rent period and the deposit agreed. */
+export function suggestedFromTerms(terms: StayTerms): PaidSuggestion {
+  return { rent: terms.rent, deposit: terms.deposit };
+}
+
+/** A booking: whatever they paid to hold the place, so nothing assumed. */
+export const NOTHING_SUGGESTED: PaidSuggestion = { rent: "", deposit: "" };
+
+function rupeesToPaise(rupees: string): number {
+  const n = parseFloat(rupees || "0");
+  return Number.isNaN(n) ? NaN : Math.round(n * 100);
+}
+
+/** The two amounts in paise, 0 for anything not paid. */
+export function paidTodayAmounts(paid: PaidToday, suggested: PaidSuggestion) {
+  if (paid.none) return { rent: 0, deposit: 0 };
+  return {
+    rent: rupeesToPaise(paid.rent ?? suggested.rent),
+    deposit: rupeesToPaise(paid.deposit ?? suggested.deposit),
+  };
+}
+
+/** What's wrong with the amounts, phrased for a form error, or "". */
+export function paidTodayError(paid: PaidToday, suggested: PaidSuggestion): string {
+  const { rent, deposit } = paidTodayAmounts(paid, suggested);
+  if (Number.isNaN(rent) || rent < 0) return "Rent paid must be a number.";
+  if (Number.isNaN(deposit) || deposit < 0) return "Deposit paid must be a number.";
+  return "";
+}
+
+/**
+ * The day a move-in's payments are dated: the start day, which is when people
+ * pay. Never later than today, because a payment can't be dated in the future,
+ * and money taken now for a stay that starts next week was taken now.
+ */
+export function paidTodayDate(terms: StayTerms): string {
+  const now = today();
+  return terms.startDate && terms.startDate < now ? terms.startDate : now;
+}
+
+/** " · ₹16,000 paid" for a button or toast, or "" when nothing was paid. */
+export function paidTodaySuffix(paid: PaidToday, suggested: PaidSuggestion): string {
+  const { rent, deposit } = paidTodayAmounts(paid, suggested);
+  const total = (rent > 0 ? rent : 0) + (deposit > 0 ? deposit : 0);
+  return total > 0 ? ` \u00b7 ${formatCurrency(total)} paid` : "";
+}
+
+/**
+ * Records the payments on a stay that now exists. Returns "" when everything
+ * was recorded, or a sentence naming what was not. The stay is already made
+ * by then, so a failure here is reported rather than thrown: the caller says
+ * so in a toast and the owner records it from Payments.
+ */
+export async function recordPaidToday(
+  token: string, stayId: number, paid: PaidToday, suggested: PaidSuggestion, date: string,
+): Promise<string> {
+  const { rent, deposit } = paidTodayAmounts(paid, suggested);
+  const base = { payment_type: paid.method, payment_date: date };
+  const missed: string[] = [];
+  for (const [kind, amount] of [["rent", rent], ["deposit", deposit]] as const) {
+    if (!(amount > 0)) continue;
+    try {
+      await staysApi.addPayment(token, stayId, { ...base, amount, kind });
+    } catch {
+      missed.push(`${kind} of ${formatCurrency(amount)}`);
+    }
+  }
+  return missed.length ? `The ${missed.join(" and the ")} wasn't recorded. Record it from Payments.` : "";
+}
+
+function firstPeriodLabel(cycle: string): string {
+  if (cycle === "weekly") return "Rent \u00b7 first week (₹)";
+  if (cycle === "daily") return "Rent \u00b7 first night (₹)";
+  return "Rent \u00b7 first month (₹)";
+}
+
+export function PaidTodayFields({
+  value,
+  onChange,
+  suggested,
+  date,
+  cycle,
+  heading,
+  rentLabel,
+  hint,
+}: {
+  value: PaidToday;
+  onChange: (next: PaidToday) => void;
+  suggested: PaidSuggestion;
+  /** The day the payments will be dated, YYYY-MM-DD. */
+  date: string;
+  cycle: string;
+  /** Defaults to "Paid today", or "Paid on 18 Oct 2026" for another day. */
+  heading?: string;
+  /** Defaults to the first rent period: "Rent · first month (₹)". */
+  rentLabel?: string;
+  hint?: string;
+}) {
+  const set = (patch: Partial<PaidToday>) => onChange({ ...value, ...patch });
+  const title = heading ?? (date === today() ? "Paid today" : `Paid on ${formatDay(date)}`);
+
+  return (
+    <section aria-label={title} className="@container rounded-xl border border-stone-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-stone-800">{title}</h3>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => set({ none: !value.none })}
+        >
+          {value.none ? "They paid something" : "They haven\u2019t paid yet"}
+        </Button>
+      </div>
+
+      {value.none ? (
+        <p className="mt-1 text-[13px] text-stone-500">
+          Nothing is recorded. What they owe shows on Payments.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {hint && <p className="-mt-1 text-[13px] text-stone-500">{hint}</p>}
+          {/* Sized by the section, not the screen: three across on a page,
+              two in a drawer, one on a phone. */}
+          <div className="grid grid-cols-1 gap-3 @xs:grid-cols-2 @xl:grid-cols-3">
+            <Field label={rentLabel ?? firstPeriodLabel(cycle)}>
+              <Input
+                type="number"
+                min="0"
+                placeholder="0"
+                value={value.rent ?? suggested.rent}
+                onChange={(e) => set({ rent: e.target.value })}
+              />
+            </Field>
+            <Field label="Deposit paid (₹)">
+              <Input
+                type="number"
+                min="0"
+                placeholder="0"
+                value={value.deposit ?? suggested.deposit}
+                onChange={(e) => set({ deposit: e.target.value })}
+              />
+            </Field>
+            <div>
+              <p className="mb-1 text-[13px] font-medium text-stone-600">Paid by</p>
+              <SegmentedControl
+                options={PAY_METHODS}
+                value={value.method}
+                onChange={(method) => set({ method })}
+                ariaLabel="Paid by"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The same section for someone booking a place: nothing assumed, dated today,
+ * and said in those words.
+ */
+export function PaidToBookFields({
+  value, onChange, cycle,
+}: {
+  value: PaidToday;
+  onChange: (next: PaidToday) => void;
+  cycle: string;
+}) {
+  return (
+    <PaidTodayFields
+      value={value}
+      onChange={onChange}
+      suggested={NOTHING_SUGGESTED}
+      date={today()}
+      cycle={cycle}
+      heading="Paid to book"
+      rentLabel="Rent paid ahead (₹)"
+      hint="Whatever they paid to hold the place. The rest is due the day they arrive."
+    />
   );
 }
 
@@ -206,8 +434,17 @@ export function BedPicker({
       .map((b) => ({ id: b.id, name: b.name, roomName: room.name, siteId: siteId! }))
   );
 
+  // A dropdown, not a list of radio buttons: the list grew with every vacant
+  // bed and was the tallest thing on Add tenant (Oct 2026).
+  const status = loadError ? null
+    : sites === null ? "Loading your sites\u2026"
+    : sites.length === 0 ? "No sites yet. Add a site with rooms and beds first."
+    : rooms === null ? "Loading beds\u2026"
+    : vacant.length === 0 ? "No vacant beds in this site."
+    : null;
+
   return (
-    <div className="space-y-3">
+    <div className={sites && sites.length > 1 ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : undefined}>
       {sites && sites.length > 1 && (
         <Field label="Site">
           <Select
@@ -221,41 +458,26 @@ export function BedPicker({
         </Field>
       )}
 
-      <div>
-        <p className="mb-1 text-[13px] font-medium text-stone-600">Vacant beds</p>
-        {loadError ? (
-          <FormError>{loadError} — reload the page to try again.</FormError>
-        ) : sites === null ? (
-          <p className="text-sm text-stone-400">Loading your sites…</p>
-        ) : sites.length === 0 ? (
-          <p className="text-sm text-stone-400">
-            No sites yet. Add a site with rooms and beds first.
-          </p>
-        ) : rooms === null ? (
-          <p className="text-sm text-stone-400">Loading beds…</p>
-        ) : vacant.length === 0 ? (
-          <p className="text-sm text-stone-400">No vacant beds in this site.</p>
-        ) : (
-          <div className="max-h-48 space-y-1.5 overflow-y-auto">
+      {loadError ? (
+        <FormError>{loadError} — reload the page to try again.</FormError>
+      ) : status ? (
+        <div>
+          <p className="mb-1 text-[13px] font-medium text-stone-600">Bed</p>
+          <p className="text-sm text-stone-400">{status}</p>
+        </div>
+      ) : (
+        <Field label="Bed">
+          <Select
+            value={value?.id ?? ""}
+            onChange={(e) => onChange(vacant.find((b) => b.id === Number(e.target.value)) ?? null)}
+          >
+            <option value="">Pick a vacant bed…</option>
             {vacant.map((b) => (
-              <label
-                key={b.id}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition duration-150 ease-out hover:bg-stone-50"
-              >
-                <input
-                  type="radio"
-                  name="bed"
-                  value={b.id}
-                  checked={value?.id === b.id}
-                  onChange={() => onChange(b)}
-                  className="accent-indigo-600"
-                />
-                <span className="text-sm text-stone-700">{b.roomName} · {b.name}</span>
-              </label>
+              <option key={b.id} value={b.id}>{b.roomName} · {b.name}</option>
             ))}
-          </div>
-        )}
-      </div>
+          </Select>
+        </Field>
+      )}
     </div>
   );
 }

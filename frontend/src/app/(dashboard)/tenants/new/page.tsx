@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
-import { tenantsApi, staysApi, uploadApi, TenantUpdateData, ApiError } from "@/lib/api";
+import { tenantsApi, staysApi, uploadApi, TenantUpdateData, ApiError, formatDay, today } from "@/lib/api";
 import {
   Button,
   Card,
@@ -13,14 +13,41 @@ import {
   FormError,
   Input,
   PageHeader,
+  SegmentedControl,
   Textarea,
   useToast,
-  TOUCH_TARGET,
 } from "@/components/ui";
 import {
   BedPicker, VacantBed,
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
+  PaidTodayFields, PaidToBookFields, PaidToday, PaidSuggestion, emptyPaidToday,
+  suggestedFromTerms, NOTHING_SUGGESTED, paidTodayDate,
+  paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
+
+/**
+ * What is happening at the desk, which decides what the rest of the form asks.
+ *
+ *  - now:     they're moving in. A bed, the terms, and what they paid.
+ *  - booking: they're holding a place for a later day. The terms, the day
+ *             they arrive, and what they paid to hold it. No bed: the owner
+ *             promises a place, not a particular bed, and assigns one when
+ *             they arrive (tenant page → Assign bed).
+ *  - later:   just the person, for now.
+ */
+type Arrival = "now" | "booking" | "later";
+
+const ARRIVALS: readonly { value: Arrival; label: string }[] = [
+  { value: "now", label: "Moving in" },
+  { value: "booking", label: "Booking" },
+  { value: "later", label: "Just add" },
+];
+
+const ARRIVAL_HINT: Record<Arrival, string> = {
+  now: "They're moving in. Pick a bed and record what they paid.",
+  booking: "They're holding a place for a later day. Assign a bed when they arrive.",
+  later: "Only their details for now. Give them a bed later from the grid.",
+};
 
 export default function NewTenantPage() {
   const { token } = useAuth();
@@ -42,12 +69,25 @@ export default function NewTenantPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Placing them is optional and off by default: an owner often adds someone
-  // days before there is a bed free, and the alternative — forcing a bed —
-  // would be worse than the walk through Sites this replaces.
-  const [placing, setPlacing] = useState(false);
+  // Moving in is the default: it is most of what happens at the desk. It was
+  // once an opt-in checkbox, because the only alternative to "no bed yet" was
+  // forcing one; booking is now its own answer.
+  const [arrival, setArrival] = useState<Arrival>("now");
   const [bed, setBed] = useState<VacantBed | null>(null);
   const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
+  const [paid, setPaid] = useState<PaidToday>(emptyPaidToday());
+
+  // Switching between moving in and booking starts the money over: the two
+  // suggest different amounts, and a figure typed for one is not the other's.
+  function chooseArrival(next: Arrival) {
+    setArrival(next);
+    setPaid(emptyPaidToday());
+    setError("");
+  }
+
+  const suggested: PaidSuggestion = arrival === "booking" ? NOTHING_SUGGESTED : suggestedFromTerms(terms);
+  const paidDate = arrival === "booking" ? today() : paidTodayDate(terms);
+  const suffix = arrival === "later" ? "" : paidTodaySuffix(paid, suggested);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,9 +96,12 @@ export default function NewTenantPage() {
 
     // Checked before the tenant is created, not after: a rent typo should not
     // cost the owner a half-made record they then have to finish by hand.
-    if (placing) {
-      if (!bed) { setError("Pick a bed, or turn off \u201CPlace them in a bed now\u201D."); return; }
-      const invalid = stayTermsError(terms);
+    if (arrival === "now" && !bed) {
+      setError("Pick a bed, or choose “Booking” or “Just add”.");
+      return;
+    }
+    if (arrival !== "later") {
+      const invalid = stayTermsError(terms) || paidTodayError(paid, suggested);
       if (invalid) { setError(invalid); return; }
     }
 
@@ -92,21 +135,27 @@ export default function NewTenantPage() {
       // The tenant exists from here on, so nothing below may throw the whole
       // submission away. A stay that fails to create leaves a real person on
       // record with nowhere to sleep, and the honest thing is to say so and
-      // hand them the page where "Assign bed" lives — the same shape as the
-      // backend's "tenant approved but failed to create stay".
-      if (placing && bed) {
+      // hand them the page — the same shape as the backend's "tenant approved
+      // but failed to create stay".
+      if (arrival !== "later") {
         try {
-          await staysApi.create(token, {
+          const stay = await staysApi.create(token, {
             tenant_id: tenant.id,
-            bed_id: bed.id,
+            ...(arrival === "now" && bed ? { bed_id: bed.id } : {}),
             ...stayTermsPayload(terms),
           });
-          toast.success(`${tenant.name} added and placed in ${bed.roomName} · ${bed.name}`);
+          const done = arrival === "now" && bed
+            ? `${tenant.name} added and placed in ${bed.roomName} · ${bed.name}`
+            : `${tenant.name} booked from ${formatDay(terms.startDate)}`;
+          const missed = await recordPaidToday(token, stay.id, paid, suggested, paidDate);
+          if (missed) toast.error(`${done}. ${missed}`);
+          else toast.success(done + suffix);
         } catch (stayErr) {
+          const what = arrival === "now" ? "the bed was not assigned" : "the booking was not saved";
           toast.error(
             stayErr instanceof ApiError
-              ? `${tenant.name} was added, but the bed was not assigned: ${stayErr.message}`
-              : `${tenant.name} was added, but the bed was not assigned.`,
+              ? `${tenant.name} was added, but ${what}: ${stayErr.message}`
+              : `${tenant.name} was added, but ${what}.`,
           );
         }
       } else {
@@ -122,6 +171,15 @@ export default function NewTenantPage() {
     }
   }
 
+  const submitLabel = arrival === "now" ? `Add and move in${suffix}`
+    : arrival === "booking" ? `Add booking${suffix}`
+    : "Add tenant";
+
+  // Who they are first, in full, then their stay and the money last, beside
+  // the button that saves it. The details were briefly folded away to shorten
+  // the form; the owner wants them filled in every time, and a folded panel
+  // invites skipping them (Oct 2026). It is short instead by pairing fields
+  // on the iPad, a bed dropdown and a cycle switch.
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
@@ -129,8 +187,8 @@ export default function NewTenantPage() {
         breadcrumb={[{ label: "Tenants", href: "/tenants" }, { label: "New tenant" }]}
       />
 
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
-        <Card title="Basic information">
+      <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
+        <Card title="Who">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Full name" required>
               <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahul Sharma" />
@@ -139,38 +197,36 @@ export default function NewTenantPage() {
               <Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 9876543210" />
             </Field>
           </div>
-          <Field label="Email" className="mt-4">
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
-          </Field>
         </Card>
 
-        <Card title="Profile details">
-          <div className="space-y-4">
-            <Field label="Home address">
-              <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="resize-none" placeholder="Permanent home address" />
+        <Card title="About them">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Email">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
             </Field>
             <Field label="Workplace / College">
               <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="e.g. BITS Pilani" />
             </Field>
-            <Field label="Notes" hint="Only you see this. Tenants never do.">
-              <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering: who referred them, how long they're staying, a deposit still to come" />
+            <Field label="Home address" className="sm:col-span-2">
+              <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="resize-none" placeholder="Permanent home address" />
             </Field>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Emergency contact name">
-                <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
-              </Field>
-              <Field label="Emergency contact phone">
-                <Input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="Phone number" />
-              </Field>
-            </div>
-            <Field label="Aadhaar number">
-              <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} placeholder="12-digit number" />
+            <Field label="Notes" hint="Only you see this. Tenants never do." className="sm:col-span-2">
+              <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering: who referred them, how long they're staying, a deposit still to come" />
             </Field>
           </div>
         </Card>
 
-        <Card title="Photo & documents">
+        <Card title="ID and emergency contact">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label="Aadhaar number">
+              <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} inputMode="numeric" placeholder="12-digit number" />
+            </Field>
+            <Field label="Emergency contact">
+              <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
+            </Field>
+            <Field label="Their phone">
+              <Input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="Phone number" />
+            </Field>
             <Field label="Photo">
               <FileInput accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
             </Field>
@@ -183,38 +239,39 @@ export default function NewTenantPage() {
           </div>
         </Card>
 
-        <Card title="Place them in a bed">
-          <label className={`${TOUCH_TARGET} flex cursor-pointer items-start gap-3`}>
-            <input
-              type="checkbox"
-              checked={placing}
-              onChange={(e) => setPlacing(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-indigo-600"
-            />
-            <span>
-              <span className="block text-sm font-medium text-stone-800">
-                Place them in a bed now
-              </span>
-              <span className="block text-[13px] text-stone-500">
-                Starts their rent ledger. Leave this off and assign a bed later
-                from their profile or the grid.
-              </span>
-            </span>
-          </label>
+        <Card title="Their stay">
+          <SegmentedControl options={ARRIVALS} value={arrival} onChange={chooseArrival} ariaLabel="Their stay" />
+          <p className="mt-2 text-[13px] text-stone-500">{ARRIVAL_HINT[arrival]}</p>
 
-          {placing && token && (
+          {arrival !== "later" && token && (
             <div className="mt-4 space-y-4 border-t border-stone-100 pt-4">
-              <BedPicker token={token} value={bed} onChange={setBed} />
-              <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
+              {arrival === "now" && <BedPicker token={token} value={bed} onChange={setBed} />}
+              <StayTermsFields
+                value={terms}
+                onChange={setTerms}
+                layout="grid"
+                startLabel={arrival === "booking" ? "Arriving on" : "Start date"}
+              />
+              {arrival === "now" ? (
+                <PaidTodayFields
+                  value={paid}
+                  onChange={setPaid}
+                  suggested={suggested}
+                  date={paidDate}
+                  cycle={terms.cycle}
+                />
+              ) : (
+                <PaidToBookFields value={paid} onChange={setPaid} cycle={terms.cycle} />
+              )}
             </div>
           )}
         </Card>
 
         {error && <FormError>{error}</FormError>}
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button type="submit" loading={loading}>
-            {loading ? "Creating…" : placing ? "Create & place tenant" : "Create tenant"}
+            {loading ? "Saving…" : submitLabel}
           </Button>
           <Link href="/tenants" className="inline-flex items-center rounded-lg px-4 py-2 text-sm text-stone-500 transition duration-150 ease-out hover:bg-stone-100">
             Cancel

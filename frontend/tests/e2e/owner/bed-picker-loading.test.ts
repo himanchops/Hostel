@@ -24,13 +24,12 @@ test.describe("The bed picker on the new-tenant form", () => {
 
     await loginAs(page, token);
     await page.goto("/tenants/new");
-    await page.getByLabel("Place them in a bed now").check();
 
     await expect(page.getByText("Loading your sites…")).toBeVisible();
     await expect(page.getByText(/No sites yet/)).toHaveCount(0);
 
     release();
-    await expect(page.getByRole("radio", { name: "Room 1 · Bed A" })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Bed", exact: true })).toContainText("Room 1 · Bed A");
     await expect(page.getByText(/No sites yet/)).toHaveCount(0);
   });
 
@@ -42,7 +41,6 @@ test.describe("The bed picker on the new-tenant form", () => {
 
     await loginAs(page, token);
     await page.goto("/tenants/new");
-    await page.getByLabel("Place them in a bed now").check();
 
     await expect(page.getByText(/reload the page to try again/)).toBeVisible();
     await expect(page.getByText(/No sites yet/)).toHaveCount(0);
@@ -52,7 +50,6 @@ test.describe("The bed picker on the new-tenant form", () => {
     const { token } = await createOwner(request, `picker-c-${RUN_ID}`);
     await loginAs(page, token);
     await page.goto("/tenants/new");
-    await page.getByLabel("Place them in a bed now").check();
     await expect(page.getByText(/No sites yet/)).toBeVisible();
   });
 });

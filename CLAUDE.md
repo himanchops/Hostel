@@ -96,7 +96,9 @@ sizes: width never stands in for "has no mouse".
 The rent-terms fields and the vacant-bed picker live in
 `frontend/src/components/StayForm.tsx` and had four drifting copies before
 Phase 16d. A fifth screen that needs "rent, deposit, cycle, start date" or "pick
-a vacant bed" imports them; it does not write them again.
+a vacant bed" imports them; it does not write them again. The same file holds
+"Paid today" (`PaidTodayFields`, `recordPaidToday`): every form that puts
+someone in a bed also records what they paid on arrival.
 
 UI work goes through `frontend/src/components/ui/` (design Phase B). New pages must not hand-roll buttons, cards, inputs, drawers or modals, and must not call `window.confirm` — use `useConfirm()`. **The app draws no charts, on purpose, and must not add a charting library.** Insights became tables in Oct 2026 because a chart's numbers sit behind a hover the iPad does not have. Prefer a table, with a `Meter` fill bar where a ratio needs to be seen at a glance. The frontend has four runtime dependencies (react, react-dom, next, @sentry/browser), and a charting library would be a conspicuous addition. If a chart ever comes back, it is hand-rolled SVG (the old `components/ui/Chart.tsx` is in git history), and it measures its container rather than scaling a fixed `viewBox`, which letterboxes a short series into an island of bars. `grep -rn "ring-stone-200" frontend/src/app` must stay at zero. Every mutation shows a toast (`useToast()`), and every failure path surfaces somewhere — inline `FormError` in forms, a toast elsewhere. Every page must work at 375px (design Phase C): sidebar above 1024px, bottom tab bar below.
 
@@ -173,6 +175,11 @@ Key conventions to carry forward:
     line so the settlement still adds up
 
   A refund says how it went back (`refund_method`, migration 013).
+- **A stay with no bed is a booking** (Oct 2026): someone who paid to hold a
+  place and gets a bed on arrival. Nothing on the grid holds a bed for them,
+  because the owner promises a place, not a bed. One that ends without ever
+  having a bed was cancelled and bills nothing (`endedCycles`). The move-out
+  sheet cancels it (`booking` mode), keeping what was paid by default.
 - **A stay that has ended is billed through `cyclesThroughEnd`** (`helpers.go`):
   every cycle that began before the leaving day, never one that starts on it.
   This applies to the settlement, the tenant summary and Insights alike. An

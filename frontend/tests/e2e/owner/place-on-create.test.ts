@@ -8,7 +8,8 @@ const RUN_ID = `place-${Date.now()}`;
  * Before this, `/tenants/new` created a *person* and nothing about where they
  * would sleep: the only `staysApi.create` call site in the whole frontend was
  * the grid. Adding a tenant meant filling the form, then walking Sites → site →
- * room → bed → assign.
+ * room → bed → assign. Moving in is now the form's default answer to "Their
+ * stay"; "Just add" is the person on their own.
  */
 test.describe("Placing a tenant while creating them", () => {
   test("creates the person and their stay in one submission", async ({ page, request }) => {
@@ -21,16 +22,15 @@ test.describe("Placing a tenant while creating them", () => {
     await page.getByLabel("Full name").fill("Placed Immediately");
     await page.getByLabel(/^Phone/).fill("9812300001");
 
-    await page.getByLabel("Place them in a bed now").check();
-    await page.getByRole("radio").first().check();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
 
     // The rent label follows the billing cycle — the drift that made this an
     // extraction rather than a fourth copy of the same four fields.
-    await page.getByLabel("Billing cycle").selectOption("weekly");
+    await page.getByRole("button", { name: "Weekly" }).click();
     await page.getByLabel("Weekly rent (₹)").fill("2000");
     await page.getByLabel("Deposit (₹)").fill("5000");
 
-    await page.getByRole("button", { name: "Create & place tenant" }).click();
+    await page.getByRole("button", { name: /^Add and move in/ }).click();
 
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     await expect(page.getByText("Stays & Ledger")).toBeVisible();
@@ -59,7 +59,7 @@ test.describe("Placing a tenant while creating them", () => {
     expect(bed.status).not.toBe("vacant");
   });
 
-  test("leaving the toggle off still just creates a person", async ({ page, request }) => {
+  test("\u201cJust add\u201d still just creates a person", async ({ page, request }) => {
     const { token } = await createOwner(request, `${RUN_ID}-b`);
     await createSiteRoomBed(request, token, `${RUN_ID}-b`);
 
@@ -67,7 +67,8 @@ test.describe("Placing a tenant while creating them", () => {
     await page.goto("/tenants/new");
     await page.getByLabel("Full name").fill("No Bed Yet");
     await page.getByLabel(/^Phone/).fill("9812300002");
-    await page.getByRole("button", { name: "Create tenant" }).click();
+    await page.getByRole("button", { name: "Just add" }).click();
+    await page.getByRole("button", { name: "Add tenant" }).click();
 
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     await expect(page.getByText("No stays yet")).toBeVisible();
@@ -81,9 +82,8 @@ test.describe("Placing a tenant while creating them", () => {
     await page.goto("/tenants/new");
     await page.getByLabel("Full name").fill("Half Finished");
     await page.getByLabel(/^Phone/).fill("9812300003");
-    await page.getByLabel("Place them in a bed now").check();
-    await page.getByRole("radio").first().check();
-    await page.getByRole("button", { name: "Create & place tenant" }).click();
+    await page.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ index: 1 });
+    await page.getByRole("button", { name: "Add and move in", exact: true }).click();
 
     await expect(page.getByText("Enter the rent amount.")).toBeVisible();
 

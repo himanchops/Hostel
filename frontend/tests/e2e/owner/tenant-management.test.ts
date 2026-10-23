@@ -68,8 +68,9 @@ test.describe("Tenant management", () => {
     await page.getByPlaceholder("e.g. Rahul Sharma").fill(uiName);
     await page.getByPlaceholder("e.g. 9876543210").fill(uiPhone);
 
-    // Submit
-    await page.getByRole("button", { name: "Create tenant" }).click();
+    // Submit, as just a person: no bed or booking yet.
+    await page.getByRole("button", { name: "Just add" }).click();
+    await page.getByRole("button", { name: "Add tenant" }).click();
 
     // Should redirect to the tenant detail page
     await expect(page.getByRole("heading", { name: uiName })).toBeVisible({ timeout: 5000 });
@@ -85,7 +86,7 @@ test.describe("Tenant management", () => {
     await page.goto("/tenants/new");
 
     await page.getByPlaceholder("e.g. 9876543210").fill("9999999999");
-    await page.getByRole("button", { name: "Create tenant" }).click();
+    await page.getByRole("button", { name: "Add and move in" }).click();
 
     // Browser native required validation prevents submission — form stays open
     await expect(page.getByText("Add new tenant")).toBeVisible();
