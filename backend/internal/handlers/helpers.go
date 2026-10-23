@@ -27,12 +27,28 @@ func daysInMonth(year int, month time.Month) int {
 //
 // Everything that bills an ENDED stay goes through this: the settlement, the
 // tenant summary and Insights, so the three cannot disagree about a leaver.
+//
+// A stay that ended without ever having a bed is billed nothing: see
+// endedCycles.
 func cyclesThroughEnd(startDate, end time.Time, cycle string) int {
 	n := cyclesElapsed(dateOnly(startDate), dateOnly(end).AddDate(0, 0, -1), cycle)
 	if n < 1 {
 		return 1
 	}
 	return n
+}
+
+// endedCycles is cyclesThroughEnd for an ended stay as stored. One that ended
+// without ever being given a bed was a booking: someone paid to hold a place
+// and never moved in, so nobody slept there and no rent is billed. Whatever
+// they paid is money paid ahead, which the move-out rules keep by default.
+// A bed is never taken off a stay once given (moving out keeps it), so a
+// stay with no bed at its end never had one.
+func endedCycles(startDate, end time.Time, cycle string, booking bool) int {
+	if booking {
+		return 0
+	}
+	return cyclesThroughEnd(startDate, end, cycle)
 }
 
 func cyclesElapsed(startDate, today time.Time, cycle string) int {

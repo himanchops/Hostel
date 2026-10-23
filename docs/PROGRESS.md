@@ -2849,49 +2849,90 @@ the demo.
 
 ---
 
-## Paid today (Oct 2026)
+## Paid today, and bookings (Oct 2026)
 
 Nearly every tenant pays the first rent, and usually the deposit, on the day
-they move in. The forms that put someone in a bed took only the terms, so the
-money was a second trip to the tenant page, easy to forget, and the new
-tenant showed as owing from their first day.
+they move in. Some book instead: they pay something to hold a place (half the
+rent, or just the deposit) and come back on the day they want, when they get a
+bed and pay the rest. The forms took only the terms, so the money was a second
+trip to the tenant page, and a booking had nowhere to go at all.
 
-**All three forms have it:** Add tenant, a vacant bed on the grid, and
-approving a registration (both "assign bed" and "agree terms"). They share
-`PaidTodayFields` in `components/StayForm.tsx`:
-- **Filled in from the terms:** rent with one rent period, the deposit with
-  the agreed amount. Each follows the terms until the owner types over it.
+**Add tenant is shorter, and asks what's happening.** It reads in the order
+of the desk: **Who** (name, phone), **Their stay** (Moving in / Booking / Just
+add), and **More about them**, folded and marked optional (email, address,
+workplace, notes, emergency contact, Aadhaar, photo and ID). Moving in is the
+default. The owner asked for less scrolling; folding the optional details
+does that without a step-by-step wizard, which would hide the money behind a
+"Next" button.
+
+**Paid today** (`PaidTodayFields`, `components/StayForm.tsx`) appears on
+every form that puts someone in a bed: Add tenant, a vacant bed on the grid,
+and approving a registration.
+- **Filled in from the terms:** one rent period and the agreed deposit, each
+  following the terms until typed over.
 - **Cash / UPI**, and **"They haven't paid yet"**, which records nothing.
-- **The button says the total:** "Create & place tenant · ₹16,000 paid".
-- **Dated the start day**, or today if the start is in the future, since a
-  payment can't be dated ahead. The heading says which: "Paid today" or
-  "Paid on 18 Oct 2026".
+- **The button says the total:** "Add and move in · ₹16,000 paid".
+- **Dated the start day** ("Paid on 18 Oct 2026"), or today for a future
+  start, since a payment can't be dated ahead.
+- Each amount is an ordinary payment, recorded after the stay is made. One that
+  fails is named in a toast ("The deposit of ₹10,000 wasn't recorded. Record it
+  from Payments.") rather than failing the form.
 
-**How it records:** each amount is an ordinary payment through
-`POST /api/stays/:id/payments`, after the stay is made. Approval answers with
-the tenant, not the stay, so the drawer looks up their open stay first. A
-payment that fails after the stay exists is named in a toast ("The deposit of
-₹10,000 wasn't recorded. Record it from Payments.") rather than failing the
-whole form. Frontend only: no backend change, no migration.
+**A booking is a stay with no bed** and an arrival date. The owner promises a
+place, not a particular bed, so nothing is held on the grid.
+- **Made from** Add tenant → Booking, or approving a registration → "Approve
+  & book a place". The form takes "Arriving on" and **Paid to book**, which
+  suggests nothing and is dated today.
+- **Until they arrive**, nothing is billed. What they paid counts towards their
+  first month, and Payments shows what's left ("Booked, no bed yet", due on
+  the arrival day), which reaches "Due this week" as the day nears.
+- **The tenant page** shows "Booked · Arrives 1 Nov", and offers **Assign
+  bed** and **Cancel booking** in place of Record notice and Move out.
+- **Arriving:** Assign bed now has "Rent from", defaulting to the booked day
+  and movable for an early or late arrival, and Paid today, filled in with
+  what's still owed after what they paid to book.
+- **Cancelling** uses the move-out sheet in a booking mode, with no leaving day
+  or notice to ask about. By the house rules, the rent paid to book and the
+  deposit are kept ("Deposit kept: booking cancelled"). The owner can type
+  over the amount to hand any back, recorded as "Changed by you".
 
-**Left for later**, at the owner's call: a "Leaving on" date when someone
-moves in (`docs/BACKLOG.md`).
+**What the backend does with a cancelled booking.** A stay that ends without
+ever having a bed bills nothing: `endedCycles` (`helpers.go`), used by the
+settlement, the tenant summary and Insights alike. A bed is never taken off a
+stay once given, so no bed at the end means none ever. A booking cancelled
+before its arrival day is dated the day it was cancelled, start and end
+alike, and its opening rent step moves with it (`SettlementHandler.Create`).
+No migration.
+
+**Left for later**, at the owner's call:
+- an "Arriving soon" list (he worried about crowding the screens)
+- a "Leaving on" date when someone moves in
+
+Both are in `docs/BACKLOG.md`.
 
 ### Verification
 
-`owner/paid-up-front.test.ts` (6 tests, iPad portrait, touch):
-- Add tenant records ₹6,000 rent and the ₹10,000 deposit by UPI, dated today.
-- An amount typed over survives a change to the terms. A cleared deposit
-  records none.
-- "They haven't paid yet" records nothing.
-- A stay started five days ago is dated that day, under "Paid on …".
-- The grid's assign drawer and the approval drawer each record both
-  payments.
+- `owner/paid-up-front.test.ts` (6 tests) covers each form recording both
+  payments, typed-over amounts, "They haven't paid yet", and a backdated start.
+- `owner/booking.test.ts` (5 tests) covers:
+  - booking from Add tenant, with no bed and nothing billed
+  - Assign bed taking the rest of the money
+  - an early arrival moving "Rent from"
+  - cancelling, which keeps what was paid and dates the stay today
+  - the owner handing the booking money back
+- **Go:** `TestCancelledBooking_BillsNothing`.
+- **Unit:** the cancelled-booking settlement.
+- **Updated** for the new form: `place-on-create`, `pending-terms`,
+  `bed-label`, `bed-picker-loading`, `tenant-notes`, `tenant-management` and
+  `session-ended`. `pending-terms` uses "They haven't paid yet" for its "no
+  money" case.
 
-`pending-terms` now uses "They haven't paid yet" for its "no money" case.
+All tests at iPad size use touch. Screenshots were checked on the demo at
+768×1024.
 
-Full suite: 160 e2e and 66 unit tests, plus `go test ./...`. Screenshots
-checked on the demo at 768×1024 and 1024×768.
+Full suite: 165 e2e and 67 unit tests, plus `go test ./...`. Showing the bed
+list by default exposed its rows as 36px under touch. They are now 44px
+(`touch-targets`), which also helps Assign bed and the grid.
 
 ---
 

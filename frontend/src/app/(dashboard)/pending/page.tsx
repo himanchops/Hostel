@@ -16,6 +16,7 @@ import {
   ApiError,
   formatCurrency,
   maskAadhaar,
+  today,
 } from "@/lib/api";
 import {
   Button,
@@ -38,7 +39,9 @@ import {
 } from "@/components/ui";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
-  PaidTodayFields, PaidToday, emptyPaidToday, paidTodayError, paidTodaySuffix, recordPaidToday,
+  PaidTodayFields, PaidToBookFields, PaidToday, emptyPaidToday,
+  suggestedFromTerms, NOTHING_SUGGESTED, paidTodayDate,
+  paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
@@ -133,6 +136,11 @@ function ReviewDrawer({
   const [selectedBed, setSelectedBed] = useState<GridBed | null>(null);
   const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
   const [paid, setPaid] = useState<PaidToday>(emptyPaidToday());
+  // Assigning a bed is a move-in, filled in from the terms. Booking suggests
+  // nothing and is dated today: they paid to hold a place, now.
+  const booking = mode === "collect_deposit";
+  const suggested = booking ? NOTHING_SUGGESTED : suggestedFromTerms(terms);
+  const paidDate = booking ? today() : paidTodayDate(terms);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -171,7 +179,7 @@ function ReviewDrawer({
           setLoading(false);
           return;
         }
-        const invalid = stayTermsError(terms) || paidTodayError(paid, terms);
+        const invalid = stayTermsError(terms) || paidTodayError(paid, suggested);
         if (invalid) {
           setError(invalid);
           setLoading(false);
@@ -187,12 +195,12 @@ function ReviewDrawer({
       let missed = "";
       let suffix = "";
       if (mode !== "approve_only") {
-        suffix = paidTodaySuffix(paid, terms);
+        suffix = paidTodaySuffix(paid, suggested);
         if (suffix) {
           try {
             const stay = (await tenantsApi.stays(token, approved.id)).find((st) => !st.end_date);
             missed = stay
-              ? await recordPaidToday(token, stay.id, paid, terms)
+              ? await recordPaidToday(token, stay.id, paid, suggested, paidDate)
               : "What they paid wasn't recorded. Record it from Payments.";
           } catch {
             missed = "What they paid wasn't recorded. Record it from Payments.";
@@ -256,7 +264,7 @@ function ReviewDrawer({
           disabled={mode === "assign_bed" && (!siteId || !selectedBed)}
           onClick={handleApprove}
         >
-          {loading ? "Approving…" : mode === "assign_bed" ? `Approve & assign${paidTodaySuffix(paid, terms)}` : mode === "collect_deposit" ? `Approve & save terms${paidTodaySuffix(paid, terms)}` : "Approve"}
+          {loading ? "Approving…" : mode === "assign_bed" ? `Approve & assign${paidTodaySuffix(paid, suggested)}` : mode === "collect_deposit" ? `Approve & book${paidTodaySuffix(paid, suggested)}` : "Approve"}
         </Button>
       </div>
     );
@@ -322,7 +330,7 @@ function ReviewDrawer({
                     name="approve_mode"
                     value={m}
                     checked={mode === m}
-                    onChange={() => setMode(m)}
+                    onChange={() => { setMode(m); setPaid(emptyPaidToday()); }}
                     className="mt-0.5 h-4 w-4 text-indigo-600"
                   />
                   <div>
@@ -334,12 +342,12 @@ function ReviewDrawer({
                           you agreed. Since a settlement refunds only deposit
                           money actually received, the old words would have left
                           an owner thinking a deposit was on the books. */}
-                      {m === "collect_deposit" && "Approve & agree terms (assign bed later)"}
+                      {m === "collect_deposit" && "Approve & book a place"}
                     </p>
                     <p className="text-xs text-stone-500">
                       {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
                       {m === "assign_bed" && "Approve and assign to a specific bed now."}
-                      {m === "collect_deposit" && "Save the rent and deposit you agreed, and anything they\u2019ve paid. Assign the bed when they move in."}
+                      {m === "collect_deposit" && "Agree the rent and the day they arrive, and record anything paid to hold it. Assign a bed when they arrive."}
                     </p>
                   </div>
                 </label>
@@ -372,7 +380,13 @@ function ReviewDrawer({
                 {selectedBed && (
                   <>
                     <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
-                    <PaidTodayFields value={paid} onChange={setPaid} terms={terms} />
+                    <PaidTodayFields
+                      value={paid}
+                      onChange={setPaid}
+                      suggested={suggested}
+                      date={paidDate}
+                      cycle={terms.cycle}
+                    />
                   </>
                 )}
               </div>
@@ -386,8 +400,8 @@ function ReviewDrawer({
                     only deposit money actually received, so the promise would
                     have cost the tenant their refund. Paid today now records
                     it for real, and only what the owner says arrived. */}
-                <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
-                <PaidTodayFields value={paid} onChange={setPaid} terms={terms} />
+                <StayTermsFields value={terms} onChange={setTerms} layout="grid" startLabel="Arriving on" />
+                <PaidToBookFields value={paid} onChange={setPaid} cycle={terms.cycle} />
               </div>
             )}
           </>

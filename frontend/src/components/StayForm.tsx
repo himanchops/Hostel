@@ -6,7 +6,7 @@ import {
   GridRoom, Site,
   today, formatDay, formatCurrency, ApiError,
 } from "@/lib/api";
-import { Button, Field, FormError, Input, SegmentedControl, Select } from "@/components/ui";
+import { Button, Field, FormError, Input, SegmentedControl, Select, TOUCH_TARGET } from "@/components/ui";
 import { PAY_METHODS, PayMethod } from "@/lib/payMethod";
 
 /**
@@ -73,11 +73,14 @@ export function StayTermsFields({
   value,
   onChange,
   layout = "stack",
+  startLabel = "Start date",
 }: {
   value: StayTerms;
   onChange: (next: StayTerms) => void;
   /** "grid" pairs the fields two-up; "stack" suits a narrow drawer. */
   layout?: "stack" | "grid";
+  /** "Arriving on" for a booking. */
+  startLabel?: string;
 }) {
   const set = (patch: Partial<StayTerms>) => onChange({ ...value, ...patch });
   const wrap =
@@ -114,7 +117,7 @@ export function StayTermsFields({
         />
       </Field>
       <Field
-        label="Start date"
+        label={startLabel}
         required
         className={layout === "grid" ? "sm:col-span-2" : undefined}
       >
@@ -131,29 +134,43 @@ export function StayTermsFields({
 // ─── Paid today ───────────────────────────────────────────────────────────────
 
 /**
- * What they handed over on arrival. Nearly everyone pays the first rent, and
- * usually the deposit, the day they move in. Before this the form took only
- * the terms. The money was a second visit to the tenant page that was easy to
- * forget, and until then the new tenant showed as owing from their first day.
+ * What they handed over. Nearly everyone pays the first rent, and usually the
+ * deposit, the day they move in; someone booking a place pays something to
+ * hold it and the rest on arrival. Before this the forms took only the terms,
+ * and the money was a second visit to the tenant page that was easy to forget.
  *
- * Rent and deposit follow the terms (one rent period, the agreed deposit)
- * until the owner types over them, so changing the rent above changes what
- * was paid below. Each becomes an ordinary payment, recorded through the same
- * endpoint as any other.
+ * Each amount starts at a suggestion — one rent period and the agreed deposit
+ * on a move-in, nothing on a booking, what's still owed on arrival — and
+ * follows it until the owner types over it. Each becomes an ordinary payment,
+ * recorded through the same endpoint as any other.
  */
 export interface PaidToday {
-  /** Rupees as typed, or null to follow the terms. */
+  /** Rupees as typed, or null to follow the suggestion. */
   rent: string | null;
-  /** Rupees as typed, or null to follow the terms. */
+  /** Rupees as typed, or null to follow the suggestion. */
   deposit: string | null;
   method: PayMethod;
   /** "They haven't paid yet": nothing is recorded. */
   none: boolean;
 }
 
+/** What the two boxes start at, in rupees as a form holds them. */
+export interface PaidSuggestion {
+  rent: string;
+  deposit: string;
+}
+
 export function emptyPaidToday(): PaidToday {
   return { rent: null, deposit: null, method: "cash", none: false };
 }
+
+/** A move-in: one rent period and the deposit agreed. */
+export function suggestedFromTerms(terms: StayTerms): PaidSuggestion {
+  return { rent: terms.rent, deposit: terms.deposit };
+}
+
+/** A booking: whatever they paid to hold the place, so nothing assumed. */
+export const NOTHING_SUGGESTED: PaidSuggestion = { rent: "", deposit: "" };
 
 function rupeesToPaise(rupees: string): number {
   const n = parseFloat(rupees || "0");
@@ -161,26 +178,26 @@ function rupeesToPaise(rupees: string): number {
 }
 
 /** The two amounts in paise, 0 for anything not paid. */
-export function paidTodayAmounts(paid: PaidToday, terms: StayTerms) {
+export function paidTodayAmounts(paid: PaidToday, suggested: PaidSuggestion) {
   if (paid.none) return { rent: 0, deposit: 0 };
   return {
-    rent: rupeesToPaise(paid.rent ?? terms.rent),
-    deposit: rupeesToPaise(paid.deposit ?? terms.deposit),
+    rent: rupeesToPaise(paid.rent ?? suggested.rent),
+    deposit: rupeesToPaise(paid.deposit ?? suggested.deposit),
   };
 }
 
 /** What's wrong with the amounts, phrased for a form error, or "". */
-export function paidTodayError(paid: PaidToday, terms: StayTerms): string {
-  const { rent, deposit } = paidTodayAmounts(paid, terms);
+export function paidTodayError(paid: PaidToday, suggested: PaidSuggestion): string {
+  const { rent, deposit } = paidTodayAmounts(paid, suggested);
   if (Number.isNaN(rent) || rent < 0) return "Rent paid must be a number.";
   if (Number.isNaN(deposit) || deposit < 0) return "Deposit paid must be a number.";
   return "";
 }
 
 /**
- * The day the payments are dated: the start day, which is when people pay.
- * Never later than today, because a payment can't be dated in the future and
- * money taken now for a stay that starts next week was still taken now.
+ * The day a move-in's payments are dated: the start day, which is when people
+ * pay. Never later than today, because a payment can't be dated in the future,
+ * and money taken now for a stay that starts next week was taken now.
  */
 export function paidTodayDate(terms: StayTerms): string {
   const now = today();
@@ -188,8 +205,8 @@ export function paidTodayDate(terms: StayTerms): string {
 }
 
 /** " · ₹16,000 paid" for a button or toast, or "" when nothing was paid. */
-export function paidTodaySuffix(paid: PaidToday, terms: StayTerms): string {
-  const { rent, deposit } = paidTodayAmounts(paid, terms);
+export function paidTodaySuffix(paid: PaidToday, suggested: PaidSuggestion): string {
+  const { rent, deposit } = paidTodayAmounts(paid, suggested);
   const total = (rent > 0 ? rent : 0) + (deposit > 0 ? deposit : 0);
   return total > 0 ? ` \u00b7 ${formatCurrency(total)} paid` : "";
 }
@@ -201,10 +218,10 @@ export function paidTodaySuffix(paid: PaidToday, terms: StayTerms): string {
  * so in a toast and the owner records it from Payments.
  */
 export async function recordPaidToday(
-  token: string, stayId: number, paid: PaidToday, terms: StayTerms,
+  token: string, stayId: number, paid: PaidToday, suggested: PaidSuggestion, date: string,
 ): Promise<string> {
-  const { rent, deposit } = paidTodayAmounts(paid, terms);
-  const base = { payment_type: paid.method, payment_date: paidTodayDate(terms) };
+  const { rent, deposit } = paidTodayAmounts(paid, suggested);
+  const base = { payment_type: paid.method, payment_date: date };
   const missed: string[] = [];
   for (const [kind, amount] of [["rent", rent], ["deposit", deposit]] as const) {
     if (!(amount > 0)) continue;
@@ -217,29 +234,41 @@ export async function recordPaidToday(
   return missed.length ? `The ${missed.join(" and the ")} wasn't recorded. Record it from Payments.` : "";
 }
 
-function paidRentLabel(cycle: string): string {
-  if (cycle === "weekly") return "Rent · first week (₹)";
-  if (cycle === "daily") return "Rent · first night (₹)";
-  return "Rent · first month (₹)";
+function firstPeriodLabel(cycle: string): string {
+  if (cycle === "weekly") return "Rent \u00b7 first week (₹)";
+  if (cycle === "daily") return "Rent \u00b7 first night (₹)";
+  return "Rent \u00b7 first month (₹)";
 }
 
 export function PaidTodayFields({
   value,
   onChange,
-  terms,
+  suggested,
+  date,
+  cycle,
+  heading,
+  rentLabel,
+  hint,
 }: {
   value: PaidToday;
   onChange: (next: PaidToday) => void;
-  terms: StayTerms;
+  suggested: PaidSuggestion;
+  /** The day the payments will be dated, YYYY-MM-DD. */
+  date: string;
+  cycle: string;
+  /** Defaults to "Paid today", or "Paid on 18 Oct 2026" for another day. */
+  heading?: string;
+  /** Defaults to the first rent period: "Rent · first month (₹)". */
+  rentLabel?: string;
+  hint?: string;
 }) {
   const set = (patch: Partial<PaidToday>) => onChange({ ...value, ...patch });
-  const date = paidTodayDate(terms);
-  const heading = date === today() ? "Paid today" : `Paid on ${formatDay(date)}`;
+  const title = heading ?? (date === today() ? "Paid today" : `Paid on ${formatDay(date)}`);
 
   return (
-    <section aria-label={heading} className="rounded-xl border border-stone-200 p-4">
+    <section aria-label={title} className="rounded-xl border border-stone-200 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-stone-800">{heading}</h3>
+        <h3 className="text-sm font-semibold text-stone-800">{title}</h3>
         <Button
           type="button"
           variant="ghost"
@@ -252,17 +281,18 @@ export function PaidTodayFields({
 
       {value.none ? (
         <p className="mt-1 text-[13px] text-stone-500">
-          Nothing is recorded. Their first rent shows as due on Payments.
+          Nothing is recorded. What they owe shows on Payments.
         </p>
       ) : (
         <div className="mt-3 space-y-3">
+          {hint && <p className="-mt-1 text-[13px] text-stone-500">{hint}</p>}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label={paidRentLabel(terms.cycle)}>
+            <Field label={rentLabel ?? firstPeriodLabel(cycle)}>
               <Input
                 type="number"
                 min="0"
                 placeholder="0"
-                value={value.rent ?? terms.rent}
+                value={value.rent ?? suggested.rent}
                 onChange={(e) => set({ rent: e.target.value })}
               />
             </Field>
@@ -271,7 +301,7 @@ export function PaidTodayFields({
                 type="number"
                 min="0"
                 placeholder="0"
-                value={value.deposit ?? terms.deposit}
+                value={value.deposit ?? suggested.deposit}
                 onChange={(e) => set({ deposit: e.target.value })}
               />
             </Field>
@@ -288,6 +318,31 @@ export function PaidTodayFields({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * The same section for someone booking a place: nothing assumed, dated today,
+ * and said in those words.
+ */
+export function PaidToBookFields({
+  value, onChange, cycle,
+}: {
+  value: PaidToday;
+  onChange: (next: PaidToday) => void;
+  cycle: string;
+}) {
+  return (
+    <PaidTodayFields
+      value={value}
+      onChange={onChange}
+      suggested={NOTHING_SUGGESTED}
+      date={today()}
+      cycle={cycle}
+      heading="Paid to book"
+      rentLabel="Rent paid ahead (₹)"
+      hint="Whatever they paid to hold the place. The rest is due the day they arrive."
+    />
   );
 }
 
@@ -404,7 +459,7 @@ export function BedPicker({
             {vacant.map((b) => (
               <label
                 key={b.id}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition duration-150 ease-out hover:bg-stone-50"
+                className={`${TOUCH_TARGET} flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition duration-150 ease-out hover:bg-stone-50`}
               >
                 <input
                   type="radio"

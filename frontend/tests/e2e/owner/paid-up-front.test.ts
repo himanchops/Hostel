@@ -42,7 +42,6 @@ test.describe("Paid today, when adding a tenant", () => {
 
     await page.getByLabel("Full name").fill("Arjun Paid Up");
     await page.getByLabel(/^Phone/).fill("9812400001");
-    await page.getByLabel("Place them in a bed now").check();
     await page.getByRole("radio").first().check();
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByLabel("Deposit (₹)").fill("10000");
@@ -52,7 +51,7 @@ test.describe("Paid today, when adding a tenant", () => {
     await expect(paid.getByLabel("Rent · first month (₹)")).toHaveValue("6000");
     await expect(paid.getByLabel("Deposit paid (₹)")).toHaveValue("10000");
     await paid.getByRole("button", { name: "UPI" }).tap();
-    await page.getByRole("button", { name: "Create & place tenant · ₹16,000 paid" }).tap();
+    await page.getByRole("button", { name: "Add and move in · ₹16,000 paid" }).tap();
 
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     await expect(page.getByText(/placed in Room 1 · Bed A · ₹16,000 paid/)).toBeVisible();
@@ -74,7 +73,6 @@ test.describe("Paid today, when adding a tenant", () => {
 
     await page.getByLabel("Full name").fill("Part Payer");
     await page.getByLabel(/^Phone/).fill("9812400002");
-    await page.getByLabel("Place them in a bed now").check();
     await page.getByRole("radio").first().check();
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByLabel("Deposit (₹)").fill("10000");
@@ -86,7 +84,7 @@ test.describe("Paid today, when adding a tenant", () => {
     await page.getByLabel("Monthly rent (₹)").fill("6500");
     await expect(paid.getByLabel("Rent · first month (₹)")).toHaveValue("3000");
 
-    await page.getByRole("button", { name: "Create & place tenant · ₹3,000 paid" }).tap();
+    await page.getByRole("button", { name: "Add and move in · ₹3,000 paid" }).tap();
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     const tenantId = Number(page.url().split("/").pop());
     expect(await paymentsOf(request, token, tenantId)).toEqual([
@@ -102,13 +100,12 @@ test.describe("Paid today, when adding a tenant", () => {
 
     await page.getByLabel("Full name").fill("Pays Later");
     await page.getByLabel(/^Phone/).fill("9812400003");
-    await page.getByLabel("Place them in a bed now").check();
     await page.getByRole("radio").first().check();
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByRole("button", { name: "They haven’t paid yet" }).tap();
     await expect(page.getByText("Nothing is recorded.", { exact: false })).toBeVisible();
 
-    await page.getByRole("button", { name: "Create & place tenant", exact: true }).tap();
+    await page.getByRole("button", { name: "Add and move in", exact: true }).tap();
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     const tenantId = Number(page.url().split("/").pop());
     expect(await paymentsOf(request, token, tenantId)).toEqual([]);
@@ -123,14 +120,13 @@ test.describe("Paid today, when adding a tenant", () => {
     const started = isoDaysAgo(5);
     await page.getByLabel("Full name").fill("Started Last Week");
     await page.getByLabel(/^Phone/).fill("9812400004");
-    await page.getByLabel("Place them in a bed now").check();
     await page.getByRole("radio").first().check();
     await page.getByLabel("Monthly rent (₹)").fill("6000");
     await page.getByLabel("Start date").fill(started);
 
     const heading = `Paid on ${new Date(`${started}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`;
     await expect(page.getByRole("region", { name: heading })).toBeVisible();
-    await page.getByRole("button", { name: "Create & place tenant · ₹6,000 paid" }).tap();
+    await page.getByRole("button", { name: "Add and move in · ₹6,000 paid" }).tap();
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     const tenantId = Number(page.url().split("/").pop());
     expect(await paymentsOf(request, token, tenantId)).toEqual([

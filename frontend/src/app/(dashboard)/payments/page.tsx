@@ -292,7 +292,7 @@ function PayeeRow({
               {row.tenant_name}
             </Link>
             <span className="text-[13px] text-stone-500">
-              {row.moved_out ? `was in ${room || "no bed"}` : room || "No bed"}
+              {row.moved_out ? `was in ${room || "no bed"}` : room || "Booked, no bed yet"}
             </span>
           </p>
           <p className={`text-[13px] tabular-nums ${behind ? "text-red-700" : "text-stone-500"}`}>

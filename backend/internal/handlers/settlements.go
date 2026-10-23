@@ -48,10 +48,20 @@ type settlementStayRow struct {
 	EndDate       *time.Time `db:"end_date"`
 	NoticeDate    *time.Time `db:"notice_date"`
 	ExpectedEnd   *time.Time `db:"expected_end_date"`
+	Booking       bool       `db:"booking"`    // never had a bed: see endedCycles
 	TotalPaid     int64      `db:"total_paid"` // rent payments only
 	// Schedule is the stay's rent over time (migration 011); flat unless the
 	// rent was ever changed from a date.
 	Schedule rentSchedule `db:"-"`
+}
+
+// dues is what the stay owes if it ends on end; negative is rent paid ahead.
+// A booking that never got a bed owes nothing, so all it paid is ahead.
+func (s settlementStayRow) dues(end time.Time) (int64, int) {
+	if s.Booking {
+		return -s.TotalPaid, 0
+	}
+	return duesForSchedule(s.schedule(), s.RentCycle, s.StartDate, end, s.TotalPaid)
 }
 
 // schedule returns the stay's rent schedule, flat when none was loaded.
@@ -248,6 +258,7 @@ func (h *SettlementHandler) loadSettlementStay(stayID, ownerID int64) (settlemen
 			s.end_date,
 			s.notice_date,
 			s.expected_end_date,
+			s.bed_id IS NULL AS booking,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
@@ -303,14 +314,17 @@ func settlementDate(stay settlementStayRow, requested string, today time.Time) (
 		return time.Time{}, errors.New("invalid end_date format, use YYYY-MM-DD")
 	}
 	asked = dateOnly(asked)
-	if asked.Before(dateOnly(stay.StartDate)) {
+	// A booking can be cancelled before the day they were due to arrive.
+	// Create then moves its start back to that day, so the stay still never
+	// ends before it begins.
+	if asked.Before(dateOnly(stay.StartDate)) && !stay.Booking {
 		return time.Time{}, errors.New("end_date cannot be before the stay's start date")
 	}
 	return asked, nil
 }
 
 func (h *SettlementHandler) previewFor(stay settlementStayRow, endDate time.Time) SettlementPreview {
-	dues, cycles := duesForSchedule(stay.schedule(), stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
+	dues, cycles := stay.dues(endDate)
 	advance := advanceHeld(dues)
 	day := func(t *time.Time) *string {
 		if t == nil {
@@ -402,7 +416,7 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 	}
 
-	dues, _ := duesForSchedule(stay.schedule(), stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
+	dues, _ := stay.dues(endDate)
 
 	// Omitting the field returns the whole advance, so a client written before
 	// the choice existed keeps behaving the way it always did.
@@ -456,6 +470,21 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 	).StructScan(&settlement)
 	if err != nil {
 		return serverError(c, err, "failed to record the settlement")
+	}
+
+	// A booking cancelled before its arrival day is dated the day it was
+	// cancelled, start and end alike, and its opening rent step moves with
+	// it, as editing a start date does.
+	if start := dateOnly(stay.StartDate); endDate.Before(start) {
+		if _, err := tx.Exec(
+			`UPDATE stay_rent_changes SET effective_date = $1 WHERE stay_id = $2 AND effective_date = $3`,
+			endDate, stayID, start,
+		); err != nil {
+			return serverError(c, err, "failed to cancel the booking")
+		}
+		if _, err := tx.Exec(`UPDATE stays SET start_date = $1 WHERE id = $2`, endDate, stayID); err != nil {
+			return serverError(c, err, "failed to cancel the booking")
+		}
 	}
 
 	if stay.EndDate == nil {

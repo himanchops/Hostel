@@ -611,6 +611,7 @@ type staySummaryRow struct {
 	RentCycle        string     `db:"rent_cycle"`
 	StartDate        time.Time  `db:"start_date"`
 	EndDate          *time.Time `db:"end_date"`
+	Booking          bool       `db:"booking"` // never had a bed: see endedCycles
 	TotalPaid        int64      `db:"total_paid"`
 	DepositAmount    int64      `db:"deposit_amount"` // agreed at intake
 	DepositPaid      int64      `db:"deposit_paid"`   // approved deposit payments
@@ -657,7 +658,7 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 		cycles := 0
 		if s.EndDate != nil {
 			until = dateOnly(*s.EndDate)
-			cycles = cyclesThroughEnd(start, until, s.RentCycle)
+			cycles = endedCycles(start, until, s.RentCycle, s.Booking)
 		} else {
 			cycles = cyclesElapsed(start, until, s.RentCycle)
 		}
@@ -726,6 +727,7 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 			s.rent_cycle,
 			s.start_date,
 			s.end_date,
+			s.bed_id IS NULL AS booking,
 			s.deposit_amount,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p

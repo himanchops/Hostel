@@ -487,10 +487,15 @@ the owner looking at 1m on production (Oct 2026).
 ### ~~Adding a tenant can't record what they paid up front~~ ✅ done (Oct 2026)
 Reported 23 Oct 2026. New tenants usually pay the first rent, and often the
 deposit, on the day they arrive, but the forms took only the terms. All three
-forms that put someone in a bed (Add tenant, a vacant bed on the grid,
-approving a registration) now have "Paid today": rent filled in with one rent
-period, the deposit with the agreed amount, Cash / UPI, and "They haven't paid
-yet". See PROGRESS.md → "Paid today".
+forms that put someone in a bed now have "Paid today", and a booking (paid to
+hold a place, bed on arrival) is its own choice on Add tenant. See
+PROGRESS.md → "Paid today, and bookings".
+
+### "Arriving soon": bookings due in the next few days — S
+Raised 23 Oct 2026, for later. Bookings show on the tenant page and, within a
+week of arriving, on Payments as due. A short list of who is arriving soon
+(dashboard or Payments) would help plan beds. The owner held it back because
+he worries about crowding the screens.
 
 ### A "Leaving on" date when someone moves in — S
 Raised 23 Oct 2026, for later. Some stays are short and agreed up front: a

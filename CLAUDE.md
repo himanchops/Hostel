@@ -175,6 +175,11 @@ Key conventions to carry forward:
     line so the settlement still adds up
 
   A refund says how it went back (`refund_method`, migration 013).
+- **A stay with no bed is a booking** (Oct 2026): someone who paid to hold a
+  place and gets a bed on arrival. Nothing on the grid holds a bed for them,
+  because the owner promises a place, not a bed. One that ends without ever
+  having a bed was cancelled and bills nothing (`endedCycles`). The move-out
+  sheet cancels it (`booking` mode), keeping what was paid by default.
 - **A stay that has ended is billed through `cyclesThroughEnd`** (`helpers.go`):
   every cycle that began before the leaving day, never one that starts on it.
   This applies to the settlement, the tenant summary and Insights alike. An

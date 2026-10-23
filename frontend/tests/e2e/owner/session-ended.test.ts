@@ -21,12 +21,13 @@ test.describe("When the session ends", () => {
 
     await page.getByLabel("Full name").fill(`Half Typed ${RUN_ID}`);
     await page.getByLabel(/^Phone/).fill(`98${RUN_ID.slice(-8)}`);
+    await page.getByRole("button", { name: "Just add" }).tap();
 
     // Elsewhere — another device — the owner signs out everywhere.
     const out = await request.post(`${BASE}/api/me/sign-out-everywhere`, { headers: { Authorization: `Bearer ${token}` } });
     expect(out.ok()).toBeTruthy();
 
-    await page.getByRole("button", { name: "Create tenant" }).tap();
+    await page.getByRole("button", { name: "Add tenant" }).tap();
     const dialog = page.getByRole("dialog", { name: "You were signed out" });
     await expect(dialog).toBeVisible();
     await expect(page.getByText(/invalid token/i)).toHaveCount(0);
@@ -40,7 +41,7 @@ test.describe("When the session ends", () => {
 
     // Nothing was lost, and the save goes through on the new session.
     await expect(page.getByLabel("Full name")).toHaveValue(`Half Typed ${RUN_ID}`);
-    await page.getByRole("button", { name: "Create tenant" }).tap();
+    await page.getByRole("button", { name: "Add tenant" }).tap();
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     await expect(page.getByText(`Half Typed ${RUN_ID}`).first()).toBeVisible();
   });

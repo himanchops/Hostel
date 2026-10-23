@@ -28,16 +28,16 @@ test("approving with agreed terms records no money unless it was paid", async ({
 
   const drawer = page.getByRole("dialog");
   await drawer.getByRole("button", { name: "Approve", exact: true }).click();
-  await drawer.getByRole("radio", { name: /Approve & agree terms/ }).check();
+  await drawer.getByRole("radio", { name: /Approve & book a place/ }).check();
 
   // No promise of money anywhere in the step.
   await expect(drawer).not.toContainText(/collect (a )?deposit|record deposit/i);
-  await expect(drawer).toContainText("and anything they\u2019ve paid");
+  await expect(drawer).toContainText("record anything paid to hold it");
 
   await drawer.getByLabel(/^Monthly rent/).fill("8000");
   await drawer.getByLabel("Deposit (₹)").fill("16000");
   await drawer.getByRole("button", { name: "They haven\u2019t paid yet" }).click();
-  await drawer.getByRole("button", { name: "Approve & save terms", exact: true }).click();
+  await drawer.getByRole("button", { name: "Approve & book", exact: true }).click();
   await expect(page.getByText(`${name} approved`)).toBeVisible();
 
   // The terms were saved; no money was. The tenant page says both.

@@ -125,7 +125,7 @@ test("an unknown cycle falls back to its own name", () => {
 //   ₹10,000 deposit held. Rent is never refunded; the deposit comes back only
 //   to someone who gave notice; the owner has the last word.
 
-import { moveOutSettlement, DEPOSIT_KEPT_LABEL, CHANGED_LABEL } from "../../src/lib/settlement";
+import { moveOutSettlement, DEPOSIT_KEPT_LABEL, CHANGED_LABEL, BOOKING_KEPT_LABEL } from "../../src/lib/settlement";
 
 test("notice given and square: the whole deposit goes back", () => {
   expect(moveOutSettlement(1000000, 0, { returnDeposit: true, deductions: [] }))
@@ -173,4 +173,16 @@ test("the owner's own amount wins, recorded as the difference", () => {
   // Typing the proposed figure back is no change at all.
   expect(moveOutSettlement(1000000, 0, { returnDeposit: true, deductions: [], finalRefund: 1000000 }).adjustments)
     .toEqual([]);
+});
+
+test("a cancelled booking: nothing billed, the rent paid to book and the deposit kept", () => {
+  // ₹3,000 rent paid to book, ₹5,000 deposit, never came. Nothing is billed,
+  // so dues are -₹3,000: rent paid ahead, which is never handed back by default.
+  const r = moveOutSettlement(500000, -300000, { returnDeposit: false, deductions: [], keptLabel: BOOKING_KEPT_LABEL });
+  expect(r.refund).toBe(0);
+  expect(r.adjustments).toEqual([{ label: "Deposit kept: booking cancelled", amount_paise: -500000 }]);
+  // The owner hands back the ₹3,000 anyway.
+  const back = moveOutSettlement(500000, -300000, { returnDeposit: false, deductions: [], keptLabel: BOOKING_KEPT_LABEL, finalRefund: 300000 });
+  expect(back.refund).toBe(300000);
+  expect(back.adjustments.at(-1)).toEqual({ label: CHANGED_LABEL, amount_paise: 300000 });
 });

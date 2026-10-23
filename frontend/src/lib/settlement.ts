@@ -105,6 +105,8 @@ export function cycleCountLabel(cycle: string, count: number): string {
 
 /** The adjustment line a kept deposit is recorded as. */
 export const DEPOSIT_KEPT_LABEL = "Deposit kept: no notice";
+/** The same line when a booking is cancelled: there was no stay to give notice of. */
+export const BOOKING_KEPT_LABEL = "Deposit kept: booking cancelled";
 /** The adjustment line an owner's own change to the amount is recorded as. */
 export const CHANGED_LABEL = "Changed by you";
 
@@ -128,12 +130,12 @@ export const CHANGED_LABEL = "Changed by you";
 export function moveOutSettlement(
   depositPaise: number,
   duesPaise: number,
-  opts: { returnDeposit: boolean; deductions: Adjustment[]; finalRefund?: number },
+  opts: { returnDeposit: boolean; deductions: Adjustment[]; finalRefund?: number; keptLabel?: string },
 ): { adjustments: Adjustment[]; proposed: number; refund: number } {
   const lines: Adjustment[] = [];
   if (!opts.returnDeposit) {
     const kept = Math.max(0, depositPaise - Math.max(duesPaise, 0));
-    if (kept > 0) lines.push({ label: DEPOSIT_KEPT_LABEL, amount_paise: -kept });
+    if (kept > 0) lines.push({ label: opts.keptLabel ?? DEPOSIT_KEPT_LABEL, amount_paise: -kept });
   }
   lines.push(...opts.deductions);
   const proposed = refundFor(depositPaise, duesPaise, 0, lines);

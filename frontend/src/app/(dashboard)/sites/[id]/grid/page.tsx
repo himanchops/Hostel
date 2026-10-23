@@ -42,7 +42,8 @@ import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
-  PaidTodayFields, PaidToday, emptyPaidToday, paidTodayError, paidTodaySuffix, recordPaidToday,
+  PaidTodayFields, PaidToday, emptyPaidToday, suggestedFromTerms, paidTodayDate,
+  paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 
@@ -439,6 +440,7 @@ function AssignPanel({
   const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
   const [paid, setPaid] = useState<PaidToday>(emptyPaidToday());
   const [step, setStep] = useState<"select" | "stay">("select");
+  const suggested = suggestedFromTerms(terms);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -468,7 +470,7 @@ function AssignPanel({
 
   async function handleAssign() {
     if (!tenantId) { setError("Pick a tenant first."); return; }
-    const invalid = stayTermsError(terms) || paidTodayError(paid, terms);
+    const invalid = stayTermsError(terms) || paidTodayError(paid, suggested);
     if (invalid) { setError(invalid); return; }
     setLoading(true);
     try {
@@ -479,9 +481,9 @@ function AssignPanel({
       });
       const name = tenants.find((t) => t.id === tenantId)?.name ?? "Tenant";
       const assigned = `${name} assigned to bed ${bed.name}`;
-      const missed = await recordPaidToday(token, stay.id, paid, terms);
+      const missed = await recordPaidToday(token, stay.id, paid, suggested, paidTodayDate(terms));
       if (missed) toast.error(`${assigned}. ${missed}`);
-      else toast.success(assigned + paidTodaySuffix(paid, terms));
+      else toast.success(assigned + paidTodaySuffix(paid, suggested));
       onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to assign");
@@ -550,11 +552,17 @@ function AssignPanel({
           </p>
 
           <StayTermsFields value={terms} onChange={setTerms} />
-          <PaidTodayFields value={paid} onChange={setPaid} terms={terms} />
+          <PaidTodayFields
+            value={paid}
+            onChange={setPaid}
+            suggested={suggested}
+            date={paidTodayDate(terms)}
+            cycle={terms.cycle}
+          />
 
           <div className="flex gap-2 pt-1">
             <Button className="flex-1" loading={loading} onClick={handleAssign}>
-              {loading ? "Assigning…" : `Assign${paidTodaySuffix(paid, terms)}`}
+              {loading ? "Assigning…" : `Assign${paidTodaySuffix(paid, suggested)}`}
             </Button>
             <Button variant="ghost" onClick={() => { setStep("select"); setError(""); }}>
               Back
