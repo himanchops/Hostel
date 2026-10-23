@@ -87,9 +87,9 @@ func TestSummary_MultipleStaysAccumulate(t *testing.T) {
 	ended := date(2026, time.March, 1)
 
 	got := summarize([]staySummaryRow{
-		// A finished stay: 2026-01-01 → 2026-03-01. 59 days, and 3 monthly
-		// cycles — rent is due at the start of each cycle, so Jan, Feb and Mar
-		// are all charged (see cyclesElapsed).
+		// A finished stay: 2026-01-01 → 2026-03-01. 59 days, and 2 monthly
+		// cycles: Jan and Feb. They left on 1 Mar, their rent day, and a month
+		// starting on the leaving day is not billed (cyclesThroughEnd).
 		{RentAmount: 500000, RentCycle: "monthly", StartDate: date(2026, time.January, 1),
 			EndDate: &ended, TotalPaid: 1000000},
 		// An active stay: 2026-06-01 → today, 3 cycles, 71 days.
@@ -100,7 +100,7 @@ func TestSummary_MultipleStaysAccumulate(t *testing.T) {
 	if got.DurationDays != 59+71 {
 		t.Errorf("DurationDays = %d, want %d", got.DurationDays, 59+71)
 	}
-	if want := int64(500000*3 + 750000*3); got.TotalExpected != want {
+	if want := int64(500000*2 + 750000*3); got.TotalExpected != want {
 		t.Errorf("TotalExpected = %d, want %d", got.TotalExpected, want)
 	}
 	if got.TotalPaid != 3250000 {

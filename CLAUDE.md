@@ -173,6 +173,10 @@ Key conventions to carry forward:
     line so the settlement still adds up
 
   A refund says how it went back (`refund_method`, migration 013).
+- **A stay that has ended is billed through `cyclesThroughEnd`** (`helpers.go`):
+  every cycle that began before the leaving day, never one that starts on it.
+  This applies to the settlement, the tenant summary and Insights alike. An
+  open stay still bills with `cyclesElapsed`, rent due on the rent day.
 - **A rejected payment is kept, never deleted** (migration 009). "Pending" is
   `is_approved = false AND rejected_at IS NULL`; any new query for the pending
   queue must say both.

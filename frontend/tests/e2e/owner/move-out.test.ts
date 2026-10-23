@@ -160,6 +160,41 @@ test.describe("Moving out", () => {
     expect(s.advance_returned_paise).toBe(0);
   });
 
+  test("leaving on their rent day owes nothing for the month that starts then", async ({ page, request }) => {
+    // Rent falls on today's date: moved in two months ago today, paid both.
+    const runId = `${RUN_ID}-rentday`;
+    const { token } = await createOwner(request, runId);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { bedId } = await createSiteRoomBed(request, token, runId);
+    const now = new Date();
+    const [y, m, d] = [now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()];
+    const start = utc(y, m - 2, d);
+    const tenant = await createTenantViaApi(request, token, { name: `Ravi ${runId}`, phone: phone() });
+    const stay = await (await request.post(`${BASE}/api/stays`, {
+      headers: auth,
+      data: { tenant_id: tenant.id, bed_id: bedId, rent_amount: RENT, deposit_amount: DEPOSIT, rent_cycle: "monthly", start_date: iso(start) },
+    })).json();
+    for (const data of [
+      { amount: DEPOSIT, kind: "deposit", payment_type: "cash", payment_date: iso(start) },
+      { amount: 2 * RENT, payment_type: "online", payment_date: iso(start) },
+    ]) await request.post(`${BASE}/api/stays/${stay.id}/payments`, { headers: auth, data });
+    await request.put(`${BASE}/api/stays/${stay.id}`, { headers: auth, data: { notice_date: iso(utc(y, m - 1, d - 2)) } });
+
+    // Skip the rare day this cannot be set up: a 31st with no 31st two months back.
+    const p = await (await request.get(`${BASE}/api/stays/${stay.id}/settlement-preview`, { headers: auth })).json();
+    test.skip(new Date(`${p.start_date}T00:00:00Z`).getUTCDate() !== d, "no matching rent day this month");
+    expect(p.cycles_billed).toBe(2);
+    expect(p.dues_paise).toBe(0);
+    expect(p.notice_on_time).toBe(true);
+
+    await loginAs(page, token);
+    await page.goto(`/tenants/${tenant.id}`);
+    await page.getByRole("button", { name: "Move out" }).tap();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByText("Rent still owed")).toHaveCount(0);
+    await expect(sheet.getByLabel("Hand back (₹)")).toHaveValue("10000");
+  });
+
   test("from the grid, leaving now and settling the money later", async ({ page, request }) => {
     const { token, auth, siteId, tenant, stay, name } = await seed(request, `${RUN_ID}-grid`, { notice: "in time", months: 3 });
     await loginAs(page, token);

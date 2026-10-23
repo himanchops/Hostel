@@ -2741,6 +2741,20 @@ The house rules are one pure function, `moveOutSettlement` (`lib/settlement.ts`)
 - `advance_returned_paise` is always sent as 0.
 - The server checks the sum as before; nothing about it changed.
 
+**Leaving on the rent day no longer starts a new month.** It used to: rent on
+the 23rd, leaving on the 23rd, billed a whole month they would never live, and
+the demo showed it. The owner's rule is that their last paid month covers
+them up to that day. `cyclesThroughEnd` (`helpers.go`) bills every cycle that
+began *before* the leaving day, and at least one. Everything that bills an
+ended stay goes through it:
+- the settlement, via `duesForSchedule`
+- the notice deadline, via `noticeBy`
+- the tenant summary
+- Insights' `billedCycles`
+
+So the three money views cannot disagree about a leaver. Open stays are
+unchanged: rent is still due on the rent day.
+
 **"They're staying"** now cancels the notice: both dates, in one tap. It used
 to clear only the leaving date. A notice date alone keeps a bed "vacating", so
 the bed stayed orange and the button looked dead. That was the "on the iPad"
@@ -2757,7 +2771,10 @@ bug, and it wasn't about the iPad.
 
 ### Verification
 
-- **Go:** `TestNoticeOnTime` covers the rent day itself, the day after, the
+- **Go:** `TestLeavingOnTheRentDay` covers the owner's example (rent and
+  leaving on the 23rd), checked across the settlement, notice deadline,
+  summary and Insights. Four older fixtures that left on a rent day were
+  updated, each saying why. `TestNoticeOnTime` covers the rent day itself, the day after, the
   last week, never, and a 31st move-in. `TestRefundMethod` covers cash, UPI,
   not said, a kept deposit, an owing tenant and a bad value.
 - **`tests/unit/settlement.test.ts`:** seven cases for the house rules:
@@ -2776,11 +2793,16 @@ bug, and it wasn't about the iPad.
   - late notice
   - rent paid ahead kept
   - from the grid: settle later, then "Settle the money" on the tenant page
+  - leaving on their rent day owes nothing for the month starting then
+
+  `insights.test.ts`'s two leavers now go on the 2nd, one night into the
+  month, which keeps its figures. Those tests skip on the 1st, when the 2nd
+  is still in the future.
 - **Moved to the new sheet:** `settlement.test.ts`,
   `tenant-profile-enrichment.test.ts` and `vacating-notice.test.ts`. The
   last now runs on an iPad and checks both dates clear and the bed is no
   longer vacating.
-- **Full suite:** 147 e2e and 66 unit tests, plus `go test ./...`.
+- **Full suite:** 148 e2e and 66 unit tests, plus `go test ./...`.
 - **By eye:** screenshots of the sheet at 768×1024 via Playwright on the demo
   (late notice; no notice with rent paid ahead). The Browser pane cuts
   slide-in panels off at that size.

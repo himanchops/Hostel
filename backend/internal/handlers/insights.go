@@ -151,13 +151,11 @@ func stayWindow(s insightStay, openEnd time.Time) (time.Time, time.Time) {
 // billedCycles is how many rent cycles a stay had been charged by `asOf`,
 // clamped to the stay's own end so a moved-out tenant stops accruing.
 func billedCycles(s insightStay, asOf time.Time) int {
-	if s.EndDate != nil {
-		if end := dateOnly(*s.EndDate); asOf.After(end) {
-			asOf = end
-		}
-	}
 	if asOf.Before(dateOnly(s.StartDate)) {
 		return 0
+	}
+	if s.EndDate != nil && !asOf.Before(dateOnly(*s.EndDate)) {
+		return cyclesThroughEnd(s.StartDate, *s.EndDate, s.RentCycle)
 	}
 	return cyclesElapsed(dateOnly(s.StartDate), asOf, s.RentCycle)
 }

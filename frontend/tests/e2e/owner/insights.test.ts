@@ -17,8 +17,9 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The 1st of a month relative to this one. Every date below is a 1st, so no
- *  figure depends on which day of the month the suite runs. */
+/** The 1st of a month relative to this one. Every date below is a 1st (bar
+ *  the two move-outs, on a 2nd), so no figure depends on which day of the
+ *  month the suite runs. */
 function firstOf(offset: number): Date {
   const t = utcToday();
   return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + offset, 1));
@@ -40,10 +41,15 @@ function phone(): string {
  *   A  in since two months back, ₹8,000 rent paid every 1st; ₹2,000 deposit
  *      paid at move-in and still held.
  *   B  in since last month, ₹5,000 rent, paid only the first month; ₹3,000
- *      deposit. Settled on this month's 1st: the deposit pays ₹3,000 of the
+ *      deposit. Settled on this month's 2nd: the deposit pays ₹3,000 of the
  *      ₹5,000 owed and they leave owing ₹2,000. No money moves that day.
  *   C  in since last month, ₹4,000 rent, paid both months; ₹2,500 deposit.
- *      Settled on this month's 1st, square: the whole ₹2,500 is handed back.
+ *      Settled on this month's 2nd, square: the whole ₹2,500 is handed back.
+ *
+ *   B and C leave on the 2nd, one night into this month, so this month is
+ *   billed to them. Leaving on the 1st, their rent day, would not be (the
+ *   owner's rule since Oct 2026). On the 1st of a month the 2nd has not
+ *   happened yet, so these tests skip that one day.
  *   D  moved in this month's 1st, ₹6,000 rent and ₹1,500 deposit, both paid.
  *
  * This month, then:
@@ -53,6 +59,7 @@ function phone(): string {
  *   held now   A's 2,000 + D's 1,500 (B and C are settled)        = ₹3,500
  */
 async function seedMonth(request: APIRequestContext, runId: string) {
+  test.skip(utcToday().getUTCDate() === 1, "the move-outs on the 2nd have not happened yet");
   const { token } = await createOwner(request, runId);
   const auth = { Authorization: `Bearer ${token}` };
   const { siteId, roomId, bedId } = await createSiteRoomBed(request, token, runId);
@@ -84,7 +91,7 @@ async function seedMonth(request: APIRequestContext, runId: string) {
     expect(res.ok(), await res.text()).toBeTruthy();
   }
   async function settle(stayId: number) {
-    const endDate = isoDate(firstOf(0));
+    const endDate = isoDate(new Date(firstOf(0).getTime() + 86_400_000));
     const preview = await request.get(`${BASE}/api/stays/${stayId}/settlement-preview?end_date=${endDate}`, { headers: auth });
     expect(preview.ok(), await preview.text()).toBeTruthy();
     const { refund_paise } = await preview.json();

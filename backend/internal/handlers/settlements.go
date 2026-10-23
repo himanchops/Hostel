@@ -121,7 +121,7 @@ type createSettlementRequest struct {
 // whose rent falls on the 15th pays for 15 Oct–14 Nov on 15 Oct, and that is
 // when they are expected to say it is their last month.
 func noticeBy(start time.Time, cycle string, end time.Time) time.Time {
-	return cycleStart(dateOnly(start), cyclesElapsed(dateOnly(start), dateOnly(end), cycle), cycle)
+	return cycleStart(dateOnly(start), cyclesThroughEnd(start, end, cycle), cycle)
 }
 
 // noticeOnTime says whether a notice given on notice counts for a stay that
@@ -142,7 +142,7 @@ func duesFor(rent int64, cycle string, start, until time.Time, totalPaid int64) 
 // duesForSchedule is duesFor for a rent that may have changed partway: each
 // cycle is billed at the rent in effect when it began.
 func duesForSchedule(sched rentSchedule, cycle string, start, until time.Time, totalPaid int64) (dues int64, cycles int) {
-	cycles = cyclesElapsed(dateOnly(start), dateOnly(until), cycle)
+	cycles = cyclesThroughEnd(start, until, cycle)
 	return sched.billed(start, cycle, 0, cycles) - totalPaid, cycles
 }
 

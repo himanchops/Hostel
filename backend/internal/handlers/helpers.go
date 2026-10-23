@@ -18,6 +18,23 @@ func daysInMonth(year int, month time.Month) int {
 // being measured. Without that, a stay starting on the 31st would never roll
 // over in a short month — February has no 31st — and the tenant would not be
 // billed for it.
+// cyclesThroughEnd is how many rent cycles a stay that ended on end is billed:
+// every cycle that began before the day they left. A cycle beginning on the
+// leaving day itself is not billed — their last paid month covers them up to
+// that day — so someone whose rent falls on the 23rd and who leaves on the
+// 23rd owes nothing for the month starting then. The owner's rule, Oct 2026;
+// it used to bill that month in full. A stay is always billed its first cycle.
+//
+// Everything that bills an ENDED stay goes through this: the settlement, the
+// tenant summary and Insights, so the three cannot disagree about a leaver.
+func cyclesThroughEnd(startDate, end time.Time, cycle string) int {
+	n := cyclesElapsed(dateOnly(startDate), dateOnly(end).AddDate(0, 0, -1), cycle)
+	if n < 1 {
+		return 1
+	}
+	return n
+}
+
 func cyclesElapsed(startDate, today time.Time, cycle string) int {
 	if today.Before(startDate) {
 		return 0
