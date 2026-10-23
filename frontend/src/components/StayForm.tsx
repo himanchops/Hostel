@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
-  gridApi, sitesApi,
+  gridApi, sitesApi, staysApi,
   GridRoom, Site,
-  today, ApiError,
+  today, formatDay, formatCurrency, ApiError,
 } from "@/lib/api";
-import { Field, FormError, Input, Select } from "@/components/ui";
+import { Button, Field, FormError, Input, SegmentedControl, Select } from "@/components/ui";
+import { PAY_METHODS, PayMethod } from "@/lib/payMethod";
 
 /**
  * The two halves of "put this person in that bed", shared by every screen that
@@ -124,6 +125,169 @@ export function StayTermsFields({
         />
       </Field>
     </div>
+  );
+}
+
+// ─── Paid today ───────────────────────────────────────────────────────────────
+
+/**
+ * What they handed over on arrival. Nearly everyone pays the first rent, and
+ * usually the deposit, the day they move in. Before this the form took only
+ * the terms. The money was a second visit to the tenant page that was easy to
+ * forget, and until then the new tenant showed as owing from their first day.
+ *
+ * Rent and deposit follow the terms (one rent period, the agreed deposit)
+ * until the owner types over them, so changing the rent above changes what
+ * was paid below. Each becomes an ordinary payment, recorded through the same
+ * endpoint as any other.
+ */
+export interface PaidToday {
+  /** Rupees as typed, or null to follow the terms. */
+  rent: string | null;
+  /** Rupees as typed, or null to follow the terms. */
+  deposit: string | null;
+  method: PayMethod;
+  /** "They haven't paid yet": nothing is recorded. */
+  none: boolean;
+}
+
+export function emptyPaidToday(): PaidToday {
+  return { rent: null, deposit: null, method: "cash", none: false };
+}
+
+function rupeesToPaise(rupees: string): number {
+  const n = parseFloat(rupees || "0");
+  return Number.isNaN(n) ? NaN : Math.round(n * 100);
+}
+
+/** The two amounts in paise, 0 for anything not paid. */
+export function paidTodayAmounts(paid: PaidToday, terms: StayTerms) {
+  if (paid.none) return { rent: 0, deposit: 0 };
+  return {
+    rent: rupeesToPaise(paid.rent ?? terms.rent),
+    deposit: rupeesToPaise(paid.deposit ?? terms.deposit),
+  };
+}
+
+/** What's wrong with the amounts, phrased for a form error, or "". */
+export function paidTodayError(paid: PaidToday, terms: StayTerms): string {
+  const { rent, deposit } = paidTodayAmounts(paid, terms);
+  if (Number.isNaN(rent) || rent < 0) return "Rent paid must be a number.";
+  if (Number.isNaN(deposit) || deposit < 0) return "Deposit paid must be a number.";
+  return "";
+}
+
+/**
+ * The day the payments are dated: the start day, which is when people pay.
+ * Never later than today, because a payment can't be dated in the future and
+ * money taken now for a stay that starts next week was still taken now.
+ */
+export function paidTodayDate(terms: StayTerms): string {
+  const now = today();
+  return terms.startDate && terms.startDate < now ? terms.startDate : now;
+}
+
+/** " · ₹16,000 paid" for a button or toast, or "" when nothing was paid. */
+export function paidTodaySuffix(paid: PaidToday, terms: StayTerms): string {
+  const { rent, deposit } = paidTodayAmounts(paid, terms);
+  const total = (rent > 0 ? rent : 0) + (deposit > 0 ? deposit : 0);
+  return total > 0 ? ` \u00b7 ${formatCurrency(total)} paid` : "";
+}
+
+/**
+ * Records the payments on a stay that now exists. Returns "" when everything
+ * was recorded, or a sentence naming what was not. The stay is already made
+ * by then, so a failure here is reported rather than thrown: the caller says
+ * so in a toast and the owner records it from Payments.
+ */
+export async function recordPaidToday(
+  token: string, stayId: number, paid: PaidToday, terms: StayTerms,
+): Promise<string> {
+  const { rent, deposit } = paidTodayAmounts(paid, terms);
+  const base = { payment_type: paid.method, payment_date: paidTodayDate(terms) };
+  const missed: string[] = [];
+  for (const [kind, amount] of [["rent", rent], ["deposit", deposit]] as const) {
+    if (!(amount > 0)) continue;
+    try {
+      await staysApi.addPayment(token, stayId, { ...base, amount, kind });
+    } catch {
+      missed.push(`${kind} of ${formatCurrency(amount)}`);
+    }
+  }
+  return missed.length ? `The ${missed.join(" and the ")} wasn't recorded. Record it from Payments.` : "";
+}
+
+function paidRentLabel(cycle: string): string {
+  if (cycle === "weekly") return "Rent · first week (₹)";
+  if (cycle === "daily") return "Rent · first night (₹)";
+  return "Rent · first month (₹)";
+}
+
+export function PaidTodayFields({
+  value,
+  onChange,
+  terms,
+}: {
+  value: PaidToday;
+  onChange: (next: PaidToday) => void;
+  terms: StayTerms;
+}) {
+  const set = (patch: Partial<PaidToday>) => onChange({ ...value, ...patch });
+  const date = paidTodayDate(terms);
+  const heading = date === today() ? "Paid today" : `Paid on ${formatDay(date)}`;
+
+  return (
+    <section aria-label={heading} className="rounded-xl border border-stone-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-stone-800">{heading}</h3>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => set({ none: !value.none })}
+        >
+          {value.none ? "They paid something" : "They haven\u2019t paid yet"}
+        </Button>
+      </div>
+
+      {value.none ? (
+        <p className="mt-1 text-[13px] text-stone-500">
+          Nothing is recorded. Their first rent shows as due on Payments.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label={paidRentLabel(terms.cycle)}>
+              <Input
+                type="number"
+                min="0"
+                placeholder="0"
+                value={value.rent ?? terms.rent}
+                onChange={(e) => set({ rent: e.target.value })}
+              />
+            </Field>
+            <Field label="Deposit paid (₹)">
+              <Input
+                type="number"
+                min="0"
+                placeholder="0"
+                value={value.deposit ?? terms.deposit}
+                onChange={(e) => set({ deposit: e.target.value })}
+              />
+            </Field>
+          </div>
+          <div>
+            <p className="mb-1 text-[13px] font-medium text-stone-600">Paid by</p>
+            <SegmentedControl
+              options={PAY_METHODS}
+              value={value.method}
+              onChange={(method) => set({ method })}
+              ariaLabel="Paid by"
+            />
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

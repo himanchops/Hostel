@@ -38,6 +38,7 @@ import {
 } from "@/components/ui";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
+  PaidTodayFields, PaidToday, emptyPaidToday, paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
@@ -116,7 +117,8 @@ function ReviewDrawer({
 }: {
   tenant: Tenant;
   token: string;
-  onDone: (approved: Tenant) => void;
+  /** `missed` names any payment that could not be recorded, or is "". */
+  onDone: (approved: Tenant, paidSuffix: string, missed: string) => void;
   onReject: (id: number) => void;
   onClose: () => void;
   rejectingId: number | null;
@@ -130,6 +132,7 @@ function ReviewDrawer({
   const [rooms, setRooms] = useState<GridRoom[]>([]);
   const [selectedBed, setSelectedBed] = useState<GridBed | null>(null);
   const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
+  const [paid, setPaid] = useState<PaidToday>(emptyPaidToday());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -168,7 +171,7 @@ function ReviewDrawer({
           setLoading(false);
           return;
         }
-        const invalid = stayTermsError(terms);
+        const invalid = stayTermsError(terms) || paidTodayError(paid, terms);
         if (invalid) {
           setError(invalid);
           setLoading(false);
@@ -179,7 +182,24 @@ function ReviewDrawer({
       }
 
       const approved = await tenantsApi.approve(token, tenant.id, payload);
-      onDone(approved);
+      // Approving makes the stay but answers with the tenant, so the stay the
+      // payments belong to is looked up: their only open one.
+      let missed = "";
+      let suffix = "";
+      if (mode !== "approve_only") {
+        suffix = paidTodaySuffix(paid, terms);
+        if (suffix) {
+          try {
+            const stay = (await tenantsApi.stays(token, approved.id)).find((st) => !st.end_date);
+            missed = stay
+              ? await recordPaidToday(token, stay.id, paid, terms)
+              : "What they paid wasn't recorded. Record it from Payments.";
+          } catch {
+            missed = "What they paid wasn't recorded. Record it from Payments.";
+          }
+        }
+      }
+      onDone(approved, missed ? "" : suffix, missed);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to approve");
     } finally {
@@ -236,7 +256,7 @@ function ReviewDrawer({
           disabled={mode === "assign_bed" && (!siteId || !selectedBed)}
           onClick={handleApprove}
         >
-          {loading ? "Approving…" : mode === "assign_bed" ? "Approve & assign" : mode === "collect_deposit" ? "Approve & save terms" : "Approve"}
+          {loading ? "Approving…" : mode === "assign_bed" ? `Approve & assign${paidTodaySuffix(paid, terms)}` : mode === "collect_deposit" ? `Approve & save terms${paidTodaySuffix(paid, terms)}` : "Approve"}
         </Button>
       </div>
     );
@@ -319,7 +339,7 @@ function ReviewDrawer({
                     <p className="text-xs text-stone-500">
                       {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
                       {m === "assign_bed" && "Approve and assign to a specific bed now."}
-                      {m === "collect_deposit" && "Save the rent and deposit you agreed. Record the deposit as a payment once it is paid; assign the bed when they move in."}
+                      {m === "collect_deposit" && "Save the rent and deposit you agreed, and anything they\u2019ve paid. Assign the bed when they move in."}
                     </p>
                   </div>
                 </label>
@@ -349,20 +369,25 @@ function ReviewDrawer({
                     )}
                   </Field>
                 )}
-                {selectedBed && <StayTermsFields value={terms} onChange={setTerms} layout="grid" />}
+                {selectedBed && (
+                  <>
+                    <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
+                    <PaidTodayFields value={paid} onChange={setPaid} terms={terms} />
+                  </>
+                )}
               </div>
             )}
 
             {/* Collect deposit flow */}
             {mode === "collect_deposit" && (
               <div className="space-y-4 rounded-xl border border-stone-200 p-4">
-                {/* This used to say the deposit "will be recorded as a
-                    payment". Nothing ever recorded one — approving only saves
-                    the agreed terms — and since a settlement now refunds only
-                    deposit money actually received, the promise would have
-                    cost the tenant their refund. */}
-                <p className="text-xs text-stone-500">This saves the agreed deposit, not the money. Once they pay it, record it on their tenant page as a deposit payment. The bed can be assigned there later too.</p>
+                {/* This once said the deposit "will be recorded as a
+                    payment" when nothing recorded one. A settlement refunds
+                    only deposit money actually received, so the promise would
+                    have cost the tenant their refund. Paid today now records
+                    it for real, and only what the owner says arrived. */}
                 <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
+                <PaidTodayFields value={paid} onChange={setPaid} terms={terms} />
               </div>
             )}
           </>
@@ -443,10 +468,11 @@ function PendingQueue() {
     } finally { setRejectingId(null); }
   }
 
-  function handleApproved(approved: Tenant) {
+  function handleApproved(approved: Tenant, paidSuffix: string, missed: string) {
     setPending((prev) => prev.filter((t) => t.id !== approved.id));
     setDrawerTenant(null);
-    toast.success(`${approved.name} approved`);
+    if (missed) toast.error(`${approved.name} approved. ${missed}`);
+    else toast.success(`${approved.name} approved${paidSuffix}`);
   }
 
   async function handleApprovePayment(id: number) {

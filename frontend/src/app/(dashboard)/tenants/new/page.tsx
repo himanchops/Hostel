@@ -20,6 +20,7 @@ import {
 import {
   BedPicker, VacantBed,
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
+  PaidTodayFields, PaidToday, emptyPaidToday, paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
 
 export default function NewTenantPage() {
@@ -48,6 +49,7 @@ export default function NewTenantPage() {
   const [placing, setPlacing] = useState(false);
   const [bed, setBed] = useState<VacantBed | null>(null);
   const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
+  const [paid, setPaid] = useState<PaidToday>(emptyPaidToday());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,7 +60,7 @@ export default function NewTenantPage() {
     // cost the owner a half-made record they then have to finish by hand.
     if (placing) {
       if (!bed) { setError("Pick a bed, or turn off \u201CPlace them in a bed now\u201D."); return; }
-      const invalid = stayTermsError(terms);
+      const invalid = stayTermsError(terms) || paidTodayError(paid, terms);
       if (invalid) { setError(invalid); return; }
     }
 
@@ -96,12 +98,15 @@ export default function NewTenantPage() {
       // backend's "tenant approved but failed to create stay".
       if (placing && bed) {
         try {
-          await staysApi.create(token, {
+          const stay = await staysApi.create(token, {
             tenant_id: tenant.id,
             bed_id: bed.id,
             ...stayTermsPayload(terms),
           });
-          toast.success(`${tenant.name} added and placed in ${bed.roomName} · ${bed.name}`);
+          const placed = `${tenant.name} added and placed in ${bed.roomName} · ${bed.name}`;
+          const missed = await recordPaidToday(token, stay.id, paid, terms);
+          if (missed) toast.error(`${placed}. ${missed}`);
+          else toast.success(placed + paidTodaySuffix(paid, terms));
         } catch (stayErr) {
           toast.error(
             stayErr instanceof ApiError
@@ -206,6 +211,7 @@ export default function NewTenantPage() {
             <div className="mt-4 space-y-4 border-t border-stone-100 pt-4">
               <BedPicker token={token} value={bed} onChange={setBed} />
               <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
+              <PaidTodayFields value={paid} onChange={setPaid} terms={terms} />
             </div>
           )}
         </Card>
@@ -214,7 +220,7 @@ export default function NewTenantPage() {
 
         <div className="flex gap-3">
           <Button type="submit" loading={loading}>
-            {loading ? "Creating…" : placing ? "Create & place tenant" : "Create tenant"}
+            {loading ? "Creating…" : placing ? `Create & place tenant${paidTodaySuffix(paid, terms)}` : "Create tenant"}
           </Button>
           <Link href="/tenants" className="inline-flex items-center rounded-lg px-4 py-2 text-sm text-stone-500 transition duration-150 ease-out hover:bg-stone-100">
             Cancel

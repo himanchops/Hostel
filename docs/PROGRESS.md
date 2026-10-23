@@ -2844,6 +2844,55 @@ Balance on its own row.
 Full suite: 154 e2e and 66 unit tests. Screenshots checked at 375 and 768 on
 the demo.
 
+**Production, 23 Oct 2026: live.** PR #47 was merged as `9f03ea0`, and
+`/tenants` and `/dashboard` serve on production. Frontend only, no migration.
+
+---
+
+## Paid today (Oct 2026)
+
+Nearly every tenant pays the first rent, and usually the deposit, on the day
+they move in. The forms that put someone in a bed took only the terms, so the
+money was a second trip to the tenant page, easy to forget, and the new
+tenant showed as owing from their first day.
+
+**All three forms have it:** Add tenant, a vacant bed on the grid, and
+approving a registration (both "assign bed" and "agree terms"). They share
+`PaidTodayFields` in `components/StayForm.tsx`:
+- **Filled in from the terms:** rent with one rent period, the deposit with
+  the agreed amount. Each follows the terms until the owner types over it.
+- **Cash / UPI**, and **"They haven't paid yet"**, which records nothing.
+- **The button says the total:** "Create & place tenant · ₹16,000 paid".
+- **Dated the start day**, or today if the start is in the future, since a
+  payment can't be dated ahead. The heading says which: "Paid today" or
+  "Paid on 18 Oct 2026".
+
+**How it records:** each amount is an ordinary payment through
+`POST /api/stays/:id/payments`, after the stay is made. Approval answers with
+the tenant, not the stay, so the drawer looks up their open stay first. A
+payment that fails after the stay exists is named in a toast ("The deposit of
+₹10,000 wasn't recorded. Record it from Payments.") rather than failing the
+whole form. Frontend only: no backend change, no migration.
+
+**Left for later**, at the owner's call: a "Leaving on" date when someone
+moves in (`docs/BACKLOG.md`).
+
+### Verification
+
+`owner/paid-up-front.test.ts` (6 tests, iPad portrait, touch):
+- Add tenant records ₹6,000 rent and the ₹10,000 deposit by UPI, dated today.
+- An amount typed over survives a change to the terms. A cleared deposit
+  records none.
+- "They haven't paid yet" records nothing.
+- A stay started five days ago is dated that day, under "Paid on …".
+- The grid's assign drawer and the approval drawer each record both
+  payments.
+
+`pending-terms` now uses "They haven't paid yet" for its "no money" case.
+
+Full suite: 160 e2e and 66 unit tests, plus `go test ./...`. Screenshots
+checked on the demo at 768×1024 and 1024×768.
+
 ---
 
 ## Architecture Notes

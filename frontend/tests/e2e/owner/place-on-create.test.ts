@@ -30,7 +30,7 @@ test.describe("Placing a tenant while creating them", () => {
     await page.getByLabel("Weekly rent (₹)").fill("2000");
     await page.getByLabel("Deposit (₹)").fill("5000");
 
-    await page.getByRole("button", { name: "Create & place tenant" }).click();
+    await page.getByRole("button", { name: /^Create & place tenant/ }).click();
 
     await expect(page).toHaveURL(/\/tenants\/\d+$/);
     await expect(page.getByText("Stays & Ledger")).toBeVisible();
