@@ -2816,6 +2816,36 @@ reported their deploys successful at 08:24 UTC. Settling a stay is the first
 write to `refund_method`; the owner's first real move-out confirms it.
 ---
 
+## Two quick fixes: tenant rows and wide amounts (Oct 2026)
+
+**The whole tenant row opens the tenant.** Above `sm`, `/tenants` was a table
+whose only link was "View →" at the far right. Now it's one list at every
+width, each row a link: name, phone, email and since as columns from `sm` up,
+and stacked on a phone, as before.
+
+**Money tiles no longer spill on a phone.** The tenant page's Rent paid / Stay
+duration / Balance tiles were three across at every width, and a third of
+375px cannot hold "₹10,50,000". On a phone they are now two across, with
+Balance on its own row.
+
+### Verification
+
+`owner/narrow-screens.test.ts` (6 tests) runs at 375×812, 768×1024 and
+1024×768 with touch:
+- **Wide figures:** a tenant with ten-lakh figures (₹10,50,000 rent paid,
+  ₹2,10,000 owed, a ₹1,00,000 deposit). The tenant page, dashboard,
+  Payments, Insights and Tenants are checked for anything spilling out of
+  its box, or the page scrolling sideways.
+- **Row taps:** tapping the phone number opens the tenant.
+- **Calibrating the amounts:** at crore-sized figures (₹1,13,40,000) the
+  dashboard's Overdue tile also spilled at 1024. That is beyond any
+  45-bed figure, so the test uses the realistic ceiling.
+
+Full suite: 154 e2e and 66 unit tests. Screenshots checked at 375 and 768 on
+the demo.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

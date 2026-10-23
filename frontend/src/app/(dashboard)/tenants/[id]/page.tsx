@@ -506,9 +506,11 @@ export default function TenantDetailPage() {
         />
       )}
 
-      {/* Financial summary bar */}
+      {/* Financial summary bar. Three across from sm up; on a phone, two
+          across with Balance on its own row, because a third of 375px cannot
+          hold "₹10,50,000" and the figure ran into the next tile. */}
       {summary && (
-        <div className="mb-6 grid grid-cols-3 gap-4">
+        <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
           <Card className="text-center">
             {/* Rent only, on purpose: a deposit is held, not paid towards
                 anything. Said in the label, and the deposit gets its own line,
@@ -526,7 +528,7 @@ export default function TenantDetailPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Stay duration</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-stone-900">{summary.duration_days}d</p>
           </Card>
-          <Card className={`text-center ${summary.balance <= 0 ? "bg-paid-50" : "bg-overdue-50"}`}>
+          <Card className={`col-span-2 text-center sm:col-span-1 ${summary.balance <= 0 ? "bg-paid-50" : "bg-overdue-50"}`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Balance</p>
             <p className={`mt-1 text-xl font-bold tabular-nums ${summary.balance <= 0 ? "text-paid-800" : "text-overdue-800"}`}>
               {summary.balance <= 0

@@ -14,7 +14,6 @@ import {
   Skeleton,
   UsersIcon,
   buttonClasses,
-  TOUCH_LINK,
 } from "@/components/ui";
 
 export default function TenantsPage() {
@@ -94,64 +93,47 @@ export default function TenantsPage() {
           />
         )
       ) : (
-        <>
-        {/* Phone: a five-column table at 375px wraps every cell onto two
-            lines. Same data, stacked. */}
-        <Card padding="none" className="divide-y divide-stone-100 sm:hidden">
-          {filtered.map((t) => (
-            <Link
-              key={t.id}
-              href={`/tenants/${t.id}`}
-              className="flex items-center justify-between gap-3 px-4 py-3 transition duration-150 ease-out active:bg-stone-50"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-stone-900">{t.name}</p>
-                <p className="truncate text-[13px] tabular-nums text-stone-500">
-                  {t.phone}
-                  {t.email ? ` · ${t.email}` : ""}
-                </p>
-              </div>
-              <span className="shrink-0 text-[13px] text-stone-400">
-                {new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
-              </span>
-            </Link>
-          ))}
-        </Card>
-
-        <Card padding="none" className="hidden overflow-hidden sm:block">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-stone-100 text-left text-xs font-semibold uppercase tracking-wide text-stone-400">
-                <th className="px-5 py-3">Name</th>
-                <th className="px-5 py-3">Phone</th>
-                <th className="hidden px-5 py-3 sm:table-cell">Email</th>
-                <th className="px-5 py-3">Since</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-50">
-              {filtered.map((t) => (
-                <tr key={t.id} className="transition duration-150 ease-out hover:bg-stone-50">
-                  <td className="px-5 py-3 font-medium text-stone-900">{t.name}</td>
-                  <td className="px-5 py-3 tabular-nums text-stone-600">{t.phone}</td>
-                  <td className="hidden px-5 py-3 text-stone-400 sm:table-cell">{t.email || "—"}</td>
-                  <td className="px-5 py-3 text-stone-400">
+        // One list for every width, each row a link to the tenant. It was a
+        // table above sm, where only a "View →" link at the far right opened
+        // anyone; the owner taps the name, the phone, anywhere. The columns
+        // that do not fit a phone drop out rather than wrapping.
+        <Card padding="none" className="overflow-hidden">
+          <div
+            aria-hidden
+            className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,2fr)_6rem_1rem] gap-4 border-b border-stone-100 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-stone-400 sm:grid"
+          >
+            <span>Name</span>
+            <span>Phone</span>
+            <span>Email</span>
+            <span>Since</span>
+            <span />
+          </div>
+          <ul className="divide-y divide-stone-100">
+            {filtered.map((t) => (
+              <li key={t.id}>
+                <Link
+                  href={`/tenants/${t.id}`}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3 text-sm transition duration-150 ease-out hover:bg-stone-50 active:bg-stone-50 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,2fr)_6rem_1rem] sm:px-5"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-stone-900">{t.name}</span>
+                    {/* Phone: the number and email under the name. */}
+                    <span className="block truncate text-[13px] tabular-nums text-stone-500 sm:hidden">
+                      {t.phone}
+                      {t.email ? ` · ${t.email}` : ""}
+                    </span>
+                  </span>
+                  <span className="hidden truncate tabular-nums text-stone-600 sm:block">{t.phone}</span>
+                  <span className="hidden truncate text-stone-400 sm:block">{t.email || "—"}</span>
+                  <span className="text-[13px] text-stone-400 sm:text-sm">
                     {new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <Link
-                      href={`/tenants/${t.id}`}
-                      className={`${TOUCH_LINK} justify-end text-indigo-600 transition duration-150 ease-out hover:text-indigo-500`}
-                    >
-                      View →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                  <span aria-hidden className="hidden text-stone-300 sm:block">›</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Card>
-        </>
       )}
     </div>
   );
