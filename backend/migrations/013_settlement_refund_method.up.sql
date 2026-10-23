@@ -1,0 +1,12 @@
+-- How a settlement's refund was handed back: cash or UPI.
+--
+-- The owner reconciles against the bank and the cash drawer together, and a
+-- refund left the building one way or the other. Payments have always said
+-- which (payment_type); refunds did not, so a month's lines could not be
+-- matched to the drawer and the bank separately when that was wanted.
+--
+-- Nullable: settlements recorded before this have no answer, and one where
+-- nothing was handed back (a tenant who owed, or a deposit kept) never will.
+-- Same enum as payments, so "online" means the same thing everywhere and the
+-- app labels it "UPI" through one helper.
+ALTER TABLE settlements ADD COLUMN refund_method payment_type;

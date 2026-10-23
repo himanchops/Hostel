@@ -20,7 +20,7 @@ import { Field, FormError, Input, Select } from "@/components/ui";
  *
  * The copies had already drifted: only the pending drawer's rent label followed
  * the billing cycle, so the grid asked for "Monthly rent" while collecting a
- * daily one. That is the same drift `EndStayDialog` was created to end, and the
+ * daily one. That is the same drift the shared move-out dialog was created to end, and the
  * reason a fourth caller had to be an extraction rather than a fifth copy.
  */
 

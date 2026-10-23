@@ -883,6 +883,12 @@ export interface SettlementPreview {
   cycles_billed: number;
   total_expected: number;
   total_paid: number;
+  /** When they told you, and when they said they would go. */
+  notice_date?: string;
+  expected_end_date?: string;
+  /** Notice counts as on time up to this day: the start of their last rent month. */
+  notice_by: string;
+  notice_on_time: boolean;
 }
 
 /** A recorded settlement. `refund_paise` negative = the tenant owes the owner. */
@@ -895,6 +901,8 @@ export interface Settlement {
   advance_returned_paise: number;
   adjustments: Adjustment[];
   refund_paise: number;
+  /** How the refund went back; absent when nothing did, or before Oct 2026. */
+  refund_method?: "cash" | "online";
   notes?: string;
   created_at: string;
 }
@@ -915,6 +923,8 @@ export const settlementsApi = {
     end_date?: string;
     /** Omit to return a rent advance in full; send 0 to keep it. */
     advance_returned_paise?: number;
+    /** How the refund went back, when something did. */
+    refund_method?: "cash" | "online";
   }) => request<Settlement>(`/api/stays/${stayId}/settlement`, { method: "POST", body: JSON.stringify(data) }, token),
 
   /** Every settlement across a tenant's stays, so the page badges them in one request. */

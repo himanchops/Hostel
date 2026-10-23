@@ -309,20 +309,19 @@ test.describe("Tenant profile enrichment", () => {
     await loginAs(page, token);
     await page.goto(`/tenants/${tenantId}`);
 
-    // Renamed in Phase 11: "End stay" became "End without settling" when
-    // "Settle & vacate" joined it. This path is the one that skips the money.
-    await page.getByRole("button", { name: "End without settling" }).click();
+    // One way out since Oct 2026: "Move out", with the money left for later
+    // when it is not being settled now. They left ten days ago.
+    const left = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
+    await page.getByRole("button", { name: "Move out" }).click();
+    const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "Another day" }).click();
+    await sheet.getByLabel("Leaving date").fill(left);
+    await sheet.getByRole("button", { name: "They've left · settle the money later" }).click();
 
-    // Date picker and confirm button should be visible
-    await expect(page.getByText("Select move-out date:")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Confirm" })).toBeVisible();
-
-    // Confirm with today's date
-    await page.getByRole("button", { name: "Confirm" }).click();
-
-    // Stay should now show the "Ended" badge. Exact match: since Phase E the
-    // success toast also says "…'s stay ended", and a substring match now
-    // resolves to both.
     await expect(page.getByText("Ended", { exact: true })).toBeVisible();
+    const [stay] = await (await request.get(`${BASE}/api/tenants/${tenantId}/stays`, { headers: auth })).json();
+    expect(stay.end_date.slice(0, 10)).toBe(left);
+    // The money is still to settle, and the page says so.
+    await expect(page.getByRole("button", { name: "Settle the money" })).toBeVisible();
   });
 });

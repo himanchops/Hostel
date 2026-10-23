@@ -402,12 +402,21 @@ anyone else. See `docs/PROGRESS.md` → "Payments". Left for later, at his
 call: deposits still owed as rows, an undo, and new work on the moved-out
 section (kept as it was, folded).
 
-### "They're staying" does not cancel a vacating notice on the iPad — S, bug
+### ~~"They're staying" does not cancel a vacating notice on the iPad~~ ✅ fixed on `move-out-flow` (Oct 2026)
+Not the iPad: the button cleared only the leaving date, and a notice date on
+its own still marks a bed as vacating, so the bed stayed orange. It now
+cancels the notice outright, both dates, in one tap. Original report:
+
 He recorded a notice, then tried to withdraw it with the "they're staying"
 control, and nothing happened. Reproduce with touch emulation at 768×1024 and
 1024×768 before guessing.
 
-### The move-out flow is hard to follow — M, after the money work
+### ~~The move-out flow is hard to follow~~ ✅ redesigned on `move-out-flow` (Oct 2026, migration 013)
+One "Move out" sheet from the tenant page and the grid, in the owner's order:
+the day, the deposit (by the notice rule), the money, the amount to hand back
+(editable), and cash or UPI. See `docs/PROGRESS.md` → "Moving out". Original
+report:
+
 "End without settling", "Settle & vacate", adjustments, advance returned: the
 owner, who built this with us, finds the words and the order unclear, and
 expects someone who is not an engineer to find it more so. What he wants to do

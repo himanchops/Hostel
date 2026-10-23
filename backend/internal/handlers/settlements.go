@@ -46,6 +46,8 @@ type settlementStayRow struct {
 	RentCycle     string     `db:"rent_cycle"`
 	StartDate     time.Time  `db:"start_date"`
 	EndDate       *time.Time `db:"end_date"`
+	NoticeDate    *time.Time `db:"notice_date"`
+	ExpectedEnd   *time.Time `db:"expected_end_date"`
 	TotalPaid     int64      `db:"total_paid"` // rent payments only
 	// Schedule is the stay's rent over time (migration 011); flat unless the
 	// rent was ever changed from a date.
@@ -88,6 +90,16 @@ type SettlementPreview struct {
 	CyclesBilled       int    `json:"cycles_billed"`
 	TotalExpected      int64  `json:"total_expected"`
 	TotalPaid          int64  `json:"total_paid"`
+
+	// The notice, for the move-out sheet's default. The house rule: rent is
+	// never refunded, and the deposit comes back only to someone who gave
+	// notice. Notice is expected by the start of their last rent month — the
+	// day they pay for the month they leave in — which is NoticeBy. The sheet
+	// proposes; the owner decides, and can return a deposit with no notice.
+	NoticeDate      *string `json:"notice_date,omitempty"`
+	ExpectedEndDate *string `json:"expected_end_date,omitempty"`
+	NoticeBy        string  `json:"notice_by"`
+	NoticeOnTime    bool    `json:"notice_on_time"`
 }
 
 type createSettlementRequest struct {
@@ -99,6 +111,23 @@ type createSettlementRequest struct {
 	// keeps the generous reading as the default: it is the tenant's money
 	// until the owner decides otherwise. Send 0 explicitly to keep it.
 	AdvanceReturnedPaise *int64 `json:"advance_returned_paise"`
+	// How the refund went back: "cash" or "online". Only meaningful when
+	// something was handed back; ignored otherwise.
+	RefundMethod *string `json:"refund_method"`
+}
+
+// noticeBy is the latest day notice counts as on time for a stay ending on
+// end: the start of the rent cycle they leave in. A tenant leaving on 10 Nov
+// whose rent falls on the 15th pays for 15 Oct–14 Nov on 15 Oct, and that is
+// when they are expected to say it is their last month.
+func noticeBy(start time.Time, cycle string, end time.Time) time.Time {
+	return cycleStart(dateOnly(start), cyclesElapsed(dateOnly(start), dateOnly(end), cycle), cycle)
+}
+
+// noticeOnTime says whether a notice given on notice counts for a stay that
+// ends on end. No notice is never on time.
+func noticeOnTime(start time.Time, cycle string, notice *time.Time, end time.Time) bool {
+	return notice != nil && !dateOnly(*notice).After(noticeBy(start, cycle, end))
 }
 
 // duesFor returns rent outstanding at `until`, and the cycle count behind it.
@@ -168,6 +197,19 @@ func validateAdvanceReturned(dues, advanceReturned int64) error {
 	return nil
 }
 
+// refundMethod checks how a refund went back. Nothing handed back means
+// nothing to record, whatever was sent; something handed back may say cash or
+// online, or nothing for a client that does not ask.
+func refundMethod(sent *string, refund int64) (*string, error) {
+	if sent == nil || *sent == "" || refund <= 0 {
+		return nil, nil
+	}
+	if *sent != "cash" && *sent != "online" {
+		return nil, errors.New(`refund_method must be "cash" or "online"`)
+	}
+	return sent, nil
+}
+
 // validateAdjustments rejects rows that would make the stored settlement
 // unreadable later. A zero amount is allowed — "Cleaning charge — waived" is a
 // line an owner may well want on the record.
@@ -204,6 +246,8 @@ func (h *SettlementHandler) loadSettlementStay(stayID, ownerID int64) (settlemen
 			s.rent_cycle,
 			s.start_date,
 			s.end_date,
+			s.notice_date,
+			s.expected_end_date,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
@@ -268,7 +312,18 @@ func settlementDate(stay settlementStayRow, requested string, today time.Time) (
 func (h *SettlementHandler) previewFor(stay settlementStayRow, endDate time.Time) SettlementPreview {
 	dues, cycles := duesForSchedule(stay.schedule(), stay.RentCycle, stay.StartDate, endDate, stay.TotalPaid)
 	advance := advanceHeld(dues)
+	day := func(t *time.Time) *string {
+		if t == nil {
+			return nil
+		}
+		s := dateOnly(*t).Format("2006-01-02")
+		return &s
+	}
 	return SettlementPreview{
+		NoticeDate:         day(stay.NoticeDate),
+		ExpectedEndDate:    day(stay.ExpectedEnd),
+		NoticeBy:           noticeBy(stay.StartDate, stay.RentCycle, endDate).Format("2006-01-02"),
+		NoticeOnTime:       noticeOnTime(stay.StartDate, stay.RentCycle, stay.NoticeDate, endDate),
 		StayID:             stay.StayID,
 		TenantName:         stay.TenantName,
 		DepositPaise:       stay.DepositHeld,
@@ -379,6 +434,10 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 	if trimmed := strings.TrimSpace(req.Notes); trimmed != "" {
 		notes = &trimmed
 	}
+	method, err := refundMethod(req.RefundMethod, refund)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
+	}
 
 	// One transaction: a settlement that records a refund without ending the
 	// stay would leave the bed occupied by someone who has been paid out.
@@ -390,10 +449,10 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 
 	var settlement models.Settlement
 	err = tx.QueryRowx(
-		`INSERT INTO settlements (stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, notes)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING id, stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, notes, created_at`,
-		stayID, stay.DepositHeld, dues, advanceReturned, adjustments, refund, notes,
+		`INSERT INTO settlements (stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, refund_method, notes)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, stay_id, deposit_paise, dues_paise, advance_returned_paise, adjustments, refund_paise, refund_method::text, notes, created_at`,
+		stayID, stay.DepositHeld, dues, advanceReturned, adjustments, refund, method, notes,
 	).StructScan(&settlement)
 	if err != nil {
 		return serverError(c, err, "failed to record the settlement")
@@ -439,7 +498,7 @@ func (h *SettlementHandler) ListByTenant(c echo.Context) error {
 	var settlements []models.Settlement
 	err = h.db.Select(&settlements, `
 		SELECT st.id, st.stay_id, st.deposit_paise, st.dues_paise, st.advance_returned_paise,
-		       st.adjustments, st.refund_paise, st.notes, st.created_at
+		       st.adjustments, st.refund_paise, st.refund_method::text AS refund_method, st.notes, st.created_at
 		FROM settlements st
 		JOIN stays s ON s.id = st.stay_id
 		WHERE s.tenant_id = $1

@@ -480,7 +480,7 @@ type MoneyEntry struct {
 	Date        string  `json:"date"`
 	Kind        string  `json:"kind"`
 	AmountPaise int64   `json:"amount_paise"`
-	PaymentType *string `json:"payment_type,omitempty"` // cash | online, payments only
+	PaymentType *string `json:"payment_type,omitempty"` // cash | online: payments, and refunds since migration 013
 	StayID      int64   `json:"stay_id"`
 	TenantID    int64   `json:"tenant_id"`
 	TenantName  string  `json:"tenant_name"`
@@ -507,10 +507,11 @@ type moneyEntryRow struct {
 	RoomName    *string   `db:"room_name"`
 	BedName     *string   `db:"bed_name"`
 	// Settlement rows only.
-	DepositPaise    int64 `db:"deposit_paise"`
-	DuesPaise       int64 `db:"dues_paise"`
-	AdvanceReturned int64 `db:"advance_returned_paise"`
-	RefundPaise     int64 `db:"refund_paise"`
+	DepositPaise    int64   `db:"deposit_paise"`
+	DuesPaise       int64   `db:"dues_paise"`
+	AdvanceReturned int64   `db:"advance_returned_paise"`
+	RefundPaise     int64   `db:"refund_paise"`
+	RefundMethod    *string `db:"refund_method"`
 }
 
 // settlementEntries splits one settlement into the lines it contributes,
@@ -525,16 +526,18 @@ func settlementEntries(r moneyEntryRow) []MoneyEntry {
 	f := settlementFlow{DepositPaise: r.DepositPaise, DuesPaise: r.DuesPaise,
 		AdvanceReturned: r.AdvanceReturned, RefundPaise: r.RefundPaise}
 	var out []MoneyEntry
-	add := func(kind string, amount int64) {
+	add := func(kind string, amount int64, method *string) {
 		if amount > 0 {
 			e := base
-			e.Kind, e.AmountPaise = kind, amount
+			e.Kind, e.AmountPaise, e.PaymentType = kind, amount, method
 			out = append(out, e)
 		}
 	}
-	add("deposit_to_rent", settlementRent(f.DepositPaise, f.DuesPaise))
-	add("advance_returned", f.AdvanceReturned)
-	add("returned", f.returned())
+	// Money handed back says how, when the settlement recorded it; the rent a
+	// deposit paid off never left anyone's hands.
+	add("deposit_to_rent", settlementRent(f.DepositPaise, f.DuesPaise), nil)
+	add("advance_returned", f.AdvanceReturned, r.RefundMethod)
+	add("returned", f.returned(), r.RefundMethod)
 	return out
 }
 
@@ -586,7 +589,8 @@ func (h *InsightsHandler) GetMonth(c echo.Context) error {
 		SELECT s.end_date AS date, 'settlement' AS kind, 0 AS amount,
 		       s.id AS stay_id, t.id AS tenant_id, t.name AS tenant_name,
 		       r.name AS room_name, b.name AS bed_name,
-		       st.deposit_paise, st.dues_paise, st.advance_returned_paise, st.refund_paise
+		       st.deposit_paise, st.dues_paise, st.advance_returned_paise, st.refund_paise,
+		       st.refund_method::text AS refund_method
 		FROM settlements st
 		JOIN stays s     ON s.id = st.stay_id
 		JOIN tenants t   ON t.id = s.tenant_id

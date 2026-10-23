@@ -13,9 +13,8 @@ import { Button, Field, FormError, Input, Modal, useToast } from "@/components/u
  * only `end_date` does that, and only a human sets it, because tenants overstay
  * and leave early and nothing in a database knows which happened.
  *
- * One component for the tenant page and the grid drawer, for the same reason
- * EndStayDialog is one component — the two surfaces had already drifted once
- * over move-out dates.
+ * One component for the tenant page and the grid drawer, because the two
+ * surfaces had already drifted once over move-out dates.
  */
 export function RecordNoticeDialog({
   open,
@@ -47,6 +46,24 @@ export function RecordNoticeDialog({
   }, [open, stay]);
 
   const editing = Boolean(stay?.notice_date || stay?.expected_end_date);
+
+  // "They're staying" cancels the notice outright: both dates. It used to
+  // clear only the leaving date, and a notice date on its own still marks the
+  // bed as vacating, so the bed stayed orange and the button looked dead.
+  async function cancelNotice() {
+    if (!stay) return;
+    setError("");
+    setLoading(true);
+    try {
+      const updated = await staysApi.update(token, stay.id, { notice_date: null, expected_end_date: null });
+      toast.success("Notice cancelled · they're staying");
+      onSaved(updated);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to cancel the notice");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,24 +110,12 @@ export function RecordNoticeDialog({
         </Field>
 
         <Field label="When are they leaving?">
-          <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              value={expectedEnd}
-              min={stay?.start_date?.slice(0, 10)}
-              onChange={(e) => setExpectedEnd(e.target.value)}
-              className="flex-1"
-            />
-            {expectedEnd && (
-              // An explicit control rather than "empty the date box". Clearing a
-              // date input is unreliable across browsers, and this is the
-              // they-changed-their-mind path — the alternative is recording a
-              // departure that never happened just to stop the reminder.
-              <Button type="button" variant="ghost" size="sm" onClick={() => setExpectedEnd("")}>
-                They&apos;re staying
-              </Button>
-            )}
-          </div>
+          <Input
+            type="date"
+            value={expectedEnd}
+            min={stay?.start_date?.slice(0, 10)}
+            onChange={(e) => setExpectedEnd(e.target.value)}
+          />
           <p className="mt-1 text-xs text-stone-400">
             Leave blank if they have not said. The bed turns orange as the date
             approaches, then asks you to confirm once it passes.
@@ -119,7 +124,16 @@ export function RecordNoticeDialog({
 
         {error && <FormError>{error}</FormError>}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* An explicit control rather than "empty the date boxes": clearing
+              a date input is unreliable across browsers, and the alternative
+              is recording a departure that never happened to stop the
+              reminder. */}
+          {editing && (
+            <Button type="button" variant="secondary" onClick={cancelNotice} disabled={loading} className="mr-auto">
+              They&apos;re staying
+            </Button>
+          )}
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>

@@ -102,3 +102,44 @@ export function cycleCountLabel(cycle: string, count: number): string {
   const noun = CYCLE_NOUN[cycle] ?? cycle;
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
+
+/** The adjustment line a kept deposit is recorded as. */
+export const DEPOSIT_KEPT_LABEL = "Deposit kept: no notice";
+/** The adjustment line an owner's own change to the amount is recorded as. */
+export const CHANGED_LABEL = "Changed by you";
+
+/**
+ * The move-out sheet's sum, under the house rules:
+ *
+ *  - Rent is never refunded, so rent paid for after they leave is kept
+ *    (no advance goes back; the sheet sends advance_returned_paise 0).
+ *  - The deposit comes back to someone who gave notice, less any rent they
+ *    still owe. From someone who did not, it is kept: that is the part that
+ *    would have come back, max(0, deposit − rent owed), recorded as its own
+ *    line so the settlement still reads as a sum.
+ *  - Anything the owner takes off is a negative line.
+ *  - The owner has the last word. A typed final amount that differs from the
+ *    proposal goes in as one "Changed by you" line for the difference, so the
+ *    record still adds up and shows that a person changed it.
+ *
+ * `finalRefund` is signed like a refund: positive hands money back, negative
+ * means they owe you. Undefined means "as proposed".
+ */
+export function moveOutSettlement(
+  depositPaise: number,
+  duesPaise: number,
+  opts: { returnDeposit: boolean; deductions: Adjustment[]; finalRefund?: number },
+): { adjustments: Adjustment[]; proposed: number; refund: number } {
+  const lines: Adjustment[] = [];
+  if (!opts.returnDeposit) {
+    const kept = Math.max(0, depositPaise - Math.max(duesPaise, 0));
+    if (kept > 0) lines.push({ label: DEPOSIT_KEPT_LABEL, amount_paise: -kept });
+  }
+  lines.push(...opts.deductions);
+  const proposed = refundFor(depositPaise, duesPaise, 0, lines);
+  if (opts.finalRefund === undefined || opts.finalRefund === proposed) {
+    return { adjustments: lines, proposed, refund: proposed };
+  }
+  const adjustments = [...lines, { label: CHANGED_LABEL, amount_paise: opts.finalRefund - proposed }];
+  return { adjustments, proposed, refund: refundFor(depositPaise, duesPaise, 0, adjustments) };
+}

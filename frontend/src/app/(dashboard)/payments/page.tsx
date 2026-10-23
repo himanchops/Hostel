@@ -404,7 +404,8 @@ function RecordForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl bg-white p-3 ring-1 ring-inset ring-stone-200">
+    <Card>
+    <form onSubmit={handleSubmit} className="space-y-3">
       {error && <FormError>{error}</FormError>}
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Amount (₹)">
@@ -453,6 +454,7 @@ function RecordForm({
         )}
       </div>
     </form>
+    </Card>
   );
 }
 

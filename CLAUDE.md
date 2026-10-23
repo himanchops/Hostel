@@ -163,6 +163,16 @@ Key conventions to carry forward:
   six such sites when the table arrived (dashboard, grid, Collections,
   Insights, tenant summary, settlements). `stays.rent_amount` is the *latest*
   scheduled rent, good for display and wrong for arithmetic.
+- **Moving out is one sheet** (`components/MoveOutSheet.tsx`), from the
+  tenant page and the grid alike. Its opening position is the house rules in
+  `moveOutSettlement` (`lib/settlement.ts`):
+  - rent is never refunded (`advance_returned_paise` 0)
+  - the deposit comes back only to someone who gave notice by the start of
+    their last rent month (`noticeBy`, `handlers/settlements.go`)
+  - the owner can type over the final amount, recorded as a "Changed by you"
+    line so the settlement still adds up
+
+  A refund says how it went back (`refund_method`, migration 013).
 - **A rejected payment is kept, never deleted** (migration 009). "Pending" is
   `is_approved = false AND rejected_at IS NULL`; any new query for the pending
   queue must say both.

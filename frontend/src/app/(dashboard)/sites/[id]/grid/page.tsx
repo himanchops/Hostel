@@ -39,7 +39,7 @@ import {
 } from "@/components/ui";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
-import { EndStayDialog } from "@/components/EndStayDialog";
+import { MoveOutSheet } from "@/components/MoveOutSheet";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
 } from "@/components/StayForm";
@@ -68,7 +68,7 @@ export default function GridPage() {
   const [filter, setFilter] = useState<BedStatus | "all" | "owes">("all");
 
   // Which stay the end-stay dialog is for, if any.
-  const [endingStay, setEndingStay] = useState<GridBed | null>(null);
+  const [movingOut, setMovingOut] = useState<GridBed | null>(null);
   const [noticeBed, setNoticeBed] = useState<GridBed | null>(null);
 
   const fetchGrid = useCallback(() => {
@@ -111,8 +111,8 @@ export default function GridPage() {
     await fetchGrid();
   }
 
-  async function handleEnded() {
-    setEndingStay(null);
+  async function handleMovedOut() {
+    setMovingOut(null);
     setSelectedBed(null);
     await fetchGrid();
   }
@@ -292,21 +292,22 @@ export default function GridPage() {
             showPaymentForm={showPayment}
             onShowPayment={() => setShowPayment(true)}
             onPaymentAdded={handlePaymentAdded}
-            onEndStay={() => setEndingStay(selectedBed)}
+            onMoveOut={() => setMovingOut(selectedBed)}
             onRecordNotice={() => setNoticeBed(selectedBed)}
           />
         ))}
       </Drawer>
 
-      {/* Same dialog the tenant page uses, so a late-recorded departure is
-          billed to the day it actually happened. */}
-      <EndStayDialog
-        open={endingStay !== null}
-        stayId={endingStay?.stay_id ?? null}
+      {/* The same sheet the tenant page opens. The grid's "End stay" used to
+          free the bed and never touch the money, which is how leavers ended
+          up with deposits that still counted as held. */}
+      <MoveOutSheet
+        open={movingOut !== null}
+        stayId={movingOut?.stay_id ?? null}
         token={token ?? ""}
-        tenantName={endingStay?.tenant?.name}
-        onEnded={handleEnded}
-        onClose={() => setEndingStay(null)}
+        tenantName={movingOut?.tenant?.name}
+        onDone={handleMovedOut}
+        onClose={() => setMovingOut(null)}
       />
 
       {/* Same dialog as the tenant page, for the same reason. */}
@@ -562,14 +563,14 @@ function AssignPanel({
 // ─── Occupied panel ───────────────────────────────────────────────────────────
 
 function OccupiedPanel({
-  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onEndStay, onRecordNotice,
+  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onMoveOut, onRecordNotice,
 }: {
   token: string;
   bed: GridBed;
   showPaymentForm: boolean;
   onShowPayment: () => void;
   onPaymentAdded: () => void;
-  onEndStay: () => void;
+  onMoveOut: () => void;
   onRecordNotice: () => void;
 }) {
   const confirm = useConfirm();
@@ -696,8 +697,8 @@ function OccupiedPanel({
                       title="They are planning to leave — this does not free the bed">
                 {bed.notice_date || bed.expected_end_date ? "Update notice" : "Record notice"}
               </Button>
-              <Button variant="secondary" size="sm" onClick={onEndStay} title="Record a move-out date">
-                End stay
+              <Button variant="secondary" size="sm" onClick={onMoveOut}>
+                Move out
               </Button>
             </>
           )}

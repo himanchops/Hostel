@@ -478,3 +478,62 @@ func TestValidateAdjustments_Limits(t *testing.T) {
 		t.Error("an over-long label should be refused")
 	}
 }
+
+// The house rule: notice is due by the start of the rent month they leave
+// in, when they pay for it. Rent on the 15th, leaving 10 Nov: the last month
+// began 15 Oct, so notice on 15 Oct counts and 16 Oct does not.
+func TestNoticeOnTime(t *testing.T) {
+	start := date(2026, time.June, 15)
+	leaving := date(2026, time.November, 10)
+	if got := noticeBy(start, "monthly", leaving); !got.Equal(date(2026, time.October, 15)) {
+		t.Fatalf("notice due by %s, want 15 Oct", got.Format("2 Jan"))
+	}
+	day := func(m time.Month, d int) *time.Time { t := date(2026, m, d); return &t }
+	cases := []struct {
+		name   string
+		notice *time.Time
+		want   bool
+	}{
+		{"a month ahead", day(time.October, 1), true},
+		{"on the rent day", day(time.October, 15), true},
+		{"the day after", day(time.October, 16), false},
+		{"in the last week", day(time.November, 3), false},
+		{"never", nil, false},
+	}
+	for _, c := range cases {
+		if got := noticeOnTime(start, "monthly", c.notice, leaving); got != c.want {
+			t.Errorf("%s: on time = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// A 31st move-in: November has no 31st, so its rent month began 30 Nov,
+	// and leaving 5 Dec needs notice by then.
+	if got := noticeBy(date(2026, time.August, 31), "monthly", date(2026, time.December, 5)); !got.Equal(date(2026, time.November, 30)) {
+		t.Errorf("31st move-in: notice due by %s, want 30 Nov", got.Format("2 Jan"))
+	}
+}
+
+func TestRefundMethod(t *testing.T) {
+	s := func(v string) *string { return &v }
+	cases := []struct {
+		name    string
+		sent    *string
+		refund  int64
+		want    *string
+		wantErr bool
+	}{
+		{"cash handed back", s("cash"), 650000, s("cash"), false},
+		{"UPI handed back", s("online"), 650000, s("online"), false},
+		{"not said", nil, 650000, nil, false},
+		// Nothing went back, so there is no "how" to keep.
+		{"deposit kept", s("cash"), 0, nil, false},
+		{"tenant owes", s("online"), -250000, nil, false},
+		{"not a method", s("cheque"), 650000, nil, true},
+	}
+	for _, c := range cases {
+		got, err := refundMethod(c.sent, c.refund)
+		if (err != nil) != c.wantErr || deref(got) != deref(c.want) {
+			t.Errorf("%s: got %s, %v; want %s, error %v", c.name, deref(got), err, deref(c.want), c.wantErr)
+		}
+	}
+}
