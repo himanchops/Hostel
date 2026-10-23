@@ -399,7 +399,7 @@ billed this month, ended or not; overdue must keep counting open stays only.
 Found while building the money table; left alone because overdue shares the
 query.
 
-### A tenant row opens only from its "View →" link — S
+### ~~A tenant row opens only from its "View →" link~~ ✅ fixed on `quick-ui-fixes` (Oct 2026)
 The whole row on `/tenants` should open the tenant.
 
 ### ~~Recording a payment is three screens deep~~ ✅ done on `payments-screen` (Oct 2026)
@@ -510,7 +510,12 @@ page", and approving a registration whose phone matches an existing tenant
 offers to link them. Raised by the owner looking at a settled demo tenant
 (Oct 2026).
 
-### The tenant page's money tiles overflow on a narrow screen — S
+### ~~The tenant page's money tiles overflow on a narrow screen~~ ✅ fixed on `quick-ui-fixes` (Oct 2026)
+Two across on a phone, Balance on its own row. `narrow-screens.test.ts`
+measures the tenant page, dashboard, Payments, Insights and Tenants with
+ten-lakh figures at 375, 768 and 1024; only the tenant tiles spilled. Original
+report:
+
 The three tiles (Rent paid, Stay duration, Balance) are three columns at every
 width. With a six-figure amount ("₹1,19,000") in a phone-width window, the
 figure runs out of its tile into the next. The fix is a smaller figure below
