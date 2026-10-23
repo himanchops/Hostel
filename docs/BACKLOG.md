@@ -476,6 +476,19 @@ nothing at a glance. Options to put to the owner:
 Lean: "Empty now", possibly with occupancy % covering the history. Raised by
 the owner looking at 1m on production (Oct 2026).
 
+### Adding a tenant can't record what they paid up front — S
+Reported 23 Oct 2026. New tenants usually pay the first rent, and often the
+deposit, on the day they arrive. The new-tenant form (and approving a
+registration) takes the rent and deposit *terms* only. The money has to be
+recorded afterwards, from the tenant page or Payments, as a separate step
+that is easy to forget. Without it, a guest who paid for their nights up
+front shows as owing from the first morning.
+
+Proposed: optional "Paid today" fields on the form: rent (prefilled with one
+cycle), deposit (prefilled with the agreed deposit), Cash / UPI. They record
+real payments dated the start day, through the same path as any other
+payment. Talk it through before building.
+
 ### A tenant who comes back has no obvious way back in — S/M
 A returning tenant can be given a new stay today, but only from Sites → grid →
 a vacant bed → search their name. Their own page, where the owner looks, has no
