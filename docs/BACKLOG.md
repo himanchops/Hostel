@@ -176,6 +176,14 @@ What that session has to cover:
 4. Still open from the audit: edit a payment, undo a settlement, a confirm step
    on settling, un-approve a proof, and a tenant withdrawing a notice. The
    session should decide which of these the redesign absorbs.
+5. **An ended stay's ledger is lopsided** (owner, 23 Oct 2026). Once someone
+   has moved out, the tenant page lets you delete a payment but not add one:
+   "+ Add payment" shows only on an active stay, while every row keeps its
+   delete. Adding is the useful one, e.g. a payment remembered after they
+   left. Deleting is the risky one: after a settlement it changes the balance
+   behind figures the settlement already stored. Owing leavers can be paid
+   from Payments → "Moved out — still owes", but nothing else can. Decide both
+   directions together when payments become editable.
 
 **Partly fixed (Sep 2026, B3):** `/account` lets an owner change their password
 and sign out everywhere, and both now actually revoke — owner tokens carry a
