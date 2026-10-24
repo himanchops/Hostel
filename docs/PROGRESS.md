@@ -3132,6 +3132,13 @@ No migration. Tests:
 
 Full suite: 183 e2e and 70 unit tests, plus `go test ./...`.
 
+**Production, 24 Oct 2026: live.** PR #50 was merged as `7c96254`. Vercel
+and Render both reported their deploys successful at 08:46 UTC. A tenant
+sign-in with "abc" now gets "Enter your 10-digit mobile number.", and the
+live sign-in page's bundle has the same message. `/my/login`, `/my`,
+`/pending` and `/register/4` serve, and `/public/owners/4` names Chopra Boys
+Hostel. No migration.
+
 ---
 
 ## Architecture Notes
