@@ -2980,6 +2980,11 @@ The labels are Add tenant's own. What changed:
   for trust.
 - **The thank-you screen** no longer promises a bed, because a booking has none
   yet.
+- **The heading is a welcome:** "Welcome to Chopra Boys Hostel" and "Fill in
+  your details to get started", in place of "Register with …". The
+  "Hostel Manager" line above it is gone, since a tenant has never heard of the
+  app. An owner with no site, or several, gets plain "Welcome": the public
+  endpoint returns an empty name instead of falling back to the owner's own.
 
 **Approving a registration** (`/pending`) is one screen, laid out like Add
 tenant:
@@ -3020,7 +3025,7 @@ The arrival choice (`Arrival`, `arrivalOptions`, `ARRIVAL_HINT`) moved into
   - the same-number warning, phone typed differently
   - Just approve, which makes no stay, and a second approve, which gets a 404
 - **Updated:**
-  - `public/registration.test.ts`: the new labels, plus two new tests, one for
+  - `public/registration.test.ts`: the new labels and heading, plus two new tests, one for
     the required emergency contact and no email, and one for no "(optional)"
   - `pending-terms` and `paid-up-front`: the new drawer
   - `reject-proof`, `touch-targets`, `portal` and `tenant-profile-enrichment`:

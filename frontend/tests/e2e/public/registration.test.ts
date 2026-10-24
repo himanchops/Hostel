@@ -35,7 +35,8 @@ test.describe("Public registration", () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
 
-    expect(body.name).toBe(owner.name);
+    // No site yet, so no property to name — and never the owner's own name.
+    expect(body.name).toBe("");
     // Owner ids are small integers and therefore enumerable. This endpoint is
     // a directory of hostel names; it must never become a directory of contact
     // details. Asserting the exact key set fails the moment a field is added.
@@ -47,7 +48,7 @@ test.describe("Public registration", () => {
 
   // The header is a trust signal for a stranger at the door, so it names the
   // property, not the account holder. With several sites there is no single
-  // property the link belongs to, so it falls back to the owner's name.
+  // property the link belongs to, so it names nobody.
   test("the registration header names the hostel, not its owner", async ({ page, request }) => {
     const { token, owner } = await createOwner(request, `pub-site-${RUN_ID}`);
     const auth = { Authorization: `Bearer ${token}` };
@@ -55,15 +56,20 @@ test.describe("Public registration", () => {
     await request.post(`${BASE}/api/sites`, { headers: auth, data: { name: hostel } });
 
     await page.goto(`/register/${owner.id}`);
-    await expect(page.getByRole("heading", { name: `Register with ${hostel}` })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Welcome to ${hostel}` })).toBeVisible();
+    await expect(page.getByText("Hostel Manager")).toHaveCount(0);
 
     await request.post(`${BASE}/api/sites`, { headers: auth, data: { name: `Second site ${RUN_ID}` } });
     const body = await (await request.get(`${BASE}/public/owners/${owner.id}`)).json();
-    expect(body).toEqual({ name: owner.name });
+    expect(body).toEqual({ name: "" });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Welcome", exact: true })).toBeVisible();
   });
 
   test("a stranger registers end-to-end at 375px", async ({ page, request }) => {
     const { token, owner } = await createOwner(request, `pub-reg-${RUN_ID}`);
+    const hostel = `Lakeview PG ${RUN_ID}`;
+    await request.post(`${BASE}/api/sites`, { headers: { Authorization: `Bearer ${token}` }, data: { name: hostel } });
     const applicant = `Priya Nair ${RUN_ID}`;
     const phone = `9${RUN_ID.slice(-9)}`;
 
@@ -71,7 +77,7 @@ test.describe("Public registration", () => {
 
     // The trust signal: the page names the property you are registering with.
     // Without it the form is indistinguishable from a phishing page.
-    await expect(page.getByRole("heading", { name: `Register with ${owner.name}` })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Welcome to ${hostel}` })).toBeVisible();
 
     await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(phone);
@@ -92,7 +98,7 @@ test.describe("Public registration", () => {
 
     // The success screen: what happened, and what happens next.
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
-    await expect(page.getByText(`Your details have gone to ${owner.name} for review.`)).toBeVisible();
+    await expect(page.getByText(`Your details have gone to ${hostel} for review.`)).toBeVisible();
     await expect(page.getByText("The owner checks your details.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Go to the tenant portal →" })).toHaveAttribute(
       "href",
@@ -121,7 +127,7 @@ test.describe("Public registration", () => {
     await page.route("**/public/owners/*", (route) => route.abort());
     await page.goto(`/register/${owner.id}`);
 
-    await expect(page.getByRole("heading", { name: "Tenant registration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome", exact: true })).toBeVisible();
 
     await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`8${RUN_ID.slice(-9)}`);

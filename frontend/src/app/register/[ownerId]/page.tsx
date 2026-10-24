@@ -31,23 +31,24 @@ function PublicFrame({
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-stone-50 to-stone-50">
       <header className="px-4 pb-10 pt-12 text-center sm:pt-16">
-        <p className="font-display text-sm font-semibold uppercase tracking-[0.2em] text-indigo-600">
-          Hostel Manager
-        </p>
-        {/* The property name is the trust signal. Until it loads, the heading
-            says something true rather than flashing a placeholder name. */}
-        <h1 className="mt-3 text-balance font-display text-3xl font-bold text-stone-900 sm:text-4xl">
+        {/* The hostel speaking, as on a sticker at its own reception. The
+            property name is the trust signal; the app's own name, once a
+            line above it, meant nothing to someone who has never heard of
+            it (Oct 2026). Until the name loads, or when there is no single
+            property to name, it says "Welcome" alone rather than flashing a
+            placeholder. */}
+        <h1 className="text-balance font-display text-3xl font-bold text-stone-900 sm:text-4xl">
           {ownerName ? (
             <>
-              Register with{" "}
+              Welcome to{" "}
               <span className="text-indigo-600">{ownerName}</span>
             </>
           ) : (
-            "Tenant registration"
+            "Welcome"
           )}
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">
-          Fill in your details for the owner to review.
+          Fill in your details to get started.
         </p>
       </header>
 
@@ -134,7 +135,8 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
     let cancelled = false;
     registrationApi
       .owner(ownerIdNum)
-      .then((o) => { if (!cancelled) setOwnerName(o.name); })
+      // An empty name means no single property to name.
+      .then((o) => { if (!cancelled) setOwnerName(o.name || null); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [ownerIdNum]);

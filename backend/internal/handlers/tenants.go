@@ -196,17 +196,19 @@ func (h *TenantHandler) PublicOwner(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid owner id"))
 	}
 
-	// The property's name, not the account holder's: "Register with Chopra
+	// The property's name, never the account holder's: "Welcome to Chopra
 	// Boys Hostel" is what a stranger at the door expects to read, and the
 	// owner's personal name on a public, enumerable page is both less
-	// reassuring and more than it needs to say. With several sites there is
-	// no single property this link belongs to, so it falls back to the
-	// owner's name until links are per site.
+	// reassuring and more than it needs to say. With no site, or several,
+	// there is no single property this link belongs to, so the name is empty
+	// and the page says "Welcome" alone until links are per site. It once fell
+	// back to the owner's own name, which read as "Welcome to Rahul Shetty"
+	// (Oct 2026).
 	var name string
 	if err := h.db.Get(&name,
 		`SELECT CASE WHEN (SELECT COUNT(*) FROM hostel_sites WHERE owner_id = o.id) = 1
 		             THEN (SELECT name FROM hostel_sites WHERE owner_id = o.id)
-		             ELSE o.name END
+		             ELSE '' END
 		 FROM owners o WHERE o.id = $1`, ownerID); err != nil {
 		// Only a genuinely absent row is a bad link. Mapping every error here
 		// to 404 told a tenant standing in a corridor that the sticker they
