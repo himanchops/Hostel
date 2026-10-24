@@ -252,7 +252,6 @@ function ReviewDrawer({
           <div>
             <p className="text-lg font-bold text-stone-900">{tenant.name}</p>
             <p className="text-sm tabular-nums text-stone-500">{tenant.phone}</p>
-            {tenant.email && <p className="text-sm text-stone-400">{tenant.email}</p>}
           </div>
         </div>
 
@@ -518,7 +517,7 @@ function PendingQueue() {
                       <Avatar name={t.name} photoUrl={t.photo_url} size="md" />
                       <div className="min-w-0">
                         <p className="font-medium text-stone-900">{t.name}</p>
-                        <p className="text-sm text-stone-500">{t.phone}{t.email ? ` · ${t.email}` : ""}</p>
+                        <p className="text-sm text-stone-500">{t.phone}</p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                           {t.workplace && <span className="text-xs text-stone-400">📍 {t.workplace}</span>}
                           {t.aadhaar_number && <span className="text-xs text-stone-400">🪪 {maskAadhaar(t.aadhaar_number)}</span>}

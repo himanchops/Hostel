@@ -23,6 +23,7 @@ export { EmptyState } from "./EmptyState";
 export { PageHeader } from "./PageHeader";
 export type { Crumb } from "./PageHeader";
 export { Skeleton, SkeletonText, SkeletonCard } from "./Skeleton";
+export { PageLoader } from "./PageLoader";
 export * from "./icons";
 export { ToastProvider, useToast } from "./Toast";
 export { Meter } from "./Meter";

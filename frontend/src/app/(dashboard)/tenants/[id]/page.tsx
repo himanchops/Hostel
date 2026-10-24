@@ -23,8 +23,8 @@ import {
   Input,
   Modal,
   PageHeader,
+  PageLoader,
   Select,
-  Skeleton,
   Textarea,
   TOUCH_LINK,
   useConfirm,
@@ -181,7 +181,6 @@ function EditProfileForm({
 }) {
   const [name, setName] = useState(tenant.name);
   const [phone, setPhone] = useState(tenant.phone);
-  const [email, setEmail] = useState(tenant.email ?? "");
   const [address, setAddress] = useState(tenant.address ?? "");
   const [workplace, setWorkplace] = useState(tenant.workplace ?? "");
   const [emergencyName, setEmergencyName] = useState(tenant.emergency_contact_name ?? "");
@@ -213,7 +212,6 @@ function EditProfileForm({
       const data: TenantUpdateData = {
         name,
         phone: phones.phone,
-        email: email || undefined,
         address: address || undefined,
         workplace: workplace || undefined,
         emergency_contact_name: emergencyName || undefined,
@@ -246,10 +244,6 @@ function EditProfileForm({
           <Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </Field>
       </div>
-
-      <Field label="Email">
-        <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      </Field>
 
       <Field label="Home address">
         <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="resize-none" />
@@ -480,13 +474,7 @@ export default function TenantDetailPage() {
   }
 
   if (loading) {
-    return (
-      <div className="space-y-4 p-4 sm:p-6 lg:p-8">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-20 w-full" />
-      </div>
-    );
+    return <PageLoader className="min-h-[60vh]" />;
   }
 
   const idProofFront = tenant?.id_proof_front_url ?? tenant?.id_proof_url;
@@ -506,7 +494,6 @@ export default function TenantDetailPage() {
             <span>
               {tenant?.name}
               <span className="block text-sm font-normal tabular-nums text-stone-500">{tenant?.phone}</span>
-              {tenant?.email && <span className="block text-sm font-normal text-stone-500">{tenant.email}</span>}
             </span>
           </span>
         }

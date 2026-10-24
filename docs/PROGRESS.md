@@ -3141,6 +3141,81 @@ Hostel. No migration.
 
 ---
 
+## A site opens on its grid; no email; a loader for slow loads (Oct 2026)
+
+Three things the owner noticed running the hostel on 24 Oct.
+
+**A site opens on its grid.** Assigning beds is the everyday job and laying
+out rooms is occasional, so every way into a site now lands on
+`/sites/:id/grid`:
+- the Sites list's cards ("Open →")
+- the Sites tab, when the owner has exactly one site (`onlySiteId` in the
+  dashboard layout)
+- the dashboard's site cards, which already did
+
+Room setup keeps its URL, `/sites/:id`, and is reached from an "Edit rooms"
+button on the grid. Its old "← Manage rooms" read as a back button. There are
+two ways back to the list, where a second site gets added: "Sites" in the
+grid's breadcrumb, and the Sites tab once there are two. A site with no rooms
+has nothing for the grid to show, so the grid sends it on to room setup.
+Creating a site goes straight there too. Room setup hides "Back to the grid"
+until there is a room, so the two pages can't bounce.
+
+**The grid says who lives there:** "22 tenants · 23 beds free" under the
+site's name. One tenant to a bed, so occupied beds are the headcount. A
+booking with no bed isn't counted, and isn't on the grid either.
+
+**The occupancy figures say which question they answer.** The dashboard's
+49% and Insights' 43% looked like a contradiction. They are two questions:
+beds full today, and the average night so far this month, which runs lower
+while rooms fill up. The dashboard now says "49% full today", and Insights
+says "average night so far, not today".
+
+**Email is gone from every owner screen:**
+- Add tenant
+- Edit tenant
+- the tenant page heading
+- the Tenants list (its column and its search)
+- the pending drawer
+- the grid's quick-add form
+
+Registration dropped it in #49. The column stays, and so does whatever is in
+it (nothing, on production).
+
+**`PageLoader`** (`components/ui/PageLoader.tsx`) replaces the full-page grey
+bars and spinners: a 4×3 block of bed tiles in the grid's colours, popping in
+and out.
+- It is held at opacity 0 for 800ms, so a warm page, which loads well under a
+  second, never shows it. The owner asked for exactly that: no loader on every
+  transition.
+- After 5 seconds it adds "Waking the server up… After a quiet spell this can
+  take up to 30 seconds."
+- It is plain CSS keyframes (`appear`, `tile-pop` in `globals.css`), so the
+  app adds no library. Under reduced motion the tiles stand still.
+- It's on the dashboard, Payments, Insights, Tenants, Sites, the grid, room
+  setup, the tenant page, the tenant portal and the sign-in check.
+- Pending keeps its per-section bars, because two loaders on one screen would
+  be odd.
+- A refetch after a change never shows it: only a page's first load does.
+
+**The lag the owner saw opening a site wasn't reproduced.** Timed on
+production on 24 Oct, the grid took 0.24–0.47s warm, 0.24s after 6 minutes
+idle, and 0.45s after 16 minutes idle (the first request then took 1.6s).
+There was no 30-second cold start, perhaps because the hostel's own traffic
+kept the instance up. If it happens again, note the time: Echo's logger
+records each request's latency in Render's logs. The owner chose to stay on
+Render's free plan. Public registration already wakes the server when it
+fetches the hostel's name on open, so a tenant filling in the form is unlikely
+to hit a cold submit.
+
+No migration, frontend only. Tests: `owner/site-grid-first.test.ts` (6
+tests), covering the Sites tab with one site and with two, a new site
+opening on room setup, the headcount, email absent from three screens, and
+the loader on a 7-second response but not on a warm one. Full suite: 189
+e2e and 70 unit tests.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

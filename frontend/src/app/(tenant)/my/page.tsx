@@ -19,6 +19,7 @@ import { reportError } from "@/lib/reportError";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import {
   Badge, Button, Card, EmptyState, Field, FormError, Input, SegmentedControl, useConfirm, useToast, FileInput,
+  PageLoader,
 } from "@/components/ui";
 
 export default function TenantPortalPage() {
@@ -59,12 +60,7 @@ export default function TenantPortalPage() {
   }, []);
 
   if (isLoading || loading) {
-    return (
-      <div className="flex items-center gap-2 pt-8 text-sm text-stone-400">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-        Loading…
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (failed) {

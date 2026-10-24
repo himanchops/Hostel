@@ -13,7 +13,7 @@ import {
   FormError,
   Input,
   PageHeader,
-  Skeleton,
+  PageLoader,
   useConfirm,
   useToast,
   HOVER_REVEAL,
@@ -204,31 +204,30 @@ export default function SiteDetailPage() {
   }
 
   if (loading) {
-    return (
-      <div className="space-y-3 p-4 sm:p-6 lg:p-8">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-      </div>
-    );
+    return <PageLoader className="min-h-[60vh]" />;
   }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
-        breadcrumb={[{ label: "Sites", href: "/sites" }, { label: site?.name ?? "" }]}
+        breadcrumb={[
+          { label: "Sites", href: "/sites" },
+          ...(rooms.length > 0 ? [{ label: site?.name ?? "", href: `/sites/${siteId}/grid` }] : []),
+          { label: rooms.length > 0 ? "Edit rooms" : site?.name ?? "" },
+        ]}
         title={site?.name ?? ""}
         subtitle={site?.address ?? undefined}
         actions={<Button onClick={() => setShowRoomForm(true)}>+ Add room</Button>}
       />
 
-      <Link
+      {/* Hidden until there is a room: the grid sends an empty site back here. */}
+      {rooms.length > 0 && <Link
         href={`/sites/${siteId}/grid`}
         className="mb-6 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 pointer-coarse:min-h-11 text-sm font-medium text-indigo-700 transition duration-150 ease-out hover:bg-indigo-100"
       >
         <GridIcon className="h-4 w-4" />
-        View occupancy grid
-      </Link>
+        Back to the grid
+      </Link>}
 
       {/* Room form */}
       {showRoomForm && (
