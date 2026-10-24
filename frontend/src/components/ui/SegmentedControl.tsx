@@ -9,6 +9,11 @@ import { TOUCH_TARGET } from "./touch";
  * white surface on a stone track, which is the same `ring-stone-200` recipe
  * Card owns, and pages are not allowed to hand-roll that (see CLAUDE.md). If a
  * second screen needs a range picker it should look identical for free.
+ *
+ * The segments share the track evenly. Where the track is a form field's full
+ * width, content-sized segments left a run of empty grey after the last one,
+ * which read as a missing option (Oct 2026). Where the track sits in a row it
+ * is content-sized, so this changes nothing there.
  */
 export function SegmentedControl<T extends string | number>({
   options,
@@ -31,7 +36,7 @@ export function SegmentedControl<T extends string | number>({
             type="button"
             aria-pressed={selected}
             onClick={() => onChange(opt.value)}
-            className={`${TOUCH_TARGET} rounded-md px-2.5 py-1 text-xs font-medium transition duration-150 ease-out ${
+            className={`${TOUCH_TARGET} flex-1 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition duration-150 ease-out ${
               selected
                 ? "bg-white text-stone-900 ring-1 ring-stone-200"
                 : "text-stone-500 hover:text-stone-800"
