@@ -224,7 +224,7 @@ test.describe("Settlement", () => {
     const auth = { Authorization: `Bearer ${token}` };
     const { stay, start } = await seedStayForSettlement(request, token, {
       name: `Settle Ended ${RUN_ID}`,
-      phone: `5${RUN_ID.slice(-9)}`,
+      phone: `65${RUN_ID.slice(-8)}`,
       paid: 2550000,
     });
 
@@ -276,7 +276,7 @@ test.describe("Settlement", () => {
       const { token } = await createOwner(request, `settle-adv-${suffix}-${RUN_ID}`);
       const { stay } = await seedStayForSettlement(request, token, {
         name: `Settle Advance ${suffix} ${RUN_ID}`,
-        phone: `4${suffix}${RUN_ID.slice(-8)}`,
+        phone: `6${suffix}${RUN_ID.slice(-8)}`,
         paid: 5100000,
       });
       return { token, stay };
@@ -338,7 +338,7 @@ test.describe("Settlement", () => {
     const auth = { Authorization: `Bearer ${token}` };
     const { stay } = await seedStayForSettlement(request, token, {
       name: `Settle No Advance ${RUN_ID}`,
-      phone: `3${RUN_ID.slice(-9)}`,
+      phone: `63${RUN_ID.slice(-8)}`,
       paid: 2550000, // one month behind
     });
 
@@ -421,7 +421,7 @@ test.describe("Settlement", () => {
     const name = `Settle Held ${RUN_ID}`;
     const { tenant, stay, start } = await seedStayForSettlement(request, token, {
       name,
-      phone: `2${RUN_ID.slice(-9)}`,
+      phone: `62${RUN_ID.slice(-8)}`,
       paid: 2550000, // one month behind
       depositPaid: 0,
     });

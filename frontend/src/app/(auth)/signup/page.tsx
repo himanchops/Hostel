@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/contexts/auth";
 import { Button, Card, Field, FormError, Input } from "@/components/ui";
+import { PHONE_ERROR, tenDigits } from "@/lib/phone";
 
 export default function SignupPage() {
   const { signup } = useAuth();
@@ -24,9 +25,14 @@ export default function SignupPage() {
       setError("Password must be at least 8 characters");
       return;
     }
+    const ownPhone = phone.trim() ? tenDigits(phone) : undefined;
+    if (ownPhone === null) {
+      setError(PHONE_ERROR);
+      return;
+    }
     setLoading(true);
     try {
-      await signup(name, email, password, phone || undefined);
+      await signup(name, email, password, ownPhone);
       router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");

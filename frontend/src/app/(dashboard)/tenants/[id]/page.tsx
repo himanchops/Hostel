@@ -42,6 +42,7 @@ import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { ChangeRentDialog } from "@/components/ChangeRentDialog";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
+import { checkPhones } from "@/lib/phone";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,8 @@ function EditProfileForm({
     e.preventDefault();
     if (!token) return;
     setError("");
+    const phones = checkPhones(phone, emergencyPhone);
+    if ("error" in phones) { setError(phones.error); return; }
     setLoading(true);
     try {
       let photoUrl: string | undefined;
@@ -209,12 +212,12 @@ function EditProfileForm({
 
       const data: TenantUpdateData = {
         name,
-        phone,
+        phone: phones.phone,
         email: email || undefined,
         address: address || undefined,
         workplace: workplace || undefined,
         emergency_contact_name: emergencyName || undefined,
-        emergency_contact_phone: emergencyPhone || undefined,
+        emergency_contact_phone: phones.emergency,
         aadhaar_number: aadhaar || undefined,
         notes: notes.trim() || undefined,
         ...(photoUrl && { photo_url: photoUrl }),
@@ -593,7 +596,7 @@ export default function TenantDetailPage() {
                 : `${summary.duration_days}d`}
             </p>
           </Card>
-          <Card className={`col-span-2 text-center sm:col-span-1 ${summary.balance <= 0 ? "bg-paid-50" : "bg-overdue-50"}`}>
+          <Card className={`col-span-2 text-center sm:col-span-1 ${summary.balance <= 0 ? "bg-paid-50!" : "bg-overdue-50!"}`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Balance</p>
             <p className={`mt-1 text-xl font-bold tabular-nums ${summary.balance <= 0 ? "text-paid-800" : "text-overdue-800"}`}>
               {summary.balance <= 0

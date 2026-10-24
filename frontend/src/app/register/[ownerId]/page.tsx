@@ -7,6 +7,7 @@ import { registrationApi, uploadApi, ApiError } from "@/lib/api";
 import {
   Button, Card, Field, FileInput, FormError, Input, Textarea,
 } from "@/components/ui";
+import { checkPhones } from "@/lib/phone";
 
 /**
  * The frame around the form.
@@ -160,6 +161,8 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
       setIdFrontError("Add a photo of the front of your ID.");
       return;
     }
+    const phones = checkPhones(phone, emergencyPhone);
+    if ("error" in phones) { setError(phones.error); return; }
     setLoading(true);
     try {
       let photoUrl: string | undefined;
@@ -171,7 +174,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
       await registrationApi.register(ownerIdNum, {
         name,
-        phone,
+        phone: phones.phone,
         password,
         photo_url: photoUrl,
         id_proof_url: idProofFrontUrl,       // legacy fallback
@@ -179,7 +182,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
         id_proof_back_url: idProofBackUrl,
         address: address || undefined,
         emergency_contact_name: emergencyName || undefined,
-        emergency_contact_phone: emergencyPhone || undefined,
+        emergency_contact_phone: phones.emergency,
         workplace: workplace || undefined,
         aadhaar_number: aadhaarNumber || undefined,
       });

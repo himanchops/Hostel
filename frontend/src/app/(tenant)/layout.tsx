@@ -9,20 +9,21 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   const { isAuthenticated, tenant, logout } = useTenantAuth();
   const router = useRouter();
 
-  // The portal is otherwise out of scope until Phase F, but it had the last
-  // window.confirm in the app, and useConfirm needs a provider above it.
+  // useConfirm needs a provider above the page.
   return (
     <ConfirmProvider>
     <ToastProvider>
     <div className="min-h-screen bg-stone-50">
       <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
           <Link href="/my" className={`${TOUCH_LINK} text-base font-bold text-indigo-600`}>
-            My Portal
+            {/* The place they live, once signed in; "My Portal" only before
+                we know which hostel this is. */}
+            {tenant?.hostel_name || "My Portal"}
           </Link>
           {isAuthenticated && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-stone-600">{tenant?.name}</span>
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="hidden truncate text-sm text-stone-600 sm:inline">{tenant?.name}</span>
               <button
                 onClick={() => { logout(); router.replace("/my/login"); }}
                 className={`${TOUCH_TARGET} rounded-lg px-2 text-sm text-stone-500 hover:text-stone-700`}

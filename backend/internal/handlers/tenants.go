@@ -65,6 +65,25 @@ type tenantRequest struct {
 	PhotoURL              *string `json:"photo_url"`
 }
 
+// normalizePhones applies the phone rule (phone.go) to both numbers on the
+// form, storing the ten digits. The emergency number may be left out here:
+// only public registration requires one.
+func (r *tenantRequest) normalizePhones() string {
+	phone, ok := normalizePhone(r.Phone)
+	if !ok {
+		return errPhone
+	}
+	r.Phone = phone
+	if r.EmergencyContactPhone != nil && strings.TrimSpace(*r.EmergencyContactPhone) != "" {
+		emergency, ok := normalizePhone(*r.EmergencyContactPhone)
+		if !ok {
+			return errEmergencyPhone
+		}
+		r.EmergencyContactPhone = &emergency
+	}
+	return ""
+}
+
 // invalidFileRef names the first file field that is not an upload key, or
 // returns "". The owner's forms only ever send keys they just uploaded; an
 // edit that omits a field leaves the stored file alone (COALESCE in Update).
@@ -140,6 +159,9 @@ func (h *TenantHandler) Create(c echo.Context) error {
 	if req.Name == "" || req.Phone == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
 	}
+	if msg := req.normalizePhones(); msg != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse(msg))
+	}
 	if msg := req.invalidFileRef(); msg != "" {
 		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
@@ -190,6 +212,19 @@ type publicRegisterRequest struct {
 // are small integers and therefore enumerable, so this endpoint is a directory
 // of hostel names and must never become a directory of contact details.
 // GET /public/owners/:ownerId
+// hostelName is what an owner's tenants call the place: the site's name when
+// there is exactly one, else empty (see PublicOwner for why never the
+// owner's own name). sql.ErrNoRows means no such owner.
+func hostelName(db *sqlx.DB, ownerID int64) (string, error) {
+	var name string
+	err := db.Get(&name,
+		`SELECT CASE WHEN (SELECT COUNT(*) FROM hostel_sites WHERE owner_id = o.id) = 1
+		             THEN (SELECT name FROM hostel_sites WHERE owner_id = o.id)
+		             ELSE '' END
+		 FROM owners o WHERE o.id = $1`, ownerID)
+	return name, err
+}
+
 func (h *TenantHandler) PublicOwner(c echo.Context) error {
 	ownerID, err := strconv.ParseInt(c.Param("ownerId"), 10, 64)
 	if err != nil {
@@ -204,12 +239,8 @@ func (h *TenantHandler) PublicOwner(c echo.Context) error {
 	// and the page says "Welcome" alone until links are per site. It once fell
 	// back to the owner's own name, which read as "Welcome to Rahul Shetty"
 	// (Oct 2026).
-	var name string
-	if err := h.db.Get(&name,
-		`SELECT CASE WHEN (SELECT COUNT(*) FROM hostel_sites WHERE owner_id = o.id) = 1
-		             THEN (SELECT name FROM hostel_sites WHERE owner_id = o.id)
-		             ELSE '' END
-		 FROM owners o WHERE o.id = $1`, ownerID); err != nil {
+	name, err := hostelName(h.db, ownerID)
+	if err != nil {
 		// Only a genuinely absent row is a bad link. Mapping every error here
 		// to 404 told a tenant standing in a corridor that the sticker they
 		// just scanned was invalid whenever Neon was asleep or unreachable —
@@ -250,6 +281,11 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	if req.Name == "" || req.Phone == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
 	}
+	phone, ok := normalizePhone(req.Phone)
+	if !ok {
+		return c.JSON(http.StatusBadRequest, errorResponse(errPhone))
+	}
+	req.Phone = phone
 	if msg := validatePassword(req.Password, 6); msg != "" {
 		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
@@ -276,6 +312,11 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	if req.EmergencyContactName == "" || req.EmergencyContactPhone == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("Add an emergency contact and their phone."))
 	}
+	emergency, ok := normalizePhone(req.EmergencyContactPhone)
+	if !ok {
+		return c.JSON(http.StatusBadRequest, errorResponse(errEmergencyPhone))
+	}
+	req.EmergencyContactPhone = emergency
 	files := []struct {
 		name string
 		v    string
@@ -416,6 +457,9 @@ func (h *TenantHandler) Update(c echo.Context) error {
 	req.Phone = strings.TrimSpace(req.Phone)
 	if req.Name == "" || req.Phone == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
+	}
+	if msg := req.normalizePhones(); msg != "" {
+		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
 
 	if msg := req.invalidFileRef(); msg != "" {
@@ -675,6 +719,17 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
 
+	summary, err := loadTenantSummary(h.db, tenantID)
+	if err != nil {
+		return serverError(c, err, "failed to compute summary")
+	}
+	return c.JSON(http.StatusOK, summary)
+}
+
+// loadTenantSummary is the tenant page's money figures. The owner's tenant
+// page and the tenant's own portal both read it, so the two can never tell
+// one person different amounts. Callers check the tenant is theirs first.
+func loadTenantSummary(db *sqlx.DB, tenantID int64) (TenantSummary, error) {
 	// One row per stay. Payment totals come from a correlated subquery rather
 	// than a JOIN: joining stays to payments yields one row per payment, and
 	// summing per-stay values (expected rent, duration) across those rows
@@ -683,7 +738,7 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 	// settlements is a plain LEFT JOIN — stay_id is UNIQUE there, so it cannot
 	// fan out the way payments would.
 	var stays []staySummaryRow
-	err = h.db.Select(&stays, `
+	err := db.Select(&stays, `
 		SELECT
 			s.id AS stay_id,
 			s.rent_amount,
@@ -711,20 +766,19 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 		tenantID,
 	)
 	if err != nil {
-		return serverError(c, err, "failed to compute summary")
+		return TenantSummary{}, err
 	}
 	stayIDs := make([]int64, len(stays))
 	for i := range stays {
 		stayIDs[i] = stays[i].StayID
 	}
-	schedules, err := rentSchedules(h.db, stayIDs)
+	schedules, err := rentSchedules(db, stayIDs)
 	if err != nil {
-		return serverError(c, err, "failed to compute summary")
+		return TenantSummary{}, err
 	}
 	for i := range stays {
 		stays[i].Schedule = schedules[stays[i].StayID]
 	}
 
-	summary := computeTenantSummary(stays, dateOnly(time.Now()))
-	return c.JSON(http.StatusOK, summary)
+	return computeTenantSummary(stays, dateOnly(time.Now())), nil
 }

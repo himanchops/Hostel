@@ -234,6 +234,8 @@ export interface Tenant {
    * an owner typed in by hand until the owner sets one.
    */
   has_portal_login: boolean;
+  /** Only on the tenant's own sign-in and /tenant/me: what the portal header calls the place. */
+  hostel_name?: string;
   is_approved: boolean;
   created_at: string;
   updated_at: string;
@@ -399,7 +401,9 @@ export interface TenantStay {
 
 export const tenantPortalApi = {
   stays: (token: string) => request<TenantStay[]>("/tenant/stays", {}, token),
-  submitPayment: (token: string, stayId: number, data: { amount: number; notes?: string; proof_url?: string }) =>
+  /** The same figures the owner sees on this tenant's page. */
+  summary: (token: string) => request<TenantSummary>("/tenant/summary", {}, token),
+  submitPayment: (token: string, stayId: number, data: { amount: number; payment_type: "cash" | "online"; notes?: string; proof_url?: string }) =>
     request<Payment>(`/tenant/stays/${stayId}/payments`, { method: "POST", body: JSON.stringify(data) }, token),
   /** `expectedEndDate` is optional — a tenant may know they are going without
    *  knowing exactly when. Omitted leaves any existing date untouched. */
@@ -409,6 +413,9 @@ export const tenantPortalApi = {
       { method: "PUT", body: JSON.stringify({ expected_end_date: expectedEndDate ?? "" }) },
       token,
     ),
+  /** Takes the notice back, both dates, like the owner's "They're staying". */
+  withdrawNotice: (token: string, stayId: number) =>
+    request<Stay>(`/tenant/stays/${stayId}/notice`, { method: "DELETE" }, token),
 };
 
 // ─── Pending Payments (owner) ─────────────────────────────────────────────────

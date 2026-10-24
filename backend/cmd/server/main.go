@@ -146,8 +146,10 @@ func main() {
 	portal.Use(appMiddleware.TenantAuthMiddleware(authService))
 	portal.GET("/me", tenantAuthHandler.Me)
 	portal.GET("/stays", tenantPortalHandler.GetStays)
+	portal.GET("/summary", tenantPortalHandler.GetSummary)
 	portal.POST("/stays/:stayId/payments", tenantPortalHandler.SubmitPayment)
 	portal.PUT("/stays/:stayId/notice", tenantPortalHandler.SubmitNotice)
+	portal.DELETE("/stays/:stayId/notice", tenantPortalHandler.WithdrawNotice)
 	portal.POST("/upload", uploadHandler.TenantUpload)
 
 	// Protected routes

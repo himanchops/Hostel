@@ -3043,6 +3043,95 @@ Vercel and Render both reported their deploys successful at 07:14 UTC.
 `/register/4`, `/pending` and `/my/login` serve. The backend's `/health`
 answers, and `/public/owners/4` names Chopra Boys Hostel. No migration.
 
+## The tenant portal, and strict phone numbers (Oct 2026)
+
+What a tenant sees after signing in at `/my` had been left alone since the
+portal was first built. It showed their payments and nothing else, so a tenant
+two months behind saw a green "Active" and a green "Confirmed".
+
+**The portal** (`app/(tenant)/my/page.tsx`):
+- **A money card at the top**, red or green:
+  - "You owe ₹14,000", or "You're paid up".
+  - When rent is due: "Rent due since 1 Sep", "Rent ₹7,000 due today" or
+    "Next rent ₹7,000 due 1 Nov".
+  - The deposit: "Deposit ₹14,000 not paid yet", "paid", or both halves.
+  - Anything they sent that the owner hasn't confirmed: "₹7,000 you sent is
+    waiting for the owner to confirm".
+
+  The figures come from `GET /tenant/summary`, which is the owner's tenant
+  summary (`loadTenantSummary`, pulled out of `Summary`). The e2e test checks
+  the two responses are equal.
+- **"Record a payment"** replaces "Submit payment", for cash or UPI. The
+  tenant picks Cash or UPI, with nothing picked for them, and the
+  screenshot field shows only for UPI. It fills in what they owe, and the
+  form lost its "(optional)"s. Before this every tenant payment was saved as
+  UPI whatever they had done, because the handler hard-coded `online`.
+  - The backend refuses a payment with no method.
+  - The owner's pending queue shows the method on each row ("Meera · ₹3,000
+    · Cash"). Its tab is renamed from "Payment Proofs" to "Tenant payments",
+    since a cash payment has no proof.
+  - Every payment row in the portal shows its method beside the date,
+    including the ones the owner records. Those show as Confirmed, as they
+    always did.
+- **Notice to vacate gets a panel of its own.** It was two lines of small
+  print. Now it reads "You're leaving on 14 Nov 2026", with when notice was
+  given and that rent runs until the owner confirms. Two buttons sit under it:
+  - **Change date** (or **Add a date**) moves the leaving date. It keeps the
+    original notice date, which decides whether the deposit comes back
+    (`noticeBy`). It used to reset to the day of the change.
+  - **Withdraw notice** asks first, then clears both dates
+    (`DELETE /tenant/stays/:id/notice`), just like the owner's "They're
+    staying". Notice given again later counts from that day.
+- **Empty and failed are different answers:**
+  - Approved with no stay yet (the owner chose "Just approve") reads "You're
+    approved. Your room will show here once it's set up."
+  - A failed load reads "Couldn't load your details", with Try again. It used
+    to swallow the error and say "No stays found".
+- **A booking reads as one:** "Booking", "You'll get a bed when you arrive",
+  and a "Booked" badge, where it used to say " ·  · Unassigned".
+- **The header names the hostel**, using the registration page's rule: the
+  site's name when the owner has exactly one. It comes back on tenant sign-in
+  and `/tenant/me` as `hostel_name`. Before sign-in it still says "My Portal".
+- **Smaller wording:** "₹7,000 a month" (it read "/monthly"), "Living here",
+  "Moved out", and "Payments".
+
+**Phone numbers are checked strictly**, the same way everywhere (`phone.go`,
+`lib/phone.ts`). A number must be an Indian mobile: ten digits starting 6–9.
+Spaces, dashes, brackets, and a +91, 91 or 0 in front are allowed. The ten
+digits are what gets stored. This applies to:
+- public registration, for the tenant and the emergency contact
+- Add tenant and editing a tenant
+- owner sign-up, where the phone is optional
+- tenant sign-in
+
+All 31 numbers in the notebook import pass. Numbers already saved in another
+shape stay as they are until someone edits that record.
+
+**Tenant sign-in matches on the last ten digits** (`phoneDigitsSQL`), so
+"+91 98450 12345" on file and "9845012345" at the sign-in box are the same
+person. Where several records share a number, as with a returning tenant, each
+is tried newest first and the password decides. It used to pick one at random.
+
+**In passing:** the owner's tenant page balance tile never showed its red or
+green tint, because the card's `bg-white` won. Both tiles now force the tint.
+
+**Not built, on purpose:** the notice rule in the portal, a refund line after
+moving out, a way to contact the owner, and tenants changing their own
+password. **House rules on the registration form** are next
+(`docs/BACKLOG.md`, round two).
+
+No migration. Tests:
+- `tenant/portal-money.test.ts` (13 tests)
+- `tests/unit/phone.test.ts`
+- `phone_test.go`
+- Four existing test files had invented numbers like `5…` or `2…`. They
+  now start 6–9.
+- The Payments test for "Fix phone" needs a number that can't be saved any
+  more, so it gets one by rewriting the board response, the way a record from
+  before the rule would come back.
+
+Full suite: 183 e2e and 70 unit tests, plus `go test ./...`.
+
 ---
 
 ## Architecture Notes

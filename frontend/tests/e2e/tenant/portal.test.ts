@@ -54,7 +54,7 @@ test.describe("Tenant portal", () => {
     // ── The submission itself: this is the call that used to 500 ──
     const submit = await request.post(`${BASE}/tenant/stays/${stayId}/payments`, {
       headers: tAuth,
-      data: { amount: 700000, notes: "Paid by UPI this morning" },
+      data: { amount: 700000, payment_type: "online", notes: "Paid by UPI this morning" },
     });
     expect(submit.status()).toBe(201);
     const payment = await submit.json();
@@ -112,7 +112,7 @@ test.describe("Tenant portal", () => {
 
     const res = await request.post(`${BASE}/tenant/stays/${b.stayId}/payments`, {
       headers: { Authorization: `Bearer ${a.tenantToken}` },
-      data: { amount: 500000 },
+      data: { amount: 500000, payment_type: "online" },
     });
     expect(res.status()).toBe(404);
   });
@@ -131,7 +131,7 @@ test.describe("Tenant portal", () => {
     await page.getByLabel("When are you leaving?").fill(leaving);
     await page.getByRole("button", { name: "Submit notice" }).click();
 
-    await expect(page.getByText(/Leaving on/)).toBeVisible();
+    await expect(page.getByText(/You’re leaving on/)).toBeVisible();
 
     // The owner gets the date, not just the fact — which is what the old
     // confirm's "they will contact you about the move-out date" stood in for.
@@ -161,7 +161,7 @@ test.describe("Tenant portal", () => {
     const { tenantToken, stayId } = await seedPortalTenant(request, "5");
     await request.post(`${BASE}/tenant/stays/${stayId}/payments`, {
       headers: { Authorization: `Bearer ${tenantToken}` },
-      data: { amount: 700000, notes: "October rent" },
+      data: { amount: 700000, payment_type: "cash", notes: "October rent" },
     });
 
     await page.addInitScript((t) => {
