@@ -222,7 +222,7 @@ test.describe("Public registration", () => {
     });
 
     await page.getByLabel("Full name").fill(applicant);
-    await page.getByPlaceholder("10-digit number").fill(`4${RUN_ID.slice(-9)}`);
+    await page.getByPlaceholder("10-digit number").fill(`64${RUN_ID.slice(-8)}`);
     await page.getByLabel("Password").fill("testpassword123");
     await page.getByLabel("Emergency contact").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
@@ -296,7 +296,7 @@ test.describe("Public registration", () => {
     await expect(page.getByLabel("Email")).toHaveCount(0);
 
     const direct = await request.post(`${BASE}/public/register/${owner.id}`, {
-      data: { name: `No SOS ${RUN_ID}`, phone: `3${RUN_ID.slice(-9)}`, password: "testpassword123", id_proof_front_url: "public/e2e00000000000000000000000000000.jpg" },
+      data: { name: `No SOS ${RUN_ID}`, phone: `63${RUN_ID.slice(-8)}`, password: "testpassword123", id_proof_front_url: "public/e2e00000000000000000000000000000.jpg" },
     });
     expect(direct.status()).toBe(400);
     expect((await direct.json()).error).toBe("Add an emergency contact and their phone.");
@@ -310,7 +310,7 @@ test.describe("Public registration", () => {
     const res = await request.post(`${BASE}/public/register/${owner.id}`, {
       data: {
         name: `Foreign ${RUN_ID}`,
-        phone: `5${RUN_ID.slice(-9)}`,
+        phone: `65${RUN_ID.slice(-8)}`,
         password: "testpassword123",
         id_proof_front_url: "https://anywhere.example/pixel.jpg",
         ...TEST_EMERGENCY,

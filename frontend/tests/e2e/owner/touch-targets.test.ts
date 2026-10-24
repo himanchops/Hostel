@@ -145,7 +145,7 @@ for (const device of [
       await page.goto("/my");
       await page.waitForLoadState("networkidle");
       await check("/my");
-      await page.getByRole("button", { name: "Submit payment" }).tap();
+      await page.getByRole("button", { name: "I’ve paid by UPI" }).tap();
       await check("/my, paying");
 
       expect(failures, failures.join("\n")).toEqual([]);

@@ -95,6 +95,9 @@ type Tenant struct {
 	IsApproved     bool      `db:"is_approved" json:"is_approved"`
 	CreatedAt      time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
+	// HostelName is set only for the tenant's own portal (sign-in and /me),
+	// so its header can name the place they live. Never stored.
+	HostelName string `db:"-" json:"hostel_name,omitempty"`
 }
 
 // Stay represents a tenant's occupancy of a bed

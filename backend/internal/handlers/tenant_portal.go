@@ -87,6 +87,18 @@ func (h *TenantPortalHandler) GetStays(c echo.Context) error {
 	return c.JSON(http.StatusOK, stays)
 }
 
+// GetSummary is what this tenant owes and when, from the same figures the
+// owner sees on their page (loadTenantSummary). The portal used to show only
+// the payments, so someone two months behind saw a green "Active" and a list
+// of confirmed payments, and nothing else.
+func (h *TenantPortalHandler) GetSummary(c echo.Context) error {
+	summary, err := loadTenantSummary(h.db, appMiddleware.GetTenantID(c))
+	if err != nil {
+		return serverError(c, err, "failed to load what you owe")
+	}
+	return c.JSON(http.StatusOK, summary)
+}
+
 type tenantSubmitPaymentRequest struct {
 	Amount   int64  `json:"amount"` // in paise
 	Notes    string `json:"notes"`

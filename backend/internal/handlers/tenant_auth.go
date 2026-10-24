@@ -41,24 +41,42 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 	if req.Phone == "" || req.Password == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("phone and password are required"))
 	}
+	phone, ok := normalizePhone(req.Phone)
+	if !ok {
+		return c.JSON(http.StatusBadRequest, errorResponse("Enter your 10-digit mobile number."))
+	}
 
+	// Matched on the last ten digits, not as typed: a tenant saved as
+	// "+91 98450 12345" signing in with "9845012345" is the same person, and
+	// was once turned away as a wrong password. The same number can be on
+	// more than one record — someone who left and came back, or who lives at
+	// two hostels on this app — so each is tried, newest first, and the
+	// password decides which one this is.
+	//
 	// `password_hash <> ''` rather than `IS NOT NULL`: NULL <> '' is NULL, so
 	// this excludes both, and it is the same predicate has_portal_login is
 	// computed from. Two spellings of "can this person sign in?" is one more
 	// than the codebase can keep honest.
-	var tenant models.Tenant
-	err := h.db.QueryRowx(
+	var candidates []models.Tenant
+	if err := h.db.Select(&candidates,
 		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, password_hash,
 		        (password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
 		        is_approved, created_at, updated_at
-		 FROM tenants WHERE phone = $1 AND is_approved = true AND password_hash <> ''`,
-		req.Phone,
-	).StructScan(&tenant)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, errorResponse("invalid phone or password"))
+		 FROM tenants WHERE `+phoneDigitsSQL+` = $1 AND is_approved = true AND password_hash <> ''
+		 ORDER BY created_at DESC`,
+		phone,
+	); err != nil {
+		return serverError(c, err, "failed to sign in")
 	}
-
-	if !h.authService.CheckPassword(req.Password, tenant.PasswordHash) {
+	var tenant models.Tenant
+	found := false
+	for _, t := range candidates {
+		if h.authService.CheckPassword(req.Password, t.PasswordHash) {
+			tenant, found = t, true
+			break
+		}
+	}
+	if !found {
 		return c.JSON(http.StatusUnauthorized, errorResponse("invalid phone or password"))
 	}
 
@@ -68,6 +86,9 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 	}
 	if err := signTenant(c, h.storage, &tenant); err != nil {
 		return serverError(c, err, "failed to prepare tenant files")
+	}
+	if tenant.HostelName, err = hostelName(h.db, tenant.OwnerID); err != nil {
+		return serverError(c, err, "failed to load the hostel's name")
 	}
 
 	return c.JSON(http.StatusOK, tenantAuthResponse{Token: token, Tenant: tenant})
@@ -89,6 +110,9 @@ func (h *TenantAuthHandler) Me(c echo.Context) error {
 	}
 	if err := signTenant(c, h.storage, &tenant); err != nil {
 		return serverError(c, err, "failed to prepare tenant files")
+	}
+	if tenant.HostelName, err = hostelName(h.db, tenant.OwnerID); err != nil {
+		return serverError(c, err, "failed to load the hostel's name")
 	}
 	return c.JSON(http.StatusOK, tenant)
 }

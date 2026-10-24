@@ -186,6 +186,15 @@ Key conventions to carry forward:
   (`StayForm.tsx`). Don't give approve a stay again; that was a second copy of
   `POST /api/stays`. Public registration requires the ID front and an emergency
   contact; owner-created tenants need only name and phone.
+- **Phone numbers are Indian mobiles** (Oct 2026): `normalizePhone`
+  (`handlers/phone.go`) on every handler that takes one, and `tenDigits` /
+  `checkPhones` (`lib/phone.ts`) on every form, so the form says so before
+  anything uploads. Store the ten digits. Anything that looks a tenant up by
+  phone compares `phoneDigitsSQL`, because older rows keep the shape they were
+  typed in.
+- **The tenant portal's money is the owner's money.** `/tenant/summary` is
+  `loadTenantSummary`, the same function as the owner's tenant page. Never
+  give the portal its own arithmetic.
 - **A stay that has ended is billed through `cyclesThroughEnd`** (`helpers.go`):
   every cycle that began before the leaving day, never one that starts on it.
   This applies to the settlement, the tenant summary and Insights alike. An

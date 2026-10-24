@@ -25,6 +25,7 @@ import {
   paidTodayError, paidTodaySuffix, recordPaidToday,
   Arrival, arrivalOptions, ARRIVAL_HINT,
 } from "@/components/StayForm";
+import { checkPhones } from "@/lib/phone";
 
 const ARRIVALS = arrivalOptions("Just add");
 
@@ -73,6 +74,9 @@ export default function NewTenantPage() {
     if (!token) return;
     setError("");
 
+    const phones = checkPhones(phone, emergencyPhone);
+    if ("error" in phones) { setError(phones.error); return; }
+
     // Checked before the tenant is created, not after: a rent typo should not
     // cost the owner a half-made record they then have to finish by hand.
     if (arrival === "now" && !bed) {
@@ -96,12 +100,12 @@ export default function NewTenantPage() {
 
       const data: TenantUpdateData = {
         name,
-        phone,
+        phone: phones.phone,
         email: email || undefined,
         address: address || undefined,
         workplace: workplace || undefined,
         emergency_contact_name: emergencyName || undefined,
-        emergency_contact_phone: emergencyPhone || undefined,
+        emergency_contact_phone: phones.emergency,
         aadhaar_number: aadhaar || undefined,
         notes: notes.trim() || undefined,
         ...(photoUrl && { photo_url: photoUrl }),

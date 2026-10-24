@@ -85,6 +85,15 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 	if msg := validatePassword(req.Password, ownerMinPassword); msg != "" {
 		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
+	// The owner's phone is optional at sign-up, but held to the same rule as
+	// everyone else's when it is given (phone.go).
+	if strings.TrimSpace(req.Phone) != "" {
+		phone, ok := normalizePhone(req.Phone)
+		if !ok {
+			return c.JSON(http.StatusBadRequest, errorResponse(errPhone))
+		}
+		req.Phone = phone
+	}
 
 	// Check duplicate email
 	var count int

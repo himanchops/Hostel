@@ -156,9 +156,19 @@ test.describe("Payments: who owes", () => {
     const name = `Bad Phone ${RUN_ID}`;
     await seedOverdueStay(request, token, {
       name,
-      phone: "12345", // too short for wa.me
+      phone: `69${RUN_ID.slice(-8)}`,
       rent: 500000,
       paid: 0,
+    });
+
+    // A number like this can no longer be saved (phone.go, Oct 2026), but
+    // records from before the rule keep whatever was typed. The board is
+    // given one, as such a record would come back.
+    await page.route("**/api/payments/board", async (route) => {
+      const res = await route.fetch();
+      const json = await res.json();
+      for (const row of json.stays) if (row.tenant_name === name) row.phone = "12345";
+      await route.fulfill({ response: res, json });
     });
 
     await loginAs(page, token);

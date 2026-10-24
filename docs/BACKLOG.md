@@ -280,12 +280,22 @@ accept any characters; a duplicate registration is silently accepted and sorts
 while focus jumps to the bottom. Also: an unapproved tenant who follows the
 success screen's own link is told "invalid phone or password", which is the
 wrong answer to a correct password.
+*Phone numbers are fixed on `tenant-portal` (Oct 2026): every form takes an
+Indian mobile only, with +91, 0, spaces and dashes allowed, and stores the ten
+digits. Aadhaar still accepts any characters.*
 
-### The tenant portal is a stub wearing the product's logo — M
+### The tenant portal is a stub wearing the product's logo — M, mostly done
 No balance (the number is already computed and correct on the owner's screen for
 the same tenant), no deposit, no headings at all, no way to contact the owner,
 no payment date or method field, and its two forms are visibly from different
 eras. `/my/page.tsx` was untouched by Phase 16.
+*Done on `tenant-portal` (Oct 2026): what they owe and when, and the deposit,
+from the owner's own summary (`GET /tenant/summary`); the hostel's name in the
+header; "You're approved" and "Couldn't load" instead of "No stays found";
+bookings read as bookings; the payment button is "I've paid by UPI" and fills
+in the amount. Left, on purpose: a way to reach the owner, the notice rule
+("give notice by … to get your deposit back"), a refund line after moving out,
+and tenants changing their own password. He chose to wait on all four.*
 
 ### ~~Found running the live account (Oct 2026)~~ ✅ fixed on `rent-from-a-date`
 - ~~The registration page said "Register with Lata Chopra"~~: it names the
@@ -372,6 +382,23 @@ registrations that were rejected.
 
 Raised by the owner in the first days of real use, after the notebook import.
 He asked for these to be taken **one at a time**, not batched.
+
+### House rules on the registration form — S, next up
+Raised 24 Oct 2026, and he called it crucial. Someone registering from the QR
+link should see the hostel's basic rules before they submit, for example:
+- rent is not refundable
+- the deposit comes back only with a month's notice
+- no smoking, no drinking
+
+and other basic rules and regulations. Design questions before building:
+- Where the rules are written. The owner should be able to edit them, so
+  probably a setting, not text in the code.
+- Whether the tenant ticks "I agree", and whether that is recorded.
+- Whether the same rules show in the portal too.
+
+The deposit rule must match what the move-out sheet does
+(`moveOutSettlement`, `noticeBy`): notice by the start of the last rent
+month. Today the app says nothing to the tenant about it.
 
 ### ~~Nothing shows the money that actually came in~~ ✅ fixed on `insights-money` (Oct 2026)
 Insights is now a table with a Rent / All money switch, and tapping a month
@@ -520,8 +547,10 @@ a vacant bed → search their name. Their own page, where the owner looks, has n
 "Start a new stay" once the last one ended; it should, reusing `StayForm`'s
 bed picker and terms. Worse, nothing stops a *second* record for the same
 person: neither the new-tenant form nor public registration checks the phone,
-so the history splits in two. Tenant login then picks between the two records
-by phone (`tenant_auth.go`, `QueryRow`), so it may sign them into the wrong one.
+so the history splits in two. *Tenant login now tries every record with that
+number, newest first, and the password decides (Oct 2026), so it no longer
+picks one at random. Two records with the same password still sign in to the
+newer.*
 Wants a phone check: the owner form offers "this is Anjali Menon, open her
 page", and approving a registration whose phone matches an existing tenant
 offers to link them. *Half done (Oct 2026): approving a registration now warns

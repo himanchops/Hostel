@@ -95,7 +95,7 @@ test.describe("Tenant profile enrichment", () => {
 
     // Register + approve without bed
     const regRes = await request.post(`${BASE}/public/register/${ownerId}`, {
-      data: { name: `Assign Tenant ${RUN_ID}`, phone: `5${RUN_ID.slice(-9)}`, password: "tenantpass", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+      data: { name: `Assign Tenant ${RUN_ID}`, phone: `65${RUN_ID.slice(-8)}`, password: "tenantpass", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
     });
     const { id: tenantId } = await regRes.json();
 
@@ -126,7 +126,7 @@ test.describe("Tenant profile enrichment", () => {
 
     const tenantRes = await request.post(`${BASE}/api/tenants`, {
       headers: auth,
-      data: { name: `Duplicate Stay ${RUN_ID}`, phone: `4${RUN_ID.slice(-9)}` },
+      data: { name: `Duplicate Stay ${RUN_ID}`, phone: `64${RUN_ID.slice(-8)}` },
     });
     const { id: tenantId } = await tenantRes.json();
 
@@ -153,7 +153,7 @@ test.describe("Tenant profile enrichment", () => {
 
     const tenantRes = await request.post(`${BASE}/api/tenants`, {
       headers: auth,
-      data: { name: `Summary Tenant ${RUN_ID}`, phone: `3${RUN_ID.slice(-9)}` },
+      data: { name: `Summary Tenant ${RUN_ID}`, phone: `63${RUN_ID.slice(-8)}` },
     });
     const { id: tenantId } = await tenantRes.json();
 
@@ -190,7 +190,7 @@ test.describe("Tenant profile enrichment", () => {
 
     const tenantRes = await request.post(`${BASE}/api/tenants`, {
       headers: auth,
-      data: { name: `Update Profile ${RUN_ID}`, phone: `2${RUN_ID.slice(-9)}` },
+      data: { name: `Update Profile ${RUN_ID}`, phone: `62${RUN_ID.slice(-8)}` },
     });
     const { id: tenantId } = await tenantRes.json();
 
@@ -198,11 +198,11 @@ test.describe("Tenant profile enrichment", () => {
       headers: auth,
       data: {
         name: `Updated Name ${RUN_ID}`,
-        phone: `2${RUN_ID.slice(-9)}`,
+        phone: `62${RUN_ID.slice(-8)}`,
         address: "456 Updated Ave",
         workplace: "Updated Corp",
         emergency_contact_name: "Updated Contact",
-        emergency_contact_phone: "1234567890",
+        emergency_contact_phone: "9123456780",
         aadhaar_number: "999988887777",
       },
     });
@@ -222,7 +222,7 @@ test.describe("Tenant profile enrichment", () => {
     // Create tenant, then update with profile fields (create only accepts name/phone/email)
     const tenantRes = await request.post(`${BASE}/api/tenants`, {
       headers: auth,
-      data: { name: `UI Profile Tenant ${RUN_ID}`, phone: `1${RUN_ID.slice(-9)}` },
+      data: { name: `UI Profile Tenant ${RUN_ID}`, phone: `61${RUN_ID.slice(-8)}` },
     });
     const tenant = await tenantRes.json();
     await request.put(`${BASE}/api/tenants/${tenant.id}`, {

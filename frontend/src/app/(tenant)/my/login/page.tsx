@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTenantAuth } from "@/contexts/tenantAuth";
 import { ApiError } from "@/lib/api";
 import { Button, Card, Field, FormError, Input } from "@/components/ui";
+import { tenDigits } from "@/lib/phone";
 
 export default function TenantLoginPage() {
   const { login, isAuthenticated, isLoading } = useTenantAuth();
@@ -21,9 +22,14 @@ export default function TenantLoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const digits = tenDigits(phone);
+    if (!digits) {
+      setError("Enter your 10-digit mobile number.");
+      return;
+    }
     setLoading(true);
     try {
-      await login(phone, password);
+      await login(digits, password);
       router.replace("/my");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Login failed");
@@ -51,6 +57,8 @@ export default function TenantLoginPage() {
               <Input
                 required
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 placeholder="10-digit number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
