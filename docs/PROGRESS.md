@@ -3214,6 +3214,12 @@ opening on room setup, the headcount, email absent from three screens, and
 the loader on a 7-second response but not on a warm one. Full suite: 189
 e2e and 70 unit tests.
 
+**Production, 24 Oct 2026: live.** PR #51 was merged as `617bc42`. Vercel
+reported the production deploy successful, and the live dashboard's HTML
+carries the loader ("Waking the server up…"). Frontend only, so Render had
+nothing to deploy. A loader for taps between pages (`loading.tsx`) was
+deferred; see `docs/BACKLOG.md`.
+
 ---
 
 ## Architecture Notes

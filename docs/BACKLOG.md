@@ -314,7 +314,9 @@ Found in the live walkthrough on 21 Oct 2026, the day real use began.
 - **Render's free plan sleeps after 15 minutes idle**, so the first request
   after that takes 20–30 seconds (22s measured). On the iPad, the first open of
   the day looks broken. The `starter` plan (~$7/month, `render.yaml` → `plan`)
-  keeps it awake. This is the owner's call.
+  keeps it awake. This is the owner's call. **He chose to stay free (24 Oct
+  2026).** Since #51, a slow load shows `PageLoader`, which says the server is
+  waking up after 5s, so the wait reads as expected rather than broken.
 - **Backups:** the only copy is Neon's own restore history, which on the free
   plan covers hours, not weeks (check the exact window in the Neon dashboard).
   Now that the data is real, a scheduled `pg_dump` from the owner's laptop is
@@ -576,6 +578,20 @@ while there.
 The help text around Delete tenant, the vacating-notice controls and similar
 is good the first time and clutter after that. Move it behind an on-demand
 info control. Circle back once the items above are done.
+
+### No sign of anything between tapping a page and its code arriving — S, later
+Owner, 24 Oct 2026, after #51. `PageLoader` covers a slow API response, and
+it is in the HTML each page sends, so it shows even before the app's code
+has run. The one gap left is a client-side tap from one page to another
+while the next page's code is still downloading: the old page stays on
+screen with no feedback. In production Next.js prefetches links in view, so
+this is usually instant, but on weak mobile data it may be the "tapped the
+site and nothing happened" the owner felt. The fix is a `loading.tsx` in the
+`(dashboard)` segment that renders `PageLoader`, with the same 800ms hold so
+a quick tap still shows nothing. Read `node_modules/next/dist/docs/` on
+`loading.tsx` first (this Next.js differs from older versions). The local dev
+server makes the gap look far worse ("Rendering…" while it compiles each
+page), so judge it on a production build. The owner deferred it.
 
 ---
 
