@@ -342,6 +342,8 @@ test.describe("Public registration", () => {
 
   test("the portal login page says it too", async ({ page }) => {
     await page.goto("/my/login");
-    await expect(page.getByText("Sign in with your phone number — not your email.")).toBeVisible();
+    await expect(page.getByText("Sign in with your phone number.", { exact: true })).toBeVisible();
+    // Registration asks for no email, so nothing here should mention one.
+    await expect(page.getByText(/email/i)).toHaveCount(0);
   });
 });
