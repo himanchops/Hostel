@@ -3038,6 +3038,11 @@ Full suite: 170 e2e and 67 unit tests, plus `go test ./...`. Running the
 registration tests back to back trips the public upload limit (10 per address),
 so a rerun wants a fresh backend.
 
+**Production, 24 Oct 2026: live.** PR #49 was merged as `828f906`, and
+Vercel and Render both reported their deploys successful at 07:14 UTC.
+`/register/4`, `/pending` and `/my/login` serve. The backend's `/health`
+answers, and `/public/owners/4` names Chopra Boys Hostel. No migration.
+
 ---
 
 ## Architecture Notes
