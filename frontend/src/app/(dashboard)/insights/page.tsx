@@ -12,7 +12,7 @@ import { payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import {
   Badge, Banner, Button, Card, ChevronIcon, Collapsible, EmptyState,
-  Meter, PageHeader, SegmentedControl, SkeletonCard, TOUCH_LINK, TOUCH_TARGET,
+  Meter, PageHeader, PageLoader, SegmentedControl, TOUCH_LINK, TOUCH_TARGET,
   type BadgeTone,
 } from "@/components/ui";
 
@@ -196,12 +196,7 @@ export default function InsightsPage() {
         </Banner>
       )}
 
-      {loading && !data && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      )}
+      {loading && !data && <PageLoader />}
 
       {data && (
         <>
@@ -236,7 +231,7 @@ export default function InsightsPage() {
                 <Tile
                   label="Occupancy this month"
                   value={latestOccupancy === undefined ? "—" : `${latestOccupancy.toFixed(0)}%`}
-                  note="of bed-nights so far"
+                  note="average night so far, not today"
                 />
               </>
             ) : (

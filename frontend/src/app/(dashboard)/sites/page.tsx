@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { sitesApi, Site, ApiError } from "@/lib/api";
 import {
@@ -12,7 +13,7 @@ import {
   FormError,
   Input,
   PageHeader,
-  SkeletonCard,
+  PageLoader,
   useConfirm,
   useToast,
   HOVER_REVEAL,
@@ -23,6 +24,7 @@ export default function SitesPage() {
   const { token } = useAuth();
   const confirm = useConfirm();
   const toast = useToast();
+  const router = useRouter();
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,11 +47,9 @@ export default function SitesPage() {
     setFormLoading(true);
     try {
       const site = await sitesApi.create(token, { name: formName, address: formAddress || undefined });
-      setSites((prev) => [site, ...prev]);
       toast.success(`Added ${site.name}`);
-      setFormName("");
-      setFormAddress("");
-      setShowForm(false);
+      // A new site has no rooms, and rooms are the only thing to do next.
+      router.push(`/sites/${site.id}`);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Failed to create site");
     } finally {
@@ -120,11 +120,7 @@ export default function SitesPage() {
 
       {/* Sites list */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
+        <PageLoader />
       ) : sites.length === 0 ? (
         <EmptyState
           icon={<BuildingIcon className="h-8 w-8" />}
@@ -139,12 +135,13 @@ export default function SitesPage() {
               key={site.id}
               className="group relative transition duration-150 ease-out hover:ring-indigo-300"
             >
-              <Link href={`/sites/${site.id}`} className="block">
+              {/* The grid sends a site with no rooms on to room setup. */}
+              <Link href={`/sites/${site.id}/grid`} className="block">
                 <p className="font-semibold text-stone-900">{site.name}</p>
                 {site.address && (
                   <p className="mt-1 text-[13px] text-stone-500">{site.address}</p>
                 )}
-                <p className="mt-3 text-xs text-indigo-600">View rooms →</p>
+                <p className="mt-3 text-xs text-indigo-600">Open →</p>
               </Link>
               {/* Was hidden with display:none until hover — so absent on
                   every touchscreen and unreachable by keyboard. See

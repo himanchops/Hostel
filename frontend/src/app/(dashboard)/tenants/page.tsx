@@ -10,8 +10,8 @@ import {
   EmptyState,
   Input,
   PageHeader,
+  PageLoader,
   SearchIcon,
-  Skeleton,
   UsersIcon,
   buttonClasses,
 } from "@/components/ui";
@@ -30,8 +30,7 @@ export default function TenantsPage() {
   const filtered = tenants.filter(
     (t) =>
       t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.phone.includes(search) ||
-      (t.email || "").toLowerCase().includes(search.toLowerCase())
+      t.phone.includes(search)
   );
 
   return (
@@ -51,7 +50,7 @@ export default function TenantsPage() {
         <div className="mb-4">
           <Input
             type="search"
-            placeholder="Search by name, phone, or email…"
+            placeholder="Search by name or phone…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
@@ -61,13 +60,7 @@ export default function TenantsPage() {
 
       {/* List */}
       {loading ? (
-        <Card padding="none" className="overflow-hidden">
-          <div className="space-y-3 p-4">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        </Card>
+        <PageLoader />
       ) : filtered.length === 0 ? (
         tenants.length === 0 ? (
           <EmptyState
@@ -100,11 +93,10 @@ export default function TenantsPage() {
         <Card padding="none" className="overflow-hidden">
           <div
             aria-hidden
-            className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,2fr)_6rem_1rem] gap-4 border-b border-stone-100 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-stone-400 sm:grid"
+            className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_6rem_1rem] gap-4 border-b border-stone-100 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-stone-400 sm:grid"
           >
             <span>Name</span>
             <span>Phone</span>
-            <span>Email</span>
             <span>Since</span>
             <span />
           </div>
@@ -113,18 +105,16 @@ export default function TenantsPage() {
               <li key={t.id}>
                 <Link
                   href={`/tenants/${t.id}`}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3 text-sm transition duration-150 ease-out hover:bg-stone-50 active:bg-stone-50 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,2fr)_6rem_1rem] sm:px-5"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3 text-sm transition duration-150 ease-out hover:bg-stone-50 active:bg-stone-50 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_6rem_1rem] sm:px-5"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium text-stone-900">{t.name}</span>
-                    {/* Phone: the number and email under the name. */}
+                    {/* Phone: the number under the name. */}
                     <span className="block truncate text-[13px] tabular-nums text-stone-500 sm:hidden">
                       {t.phone}
-                      {t.email ? ` · ${t.email}` : ""}
                     </span>
                   </span>
                   <span className="hidden truncate tabular-nums text-stone-600 sm:block">{t.phone}</span>
-                  <span className="hidden truncate text-stone-400 sm:block">{t.email || "—"}</span>
                   <span className="text-[13px] text-stone-400 sm:text-sm">
                     {new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
                   </span>

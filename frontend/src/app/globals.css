@@ -105,3 +105,21 @@ body {
   from { stroke-dasharray: 24; stroke-dashoffset: 24; }
   to   { stroke-dasharray: 24; stroke-dashoffset: 0; }
 }
+
+/* ── Loading ───────────────────────────────────────────────────────────────
+   PageLoader (components/ui/PageLoader.tsx): beds filling in, in the grid's
+   own colours. `appear` holds it back for the first 800ms so a warm load
+   shows nothing at all, then brings the "waking up" line in at 5s. A fade is
+   not motion, so `appear` runs for everyone; the tiles sit still under
+   "reduce motion". */
+
+@keyframes appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes tile-pop {
+  0%, 100% { opacity: 0.2; transform: scale(0.6); }
+  12%, 70% { opacity: 1;   transform: none; }
+  82%      { opacity: 0.2; transform: scale(0.6); }
+}

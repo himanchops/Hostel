@@ -26,6 +26,7 @@ import {
   FormError,
   Input,
   PageHeader,
+  PageLoader,
   STATUS_STYLES,
   Select,
   Skeleton,
@@ -84,9 +85,13 @@ export default function GridPage() {
       sitesApi.get(token, siteId),
       gridApi.get(token, siteId),
     ])
-      .then(([s, g]) => { setSite(s); setGrid(g); })
-      .catch(() => router.replace("/sites"))
-      .finally(() => setLoading(false));
+      .then(([s, g]) => {
+        // The grid is where a site opens, but a site with no rooms has nothing
+        // to show here. Setting up rooms is the only next step, so go there.
+        if (g.length === 0) { router.replace(`/sites/${siteId}`); return; }
+        setSite(s); setGrid(g); setLoading(false);
+      })
+      .catch(() => router.replace("/sites"));
   }, [token, siteId, router]);
 
   function handleBedClick(bed: GridBed) {
@@ -126,6 +131,11 @@ export default function GridPage() {
     return acc;
   }, {} as Record<BedStatus, number>);
 
+  // One tenant to a bed, so occupied beds are the headcount. A booking with no
+  // bed yet is not living here, and the grid does not show it either.
+  const vacant = statusCounts.vacant ?? 0;
+  const occupied = totalBeds - vacant;
+
   const owing = allBeds.filter(owesMoney);
   const owedTotal = owing.reduce((sum, b) => sum - (b.balance ?? 0), 0);
   const matches = (b: GridBed) =>
@@ -138,34 +148,34 @@ export default function GridPage() {
     .filter(({ beds }) => beds.length > 0 || filter === "all");
 
   if (loading) {
-    return (
-      <div className="space-y-4 p-4 sm:p-6 lg:p-8">
-        <Skeleton className="h-6 w-64" />
-        <Skeleton className="h-8 w-96" />
-        <div className="flex flex-wrap gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-36" />
-          ))}
-        </div>
-      </div>
-    );
+    return <PageLoader className="min-h-[60vh]" />;
   }
 
   return (
     <div className="h-full overflow-auto p-4 sm:p-6 lg:p-8">
+      {/* A site opens here: assigning beds is the everyday job, and laying out
+          rooms is occasional, so it is a button rather than the landing page.
+          "Sites" in the breadcrumb is the way to the list and to adding one. */}
       <PageHeader
         breadcrumb={[
           { label: "Sites", href: "/sites" },
-          { label: site?.name ?? "", href: `/sites/${siteId}` },
-          { label: "Grid" },
+          { label: site?.name ?? "" },
         ]}
-        title={`${site?.name ?? ""} — Occupancy Grid`}
+        title={site?.name ?? ""}
+        subtitle={
+          <span data-testid="site-headcount">
+            <span className="font-medium text-stone-700">{occupied}</span>{" "}
+            {occupied === 1 ? "tenant" : "tenants"} ·{" "}
+            <span className="font-medium text-stone-700">{vacant}</span>{" "}
+            {vacant === 1 ? "bed" : "beds"} free
+          </span>
+        }
         actions={
           <Link
             href={`/sites/${siteId}`}
             className={buttonClasses({ variant: "secondary", size: "sm" })}
           >
-            ← Manage rooms
+            Edit rooms
           </Link>
         }
       />
@@ -433,7 +443,6 @@ function AssignPanel({
   // New tenant fields
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
-  const [newEmail, setNewEmail] = useState("");
 
   // Stay fields
   const [tenantId, setTenantId] = useState<number | null>(null);
@@ -457,7 +466,7 @@ function AssignPanel({
     if (!newName || !newPhone) { setError("Name and phone required"); return; }
     setLoading(true);
     try {
-      const t = await tenantsApi.create(token, { name: newName, phone: newPhone, email: newEmail || undefined });
+      const t = await tenantsApi.create(token, { name: newName, phone: newPhone });
       setTenants((prev) => [...prev, t]);
       setTenantId(t.id);
       setStep("stay");
@@ -530,7 +539,6 @@ function AssignPanel({
               <div className="space-y-2">
                 <Input placeholder="Name *" value={newName} onChange={(e) => setNewName(e.target.value)} />
                 <Input placeholder="Phone *" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
-                <Input placeholder="Email (optional)" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
                 <div className="flex gap-2">
                   <Button className="flex-1" loading={loading} onClick={handleCreateTenant}>
                     {loading ? "…" : "Create"}

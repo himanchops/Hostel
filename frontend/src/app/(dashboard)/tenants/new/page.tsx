@@ -36,7 +36,6 @@ export default function NewTenantPage() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [workplace, setWorkplace] = useState("");
   const [emergencyName, setEmergencyName] = useState("");
@@ -101,7 +100,6 @@ export default function NewTenantPage() {
       const data: TenantUpdateData = {
         name,
         phone: phones.phone,
-        email: email || undefined,
         address: address || undefined,
         workplace: workplace || undefined,
         emergency_contact_name: emergencyName || undefined,
@@ -184,9 +182,6 @@ export default function NewTenantPage() {
 
         <Card title="About them">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Email">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
-            </Field>
             <Field label="Workplace / College">
               <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} placeholder="e.g. BITS Pilani" />
             </Field>

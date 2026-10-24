@@ -21,9 +21,8 @@ import {
   CountBadge,
   EmptyState,
   PageHeader,
+  PageLoader,
   RupeeIcon,
-  Skeleton,
-  SkeletonCard,
   UsersIcon,
   buttonClasses,
   TOUCH_TARGET,
@@ -130,12 +129,7 @@ export default function DashboardPage() {
 
       {/* Stat cards */}
       {loading ? (
-        <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
+        <PageLoader />
       ) : (
         <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
@@ -149,7 +143,9 @@ export default function DashboardPage() {
             value={(occ?.occupied_beds ?? 0).toString()}
             icon={<UsersIcon className="h-4 w-4" />}
             tone="indigo"
-            note={occ && occ.total_beds > 0 ? `${occ.percentage.toFixed(0)}% occupancy` : undefined}
+            // Today's beds. Insights averages the month's nights, so it reads lower
+            // while rooms fill up; each label says which question it answers.
+            note={occ && occ.total_beds > 0 ? `${occ.percentage.toFixed(0)}% full today` : undefined}
           />
           <StatCard
             label="Collected This Month"
@@ -350,25 +346,6 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Panels still loading */}
-      {loading && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <Skeleton className="h-4 w-32" />
-            <div className="mt-4 space-y-3">
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-4/5" />
-            </div>
-          </Card>
-          <Card>
-            <Skeleton className="h-4 w-32" />
-            <div className="mt-4 space-y-3">
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-4/5" />
-            </div>
-          </Card>
-        </div>
-      )}
     </div>
   );
 }

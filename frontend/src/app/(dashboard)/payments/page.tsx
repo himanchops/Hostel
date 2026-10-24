@@ -29,9 +29,9 @@ import {
   FormError,
   Input,
   PageHeader,
+  PageLoader,
   RupeeIcon,
   SegmentedControl,
-  Skeleton,
   Textarea,
   useToast,
   TOUCH_LINK,
@@ -109,11 +109,7 @@ export default function PaymentsPage() {
       {loadError ? (
         <FormError>Could not load payments. Reload the page to try again.</FormError>
       ) : !board ? (
-        <div className="space-y-3">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-        </div>
+        <PageLoader />
       ) : (
         <div className="space-y-6">
           {/* Anyone not on the lists below: paying early, a second month. */}

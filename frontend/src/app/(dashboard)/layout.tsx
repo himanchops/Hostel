@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
-import { ApiError, paymentsBoardApi, tenantsApi } from "@/lib/api";
+import { ApiError, paymentsBoardApi, sitesApi, tenantsApi } from "@/lib/api";
 import {
   BuildingIcon,
   Button,
@@ -23,6 +23,7 @@ import {
   Input,
   FormError,
   useToast,
+  PageLoader,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 
@@ -40,6 +41,8 @@ import type { BadgeTone } from "@/components/ui";
 type NavItem = {
   label: string;
   href: string;
+  /** The routes that light this tab up, when they differ from href. */
+  match?: string;
   icon: (props: { className?: string }) => React.ReactElement;
   count?: number;
   tone?: BadgeTone;
@@ -51,6 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
   const [behindCount, setBehindCount] = useState(0);
+  const [onlySiteId, setOnlySiteId] = useState<number | null>(null);
   // Stores the route the menu was opened on rather than a bare boolean, so a
   // navigation closes it for free. Resetting it from an effect instead would
   // mean a setState during render's commit — the thing react-hooks warns about.
@@ -66,6 +70,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // is merely due today, which the page lists under "Due this week".
     paymentsBoardApi.get(token)
       .then((b) => setBehindCount(b.stays.filter((r) => r.due_state === "overdue").length + b.moved_out.length))
+      .catch(() => {});
+    // An owner with one site goes straight to its grid from the Sites tab. The
+    // list stays one tap away, through "Sites" in the grid's breadcrumb, and
+    // that is where a second site gets added.
+    sitesApi.list(token)
+      .then((s) => setOnlySiteId(s.length === 1 ? s[0].id : null))
       .catch(() => {});
   }, [token, pathname]);
 
@@ -84,7 +94,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (isLoading || !isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+        <PageLoader />
       </div>
     );
   }
@@ -95,7 +105,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // to chase. It was "Collections", a word that did not say what it held.
     { label: "Payments", href: "/payments", icon: RupeeIcon, count: behindCount, tone: "danger" },
     { label: "Insights", href: "/insights", icon: ChartIcon },
-    { label: "Sites", href: "/sites", icon: BuildingIcon },
+    {
+      label: "Sites",
+      href: onlySiteId ? `/sites/${onlySiteId}/grid` : "/sites",
+      match: "/sites",
+      icon: BuildingIcon,
+    },
     { label: "Tenants", href: "/tenants", icon: UsersIcon },
     { label: "Pending", href: "/pending", icon: ClockIcon, count: pendingCount, tone: "warning" },
   ];
@@ -118,12 +133,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav aria-label="Primary" className="flex-1 space-y-0.5 px-3 py-3">
-          {navItems.map(({ label, href, icon: Icon, count, tone }) => (
+          {navItems.map(({ label, href, match, icon: Icon, count, tone }) => (
             <Link
-              key={href}
+              key={label}
               href={href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 pointer-coarse:min-h-11 text-sm font-medium transition duration-150 ease-out ${
-                isActive(href)
+                isActive(match ?? href)
                   ? "bg-indigo-50 text-indigo-700"
                   : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
@@ -211,11 +226,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Bottom tab bar — below 1024px only */}
       <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden">
-        {navItems.map(({ label, href, icon: Icon, count, tone }) => {
-          const active = isActive(href);
+        {navItems.map(({ label, href, match, icon: Icon, count, tone }) => {
+          const active = isActive(match ?? href);
           return (
             <Link
-              key={href}
+              key={label}
               href={href}
               aria-current={active ? "page" : undefined}
               className={`flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-2 text-[11px] font-medium transition duration-150 ease-out ${
