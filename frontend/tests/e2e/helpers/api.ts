@@ -13,6 +13,9 @@ const BASE = "http://localhost:8080";
  */
 export const TEST_ID_KEY = "public/e2e00000000000000000000000000000.jpg";
 
+/** Registration also requires an emergency contact; API-level setup sends this one. */
+export const TEST_EMERGENCY = { emergency_contact_name: "Test Parent", emergency_contact_phone: "9000000001" };
+
 export async function createOwner(
   request: APIRequestContext,
   runId: string
@@ -85,6 +88,28 @@ export async function createSiteRoomBed(
   const { id: bedId } = await bedRes.json();
 
   return { siteId, roomId, bedId };
+}
+
+/**
+ * Approves a registration and gives them a stay, the two calls the pending
+ * queue makes. Approving once made the stay itself from a bed and terms in
+ * its body; it only approves now (Oct 2026), so a test that wants both says so.
+ */
+export async function approveIntoStay(
+  request: APIRequestContext,
+  token: string,
+  tenantId: number,
+  stay: { bed_id?: number; rent_amount: number; deposit_amount: number; rent_cycle?: string; start_date: string },
+): Promise<{ id: number; bed_id: number | null }> {
+  const auth = { Authorization: `Bearer ${token}` };
+  const approved = await request.post(`${BASE}/api/tenants/${tenantId}/approve`, { headers: auth, data: {} });
+  if (!approved.ok()) throw new Error(`approve failed: ${await approved.text()}`);
+  const res = await request.post(`${BASE}/api/stays`, {
+    headers: auth,
+    data: { tenant_id: tenantId, rent_cycle: "monthly", ...stay },
+  });
+  if (!res.ok()) throw new Error(`stay failed: ${await res.text()}`);
+  return res.json();
 }
 
 /**

@@ -2954,6 +2954,87 @@ Vercel and Render both reported their deploys successful at 09:51 UTC.
 
 ---
 
+## Registration, in line with Add tenant (Oct 2026)
+
+The QR registration form isn't in use yet. Before it goes on a sticker, both of
+its halves were brought in line with what the owner side became in #48.
+
+**What the tenant fills in** (`app/register/[ownerId]/page.tsx`) is grouped
+like Add tenant:
+1. **You:** name and phone.
+2. **About you:** workplace and address.
+3. **ID and emergency contact:** Aadhaar, the emergency contact and their
+   phone, ID front and back, and a photo.
+4. **Sign-in:** a password.
+
+The labels are Add tenant's own. What changed:
+- **No "(optional)" anywhere.** Beside most fields it read as permission to
+  skip them. Only what is required is marked, with the asterisk.
+- **The emergency contact is now required.** The owner asked for it, and the
+  backend refuses a registration without it, as it does without the ID front.
+  Owner-created tenants still need only name and phone.
+- **No email field.** The owner dropped it; the API still accepts one.
+- **Fewer hints.** Only the ones that change what someone types are left:
+  "You'll sign in with this" under the phone, what counts as an ID, the
+  password length, and "Only the owner sees this" beside the Aadhaar number,
+  for trust.
+- **The thank-you screen** no longer promises a bed, because a booking has none
+  yet.
+
+**Approving a registration** (`/pending`) is one screen, laid out like Add
+tenant:
+- Their details and ID photos come first, then a Notes box (owner-only), then
+  "Their stay" last.
+- **The same three answers:** Moving in (the default), Booking or Just approve,
+  on the same switch.
+- **The same shared parts:** bed picker, terms, and Paid today or Paid to book.
+  The drawer's own site and bed dropdowns are gone, and the rent fields show
+  from the start.
+- **A number already on your books** gets a warning on the queue and in the
+  drawer: "Same number as Aditya Bose, already on your books". It links to
+  their page. It warns, it doesn't block, because two people can share a
+  phone.
+
+**One save path.** `POST /api/tenants/:id/approve` only approves now, and takes
+an optional note. Only a registration still waiting can be approved. It used to
+make the stay too, from a bed and terms in its body, which was a second copy of
+`POST /api/stays`. The drawer now approves, then makes the stay and records the
+money with the same calls as Add tenant. If the stay fails, it says so, the
+way Add tenant does. Tests and `seed-demo.py` approve and then make the stay
+(`approveIntoStay` in `tests/e2e/helpers/api.ts`).
+
+The arrival choice (`Arrival`, `arrivalOptions`, `ARRIVAL_HINT`) moved into
+`components/StayForm.tsx`, shared by both screens.
+
+**Left for later, by the owner's choice:**
+- **A printable QR code.** The Pending panel still shows only the link.
+- **An arrival date on the form.** It would need a migration.
+- **The tenant saying what they've already paid.** Same reason; most people
+  register at the desk, where the owner sees the money change hands.
+
+### Verification
+
+- **New:** `owner/pending-approval.test.ts` (3 tests) covers:
+  - one screen, with the note saved and the stay made
+  - nothing approved before the stay adds up
+  - the same-number warning, phone typed differently
+  - Just approve, which makes no stay, and a second approve, which gets a 404
+- **Updated:**
+  - `public/registration.test.ts`: the new labels, plus two new tests, one for
+    the required emergency contact and no email, and one for no "(optional)"
+  - `pending-terms` and `paid-up-front`: the new drawer
+  - `reject-proof`, `touch-targets`, `portal` and `tenant-profile-enrichment`:
+    approve, then make the stay
+
+Screenshots were checked on the demo at 375×812, and at 768×1024 and 1024×768
+with touch.
+
+Full suite: 170 e2e and 67 unit tests, plus `go test ./...`. Running the
+registration tests back to back trips the public upload limit (10 per address),
+so a rerun wants a fresh backend.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

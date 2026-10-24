@@ -23,31 +23,10 @@ import {
   PaidTodayFields, PaidToBookFields, PaidToday, PaidSuggestion, emptyPaidToday,
   suggestedFromTerms, NOTHING_SUGGESTED, paidTodayDate,
   paidTodayError, paidTodaySuffix, recordPaidToday,
+  Arrival, arrivalOptions, ARRIVAL_HINT,
 } from "@/components/StayForm";
 
-/**
- * What is happening at the desk, which decides what the rest of the form asks.
- *
- *  - now:     they're moving in. A bed, the terms, and what they paid.
- *  - booking: they're holding a place for a later day. The terms, the day
- *             they arrive, and what they paid to hold it. No bed: the owner
- *             promises a place, not a particular bed, and assigns one when
- *             they arrive (tenant page → Assign bed).
- *  - later:   just the person, for now.
- */
-type Arrival = "now" | "booking" | "later";
-
-const ARRIVALS: readonly { value: Arrival; label: string }[] = [
-  { value: "now", label: "Moving in" },
-  { value: "booking", label: "Booking" },
-  { value: "later", label: "Just add" },
-];
-
-const ARRIVAL_HINT: Record<Arrival, string> = {
-  now: "They're moving in. Pick a bed and record what they paid.",
-  booking: "They're holding a place for a later day. Assign a bed when they arrive.",
-  later: "Only their details for now. Give them a bed later from the grid.",
-};
+const ARRIVALS = arrivalOptions("Just add");
 
 export default function NewTenantPage() {
   const { token } = useAuth();

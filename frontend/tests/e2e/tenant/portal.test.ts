@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed, TEST_ID_KEY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, TEST_ID_KEY, approveIntoStay, TEST_EMERGENCY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -19,25 +19,17 @@ async function seedPortalTenant(
   suffix: string
 ): Promise<{ ownerToken: string; tenantToken: string; stayId: number; tenantId: number }> {
   const { token: ownerToken, owner } = await createOwner(request, `portal-${suffix}-${RUN_ID}`);
-  const auth = { Authorization: `Bearer ${ownerToken}` };
   const { bedId } = await createSiteRoomBed(request, ownerToken, `${suffix}-${RUN_ID}`);
   const phone = `9${suffix}${RUN_ID.slice(-8)}`;
 
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: `Portal Tenant ${suffix} ${RUN_ID}`, phone, password: TENANT_PASSWORD, id_proof_front_url: TEST_ID_KEY },
+    data: { name: `Portal Tenant ${suffix} ${RUN_ID}`, phone, password: TENANT_PASSWORD, id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
   });
   if (!reg.ok()) throw new Error(`register failed: ${await reg.text()}`);
   const tenant = await reg.json();
 
   const start = new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10);
-  const approve = await request.post(`${BASE}/api/tenants/${tenant.id}/approve`, {
-    headers: auth,
-    data: {
-      bed_id: bedId, rent_amount: 700000, deposit_amount: 1400000,
-      rent_cycle: "monthly", start_date: start,
-    },
-  });
-  if (!approve.ok()) throw new Error(`approve failed: ${await approve.text()}`);
+  await approveIntoStay(request, ownerToken, tenant.id, { bed_id: bedId, rent_amount: 700000, deposit_amount: 1400000, start_date: start });
 
   const login = await request.post(`${BASE}/tenant-auth/login`, {
     data: { phone, password: TENANT_PASSWORD },

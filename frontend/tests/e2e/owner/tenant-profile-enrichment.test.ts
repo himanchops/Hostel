@@ -1,12 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY, approveIntoStay, TEST_EMERGENCY } from "../helpers/api";
 
 /**
  * Tenant profile enrichment & registration-time deposit tests.
  *
  * Covers:
  *  - Public self-registration with all new profile fields
- *  - Pending approval: "collect deposit" mode creates a stay with null bed_id
+ *  - Pending approval: a booking is a stay with null bed_id
  *  - Pending approval: "assign bed" mode creates a stay with a bed
  *  - Tenant detail page shows profile fields
  *  - Assign bed to a pending (unassigned) stay
@@ -37,7 +37,7 @@ test.describe("Tenant profile enrichment", () => {
         name: `Profile Tenant ${RUN_ID}`,
         phone: `7${RUN_ID.slice(-9)}`,
         password: "tenant123",
-        id_proof_front_url: TEST_ID_KEY,
+        id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY,
         address: "123 Test Street, Bengaluru",
         workplace: "Acme Corp",
         emergency_contact_name: "Parent Name",
@@ -58,34 +58,25 @@ test.describe("Tenant profile enrichment", () => {
 
   // ── API: approve with deposit-only (no bed) ────────────────────────────────
 
-  test("approve with deposit creates a null-bed stay", async ({ request }) => {
+  test("approving into a booking makes a null-bed stay", async ({ request }) => {
     // Register a fresh tenant
     const regRes = await request.post(`${BASE}/public/register/${ownerId}`, {
       data: {
         name: `Deposit Tenant ${RUN_ID}`,
         phone: `6${RUN_ID.slice(-9)}`,
         password: "tenant123",
-        id_proof_front_url: TEST_ID_KEY,
+        id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY,
       },
     });
     expect(regRes.ok()).toBeTruthy();
     const { id: tenantId } = await regRes.json();
 
-    // Approve with rent + deposit but no bed_id
-    const approveRes = await request.post(
-      `${BASE}/api/tenants/${tenantId}/approve`,
-      {
-        headers: { Authorization: `Bearer ${ownerToken}` },
-        data: {
-          rent_amount: 500000,   // ₹5000 in paise
-          deposit_amount: 100000, // ₹1000 in paise
-          rent_cycle: "monthly",
-          start_date: new Date().toISOString().slice(0, 10),
-          // no bed_id
-        },
-      }
-    );
-    expect(approveRes.ok(), `Approve failed: ${await approveRes.text()}`).toBeTruthy();
+    // Approve, then a stay with rent + deposit but no bed_id
+    await approveIntoStay(request, ownerToken, tenantId, {
+      rent_amount: 500000,   // ₹5000 in paise
+      deposit_amount: 100000, // ₹1000 in paise
+      start_date: new Date().toISOString().slice(0, 10),
+    });
 
     // Fetch stays and verify bed_id is null
     const staysRes = await request.get(`${BASE}/api/tenants/${tenantId}/stays`, {
@@ -104,14 +95,11 @@ test.describe("Tenant profile enrichment", () => {
 
     // Register + approve without bed
     const regRes = await request.post(`${BASE}/public/register/${ownerId}`, {
-      data: { name: `Assign Tenant ${RUN_ID}`, phone: `5${RUN_ID.slice(-9)}`, password: "tenantpass", id_proof_front_url: TEST_ID_KEY },
+      data: { name: `Assign Tenant ${RUN_ID}`, phone: `5${RUN_ID.slice(-9)}`, password: "tenantpass", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
     });
     const { id: tenantId } = await regRes.json();
 
-    await request.post(`${BASE}/api/tenants/${tenantId}/approve`, {
-      headers: { Authorization: `Bearer ${ownerToken}` },
-      data: { rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", start_date: new Date().toISOString().slice(0, 10) },
-    });
+    await approveIntoStay(request, ownerToken, tenantId, { rent_amount: 500000, deposit_amount: 0, start_date: new Date().toISOString().slice(0, 10) });
 
     const staysRes = await request.get(`${BASE}/api/tenants/${tenantId}/stays`, {
       headers: { Authorization: `Bearer ${ownerToken}` },

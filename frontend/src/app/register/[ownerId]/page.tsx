@@ -8,8 +8,6 @@ import {
   Button, Card, Field, FileInput, FormError, Input, Textarea,
 } from "@/components/ui";
 
-const optionalSpan = <span className="font-normal text-stone-400">(optional)</span>;
-
 /**
  * The frame around the form.
  *
@@ -49,8 +47,7 @@ function PublicFrame({
           )}
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">
-          Fill in your details and the owner will review your request. It takes
-          about two minutes.
+          Fill in your details for the owner to review.
         </p>
       </header>
 
@@ -114,7 +111,6 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [address, setAddress] = useState("");
   const [emergencyName, setEmergencyName] = useState("");
@@ -174,7 +170,6 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
       await registrationApi.register(ownerIdNum, {
         name,
         phone,
-        email: email || undefined,
         password,
         photo_url: photoUrl,
         id_proof_url: idProofFrontUrl,       // legacy fallback
@@ -228,9 +223,9 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
               who just typed their Aadhaar number with nothing to expect. */}
           <ol className="mt-6 space-y-3 text-left">
             {[
-              "The owner checks your details and assigns you a bed.",
-              "You'll hear from them on the phone number you gave.",
-              "Once approved, sign in to see your rent and payments.",
+              "The owner checks your details.",
+              "You'll hear from them on the number you gave.",
+              "Then sign in with your phone number and password.",
             ].map((step, i) => (
               <li key={i} className="flex gap-3 text-sm text-stone-600">
                 <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-stone-100 text-xs font-semibold tabular-nums text-stone-500">
@@ -252,153 +247,80 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
     );
   }
 
+  // The same four groups, in the same order and with the same labels, as the
+  // owner's Add tenant form, so what the owner reviews reads the way they
+  // would have typed it. Only what is required is marked; "(optional)" beside
+  // most fields read as permission to skip them, and every hint that did not
+  // change what someone types is gone. The owner wants an emergency contact
+  // from everyone and no email at all (Oct 2026).
   return (
     <PublicFrame ownerName={ownerName}>
-      {/* padding="none" plus explicit padding: passing p-8 alongside Card's
-          own p-4 would leave Tailwind's source order to pick the winner. */}
-      <Card padding="none" className="p-6 sm:p-8">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && <FormError>{error}</FormError>}
-
-          {/* ── Personal details ── */}
-          <Field label="Full name" required>
-            <Input
-              required
-              type="text"
-              placeholder="Your full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Field>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Phone" required>
-              <Input
-                required
-                type="tel"
-                placeholder="10-digit number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Card title="You">
+          <div className="space-y-4">
+            <Field label="Full name" required>
+              <Input required value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <Field
-              label={<>Email {optionalSpan}</>}
-              hint="For contact only — you sign in with your phone number."
-            >
-              <Input
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            <Field label="Phone" required hint="You'll sign in with this.">
+              <Input required type="tel" inputMode="tel" placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </Field>
           </div>
+        </Card>
 
-          <Field label={<>Home address {optionalSpan}</>}>
-            <Textarea
-              placeholder="Full home / permanent address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              rows={2}
-              className="resize-none"
-            />
-          </Field>
-
-          <Field label={<>Workplace / College {optionalSpan}</>}>
-            <Input
-              type="text"
-              placeholder="Company or college name"
-              value={workplace}
-              onChange={(e) => setWorkplace(e.target.value)}
-            />
-          </Field>
-
-          {/* ── Emergency contact ── */}
-          <div>
-            <p className="mb-2 text-sm font-semibold text-stone-700">
-              Emergency contact {optionalSpan}
-            </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Name">
-                <Input
-                  type="text"
-                  placeholder="Parent / guardian name"
-                  value={emergencyName}
-                  onChange={(e) => setEmergencyName(e.target.value)}
-                />
-              </Field>
-              <Field label="Phone">
-                <Input
-                  type="tel"
-                  placeholder="Contact number"
-                  value={emergencyPhone}
-                  onChange={(e) => setEmergencyPhone(e.target.value)}
-                />
-              </Field>
-            </div>
+        <Card title="About you">
+          <div className="space-y-4">
+            <Field label="Workplace / College">
+              <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} />
+            </Field>
+            <Field label="Home address">
+              <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className="resize-none" />
+            </Field>
           </div>
+        </Card>
 
-          {/* ── ID details ── */}
-          <Field
-            label={<>Aadhaar number {optionalSpan}</>}
-            hint="Your Aadhaar number is stored securely and only visible to the property owner."
-          >
-            <Input
-              type="text"
-              placeholder="12-digit Aadhaar number"
-              value={aadhaarNumber}
-              onChange={(e) => setAadhaarNumber(e.target.value)}
-              maxLength={12}
-            />
-          </Field>
-
-          {/* The photo asks for nothing the owner-side form does not already
-              have a column and a field for — it was simply never asked here,
-              at the one moment the person is standing there with a phone. */}
-          <UploadField
-            label={<>Your photo {optionalSpan}</>}
-            onChange={setPhoto}
-            file={photo}
-            hint="A clear photo of your face, so the owner can recognise you."
-            accept="image/jpeg,image/png,image/webp"
-          />
-
+        <Card title="ID and emergency contact">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* The one hint kept for trust: this is a stranger typing an
+                Aadhaar number into a page they reached from a sticker. */}
+            <Field label="Aadhaar number" hint="Only the owner sees this." className="sm:col-span-2">
+              <Input value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value)} maxLength={12} inputMode="numeric" placeholder="12 digits" />
+            </Field>
+            <Field label="Emergency contact" required>
+              <Input required value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
+            </Field>
+            <Field label="Their phone" required>
+              <Input required type="tel" inputMode="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
+            </Field>
             <UploadField
-              label="ID proof — front"
+              label="ID front"
               required
               onChange={(f) => { setIdProofFront(f); if (f) setIdFrontError(""); }}
               file={idProofFront}
               error={idFrontError}
-              hint="Aadhaar, passport, driving licence…"
+              hint="Aadhaar, passport or driving licence"
             />
+            <UploadField label="ID back" onChange={setIdProofBack} file={idProofBack} />
             <UploadField
-              label={<>ID proof — back {optionalSpan}</>}
-              onChange={setIdProofBack}
-              file={idProofBack}
+              label="Your photo"
+              onChange={setPhoto}
+              file={photo}
+              accept="image/jpeg,image/png,image/webp"
             />
           </div>
+        </Card>
 
-          {/* ── Portal password ── */}
-          <Field
-            label="Password"
-            required
-            hint={`You'll sign in to your tenant portal with your phone number${phone ? ` (${phone})` : ""} and this password, once the owner approves you.`}
-          >
-            <Input
-              required
-              type="password"
-              placeholder="Min. 6 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+        <Card title="Sign-in">
+          <Field label="Password" required hint="At least 6 characters">
+            <Input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
+        </Card>
 
-          <Button type="submit" loading={loading} className="mt-2 w-full">
-            {loading ? "Submitting…" : "Submit registration"}
-          </Button>
-        </form>
-      </Card>
+        {error && <FormError>{error}</FormError>}
+
+        <Button type="submit" loading={loading} className="w-full">
+          {loading ? "Submitting…" : "Submit registration"}
+        </Button>
+      </form>
     </PublicFrame>
   );
 }

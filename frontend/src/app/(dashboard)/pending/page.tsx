@@ -5,20 +5,18 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import {
   tenantsApi,
-  sitesApi,
-  gridApi,
+  staysApi,
   pendingPaymentsApi,
   Tenant,
-  Site,
-  GridRoom,
-  GridBed,
   PendingPayment,
   ApiError,
   formatCurrency,
+  formatDay,
   maskAadhaar,
   today,
 } from "@/lib/api";
 import {
+  Banner,
   Button,
   Card,
   CountBadge,
@@ -29,7 +27,7 @@ import {
   InboxIcon,
   ReceiptIcon,
   PageHeader,
-  Select,
+  SegmentedControl,
   Skeleton,
   useConfirm,
   useToast,
@@ -38,10 +36,12 @@ import {
   Textarea,
 } from "@/components/ui";
 import {
+  BedPicker, VacantBed,
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
-  PaidTodayFields, PaidToBookFields, PaidToday, emptyPaidToday,
+  PaidTodayFields, PaidToBookFields, PaidToday, PaidSuggestion, emptyPaidToday,
   suggestedFromTerms, NOTHING_SUGGESTED, paidTodayDate,
   paidTodayError, paidTodaySuffix, recordPaidToday,
+  Arrival, arrivalOptions, ARRIVAL_HINT,
 } from "@/components/StayForm";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
@@ -110,169 +110,142 @@ function IdProofTile({ label, url, isImage }: { label: string; url: string; isIm
   );
 }
 
-// ── Unified Review + Approve Drawer ──────────────────────────────────────────
+// ── Review and approve, on one screen ───────────────────────────────────────
 
-type ApproveMode = "approve_only" | "assign_bed" | "collect_deposit";
-type DrawerStep = "review" | "approve";
+const ARRIVALS = arrivalOptions("Just approve");
 
+/** Digits only, the last ten: "+91 98450 11001" and "9845011001" are one number. */
+function phoneKey(phone: string): string {
+  return phone.replace(/\D/g, "").slice(-10);
+}
+
+/**
+ * Who they said they are, then their stay and the money last, beside the
+ * button that saves it — the shape of Add tenant, with the same three answers
+ * and the same fields. It was two steps (read, then "What would you like to
+ * do?" over three radio cards) with its own site and bed dropdowns, and it
+ * made the stay through the approve endpoint rather than the one Add tenant
+ * uses (Oct 2026).
+ */
 function ReviewDrawer({
-  tenant, token, onDone, onReject, onClose, rejectingId,
+  tenant, token, sameNumber, onDone, onReject, onClose, rejectingId,
 }: {
   tenant: Tenant;
   token: string;
-  /** `missed` names any payment that could not be recorded, or is "". */
-  onDone: (approved: Tenant, paidSuffix: string, missed: string) => void;
+  /** Tenants already on the books with this phone number. */
+  sameNumber: Tenant[];
+  /** `failed` when something after approving did not go through. */
+  onDone: (approved: Tenant, message: string, failed: boolean) => void;
   onReject: (id: number) => void;
   onClose: () => void;
   rejectingId: number | null;
 }) {
-  const [step, setStep] = useState<DrawerStep>("review");
-
-  // Approval state
-  const [mode, setMode] = useState<ApproveMode>("approve_only");
-  const [sites, setSites] = useState<Site[]>([]);
-  const [siteId, setSiteId] = useState<number | "">("");
-  const [rooms, setRooms] = useState<GridRoom[]>([]);
-  const [selectedBed, setSelectedBed] = useState<GridBed | null>(null);
+  const [arrival, setArrival] = useState<Arrival>("now");
+  const [bed, setBed] = useState<VacantBed | null>(null);
   const [terms, setTerms] = useState<StayTerms>(emptyStayTerms());
   const [paid, setPaid] = useState<PaidToday>(emptyPaidToday());
-  // Assigning a bed is a move-in, filled in from the terms. Booking suggests
-  // nothing and is dated today: they paid to hold a place, now.
-  const booking = mode === "collect_deposit";
-  const suggested = booking ? NOTHING_SUGGESTED : suggestedFromTerms(terms);
-  const paidDate = booking ? today() : paidTodayDate(terms);
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [sitesLoading, setSitesLoading] = useState(false);
-  const [roomsLoading, setRoomsLoading] = useState(false);
+
+  // As on Add tenant: moving in suggests the rent and deposit from the terms,
+  // a booking suggests nothing and is dated today.
+  const suggested: PaidSuggestion = arrival === "booking" ? NOTHING_SUGGESTED : suggestedFromTerms(terms);
+  const paidDate = arrival === "booking" ? today() : paidTodayDate(terms);
+  const suffix = arrival === "later" ? "" : paidTodaySuffix(paid, suggested);
+
+  function chooseArrival(next: Arrival) {
+    setArrival(next);
+    setPaid(emptyPaidToday());
+    setError("");
+  }
 
   const idFront = tenant.id_proof_front_url ?? tenant.id_proof_url;
   const idBack = tenant.id_proof_back_url;
   const isImage = (url: string) => /\.(jpe?g|png|webp)(\?|$)/i.test(url);
 
-  useEffect(() => {
-    if (mode !== "assign_bed" || step !== "approve") return;
-    setSitesLoading(true);
-    sitesApi.list(token).then(setSites).finally(() => setSitesLoading(false));
-  }, [mode, step, token]);
-
-  useEffect(() => {
-    if (!siteId) { setRooms([]); setSelectedBed(null); return; }
-    setRoomsLoading(true);
-    setSelectedBed(null);
-    gridApi.get(token, siteId as number).then(setRooms).finally(() => setRoomsLoading(false));
-  }, [siteId, token]);
-
-  const vacantBeds = rooms.flatMap((r) =>
-    r.beds.filter((b) => b.status === "vacant").map((b) => ({ ...b, roomName: r.name }))
-  );
-
   async function handleApprove() {
     setError("");
+    // Checked before approving, so a rent typo does not leave someone on the
+    // books with no stay to finish by hand.
+    if (arrival === "now" && !bed) {
+      setError("Pick a bed, or choose “Booking” or “Just approve”.");
+      return;
+    }
+    if (arrival !== "later") {
+      const invalid = stayTermsError(terms) || paidTodayError(paid, suggested);
+      if (invalid) { setError(invalid); return; }
+    }
+
     setLoading(true);
+    let approved: Tenant;
     try {
-      const payload: Parameters<typeof tenantsApi.approve>[2] = {};
-
-      if (mode === "assign_bed" || mode === "collect_deposit") {
-        if (mode === "assign_bed" && !selectedBed) {
-          setError("Select a bed.");
-          setLoading(false);
-          return;
-        }
-        const invalid = stayTermsError(terms) || paidTodayError(paid, suggested);
-        if (invalid) {
-          setError(invalid);
-          setLoading(false);
-          return;
-        }
-        if (mode === "assign_bed") payload.bed_id = selectedBed!.id;
-        Object.assign(payload, stayTermsPayload(terms));
-      }
-
-      const approved = await tenantsApi.approve(token, tenant.id, payload);
-      // Approving makes the stay but answers with the tenant, so the stay the
-      // payments belong to is looked up: their only open one.
-      let missed = "";
-      let suffix = "";
-      if (mode !== "approve_only") {
-        suffix = paidTodaySuffix(paid, suggested);
-        if (suffix) {
-          try {
-            const stay = (await tenantsApi.stays(token, approved.id)).find((st) => !st.end_date);
-            missed = stay
-              ? await recordPaidToday(token, stay.id, paid, suggested, paidDate)
-              : "What they paid wasn't recorded. Record it from Payments.";
-          } catch {
-            missed = "What they paid wasn't recorded. Record it from Payments.";
-          }
-        }
-      }
-      onDone(approved, missed ? "" : suffix, missed);
+      approved = await tenantsApi.approve(token, tenant.id, { notes: notes.trim() || undefined });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to approve");
-    } finally {
       setLoading(false);
+      return;
+    }
+
+    // They are on the books from here on, so nothing below may undo that or
+    // throw it away: say what did not happen, the way Add tenant does.
+    if (arrival === "later") {
+      onDone(approved, `${approved.name} approved`, false);
+      return;
+    }
+    try {
+      const stay = await staysApi.create(token, {
+        tenant_id: approved.id,
+        ...(arrival === "now" && bed ? { bed_id: bed.id } : {}),
+        ...stayTermsPayload(terms),
+      });
+      const done = arrival === "now" && bed
+        ? `${approved.name} approved and placed in ${bed.roomName} · ${bed.name}`
+        : `${approved.name} approved, booked from ${formatDay(terms.startDate)}`;
+      const missed = await recordPaidToday(token, stay.id, paid, suggested, paidDate);
+      onDone(approved, missed ? `${done}. ${missed}` : done + suffix, !!missed);
+    } catch (stayErr) {
+      const what = arrival === "now" ? "the bed was not assigned" : "the booking was not saved";
+      onDone(
+        approved,
+        stayErr instanceof ApiError
+          ? `${approved.name} was approved, but ${what}: ${stayErr.message}`
+          : `${approved.name} was approved, but ${what}.`,
+        true,
+      );
     }
   }
 
+  const submitLabel = arrival === "now" ? `Approve & move in${suffix}`
+    : arrival === "booking" ? `Approve & book${suffix}`
+    : "Approve";
+
   const header = (
-    <div className="flex items-center gap-2">
-      {step === "approve" && (
-        <button
-          onClick={() => { setStep("review"); setError(""); }}
-          aria-label="Back"
-          className="rounded-lg p-1 text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-      )}
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-700">
-        {step === "review" ? "Registration details" : "Approve registration"}
-      </h2>
-    </div>
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-700">Registration</h2>
   );
 
-  const footer =
-    step === "review" ? (
+  const footer = (
+    <div className="space-y-3">
+      {error && <FormError>{error}</FormError>}
       <div className="flex gap-2">
         <Button
           variant="danger"
-          className="flex-1"
+          disabled={loading}
           loading={rejectingId === tenant.id}
           onClick={() => onReject(tenant.id)}
         >
           {rejectingId === tenant.id ? "Removing…" : "Reject"}
         </Button>
-        <Button className="flex-1" onClick={() => setStep("approve")}>
-          Approve
+        <Button className="flex-1" loading={loading} onClick={handleApprove}>
+          {loading ? "Approving…" : submitLabel}
         </Button>
       </div>
-    ) : (
-      <div className="flex gap-2">
-        <Button
-          variant="ghost"
-          disabled={loading}
-          onClick={() => { setStep("review"); setError(""); }}
-        >
-          Back
-        </Button>
-        <Button
-          className="flex-1"
-          loading={loading}
-          disabled={mode === "assign_bed" && (!siteId || !selectedBed)}
-          onClick={handleApprove}
-        >
-          {loading ? "Approving…" : mode === "assign_bed" ? `Approve & assign${paidTodaySuffix(paid, suggested)}` : mode === "collect_deposit" ? `Approve & book${paidTodaySuffix(paid, suggested)}` : "Approve"}
-        </Button>
-      </div>
-    );
+    </div>
+  );
 
   return (
     <Drawer open onClose={onClose} header={header} footer={footer}>
       <div className="space-y-5">
-        {/* Identity — always visible */}
         <div className="flex items-center gap-4">
           <Avatar name={tenant.name} photoUrl={tenant.photo_url} size="lg" />
           <div>
@@ -282,130 +255,79 @@ function ReviewDrawer({
           </div>
         </div>
 
-        {/* Step: Review — profile details */}
-        {step === "review" && (
-          <>
-            <div className="space-y-3 rounded-xl bg-stone-50 px-4 py-4">
-              {tenant.workplace && (
-                <Row icon="📍" label="Workplace / College" value={tenant.workplace} />
-              )}
-              {tenant.address && (
-                <Row icon="🏠" label="Home address" value={tenant.address} />
-              )}
-              {(tenant.emergency_contact_name || tenant.emergency_contact_phone) && (
-                <Row icon="🆘" label="Emergency contact"
-                  value={[tenant.emergency_contact_name, tenant.emergency_contact_phone].filter(Boolean).join("  ·  ")} />
-              )}
-              {tenant.aadhaar_number && (
-                <Row icon="🪪" label="Aadhaar" value={maskAadhaar(tenant.aadhaar_number)} />
-              )}
-              <Row icon="📅" label="Registered"
-                value={new Date(tenant.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} />
-            </div>
+        {/* Someone already on the books scanning the sticker — for a portal
+            login, say — would otherwise become a second record of the same
+            person, with their history on the first. A warning, not a block:
+            two people can share a phone. */}
+        {sameNumber.map((t) => (
+          <Banner key={t.id} tone="warning" href={`/tenants/${t.id}`}>
+            <span>
+              Same number as <strong>{t.name}</strong>, already on your books.
+              If it&apos;s them, reject this and use their record.
+            </span>
+          </Banner>
+        ))}
 
-            {(idFront || idBack) && (
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">ID Proof</p>
-                <div className="flex gap-3">
-                  {idFront && <IdProofTile label="Front" url={idFront} isImage={isImage(idFront)} />}
-                  {idBack && <IdProofTile label="Back" url={idBack} isImage={isImage(idBack)} />}
-                </div>
-              </div>
-            )}
-          </>
+        <div className="space-y-3 rounded-xl bg-stone-50 px-4 py-4">
+          {tenant.workplace && (
+            <Row icon="📍" label="Workplace / College" value={tenant.workplace} />
+          )}
+          {tenant.address && (
+            <Row icon="🏠" label="Home address" value={tenant.address} />
+          )}
+          {(tenant.emergency_contact_name || tenant.emergency_contact_phone) && (
+            <Row icon="🆘" label="Emergency contact"
+              value={[tenant.emergency_contact_name, tenant.emergency_contact_phone].filter(Boolean).join("  ·  ")} />
+          )}
+          {tenant.aadhaar_number && (
+            <Row icon="🪪" label="Aadhaar" value={maskAadhaar(tenant.aadhaar_number)} />
+          )}
+          <Row icon="📅" label="Registered"
+            value={new Date(tenant.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} />
+        </div>
+
+        {(idFront || idBack) && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">ID Proof</p>
+            <div className="flex gap-3">
+              {idFront && <IdProofTile label="Front" url={idFront} isImage={isImage(idFront)} />}
+              {idBack && <IdProofTile label="Back" url={idBack} isImage={isImage(idBack)} />}
+            </div>
+          </div>
         )}
 
-        {/* Step: Approve — mode selection + fields */}
-        {step === "approve" && (
-          <>
-            {error && <FormError>{error}</FormError>}
+        <Field label="Notes" hint="Only you see this. Tenants never do.">
+          <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering: who referred them, how long they're staying" />
+        </Field>
 
-            {/* Mode selection */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-stone-700">What would you like to do?</p>
-              {(["approve_only", "assign_bed", "collect_deposit"] as ApproveMode[]).map((m) => (
-                <label key={m} className="flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 p-3 transition duration-150 ease-out hover:bg-stone-50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
-                  <input
-                    type="radio"
-                    name="approve_mode"
-                    value={m}
-                    checked={mode === m}
-                    onChange={() => { setMode(m); setPaid(emptyPaidToday()); }}
-                    className="mt-0.5 h-4 w-4 text-indigo-600"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-stone-800">
-                      {m === "approve_only" && "Approve only"}
-                      {m === "assign_bed" && "Approve & assign bed"}
-                      {/* "Collect" and "record" both promised money, and this
-                          option has never recorded a rupee — it saves the terms
-                          you agreed. Since a settlement refunds only deposit
-                          money actually received, the old words would have left
-                          an owner thinking a deposit was on the books. */}
-                      {m === "collect_deposit" && "Approve & book a place"}
-                    </p>
-                    <p className="text-xs text-stone-500">
-                      {m === "approve_only" && "Tenant is approved, bed assigned manually later."}
-                      {m === "assign_bed" && "Approve and assign to a specific bed now."}
-                      {m === "collect_deposit" && "Agree the rent and the day they arrive, and record anything paid to hold it. Assign a bed when they arrive."}
-                    </p>
-                  </div>
-                </label>
-              ))}
-            </div>
+        <section aria-label="Their stay" className="border-t border-stone-100 pt-5">
+          <h3 className="mb-3 text-base font-semibold text-stone-900">Their stay</h3>
+          <SegmentedControl options={ARRIVALS} value={arrival} onChange={chooseArrival} ariaLabel="Their stay" />
+          <p className="mt-2 text-[13px] text-stone-500">{ARRIVAL_HINT[arrival]}</p>
 
-            {/* Assign bed flow */}
-            {mode === "assign_bed" && (
-              <div className="space-y-4 rounded-xl border border-stone-200 p-4">
-                <Field label="Site">
-                  {sitesLoading ? <p className="text-sm text-stone-400">Loading…</p> : (
-                    <Select value={siteId} onChange={(e) => setSiteId(e.target.value ? parseInt(e.target.value) : "")}>
-                      <option value="">Select a site…</option>
-                      {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </Select>
-                  )}
-                </Field>
-                {siteId && (
-                  <Field label="Bed">
-                    {roomsLoading ? <p className="text-sm text-stone-400">Loading…</p> : vacantBeds.length === 0 ? (
-                      <p className="text-sm text-stone-400">No vacant beds at this site.</p>
-                    ) : (
-                      <Select value={selectedBed?.id ?? ""} onChange={(e) => setSelectedBed(vacantBeds.find((b) => b.id === parseInt(e.target.value)) ?? null)}>
-                        <option value="">Select a bed…</option>
-                        {vacantBeds.map((b) => <option key={b.id} value={b.id}>{b.roomName} — {b.name}</option>)}
-                      </Select>
-                    )}
-                  </Field>
-                )}
-                {selectedBed && (
-                  <>
-                    <StayTermsFields value={terms} onChange={setTerms} layout="grid" />
-                    <PaidTodayFields
-                      value={paid}
-                      onChange={setPaid}
-                      suggested={suggested}
-                      date={paidDate}
-                      cycle={terms.cycle}
-                    />
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Collect deposit flow */}
-            {mode === "collect_deposit" && (
-              <div className="space-y-4 rounded-xl border border-stone-200 p-4">
-                {/* This once said the deposit "will be recorded as a
-                    payment" when nothing recorded one. A settlement refunds
-                    only deposit money actually received, so the promise would
-                    have cost the tenant their refund. Paid today now records
-                    it for real, and only what the owner says arrived. */}
-                <StayTermsFields value={terms} onChange={setTerms} layout="grid" startLabel="Arriving on" />
+          {arrival !== "later" && (
+            <div className="mt-4 space-y-4">
+              {arrival === "now" && <BedPicker token={token} value={bed} onChange={setBed} />}
+              <StayTermsFields
+                value={terms}
+                onChange={setTerms}
+                layout="grid"
+                startLabel={arrival === "booking" ? "Arriving on" : "Start date"}
+              />
+              {arrival === "now" ? (
+                <PaidTodayFields
+                  value={paid}
+                  onChange={setPaid}
+                  suggested={suggested}
+                  date={paidDate}
+                  cycle={terms.cycle}
+                />
+              ) : (
                 <PaidToBookFields value={paid} onChange={setPaid} cycle={terms.cycle} />
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </div>
+          )}
+        </section>
       </div>
     </Drawer>
   );
@@ -435,6 +357,7 @@ function PendingQueue() {
 
   const [pending, setPending] = useState<Tenant[]>([]);
   const [regLoading, setRegLoading] = useState(true);
+  const [onBooks, setOnBooks] = useState<Tenant[]>([]);
   const [drawerTenant, setDrawerTenant] = useState<Tenant | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
 
@@ -447,11 +370,15 @@ function PendingQueue() {
 
   const loadRegistrations = useCallback(() => {
     if (!token) return;
-    tenantsApi.list(token, true)
-      .then(setPending)
+    // Everyone already on the books comes too, to catch a registration from
+    // a phone number the owner already has.
+    Promise.all([tenantsApi.list(token, true), tenantsApi.list(token)])
+      .then(([waiting, approved]) => { setPending(waiting); setOnBooks(approved); })
       .catch(() => toast.error("Could not load registrations — reload the page"))
       .finally(() => setRegLoading(false));
-  }, [token]);
+  }, [token, toast]);
+
+  const sameNumber = (t: Tenant) => onBooks.filter((o) => phoneKey(o.phone) === phoneKey(t.phone));
 
   const loadPayments = useCallback(() => {
     if (!token) return;
@@ -482,11 +409,12 @@ function PendingQueue() {
     } finally { setRejectingId(null); }
   }
 
-  function handleApproved(approved: Tenant, paidSuffix: string, missed: string) {
+  function handleApproved(approved: Tenant, message: string, failed: boolean) {
     setPending((prev) => prev.filter((t) => t.id !== approved.id));
     setDrawerTenant(null);
-    if (missed) toast.error(`${approved.name} approved. ${missed}`);
-    else toast.success(`${approved.name} approved${paidSuffix}`);
+    setOnBooks((prev) => [...prev, approved]);
+    if (failed) toast.error(message);
+    else toast.success(message);
   }
 
   async function handleApprovePayment(id: number) {
@@ -593,6 +521,9 @@ function PendingQueue() {
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                           {t.workplace && <span className="text-xs text-stone-400">📍 {t.workplace}</span>}
                           {t.aadhaar_number && <span className="text-xs text-stone-400">🪪 {maskAadhaar(t.aadhaar_number)}</span>}
+                          {sameNumber(t).length > 0 && (
+                            <span className="text-xs font-medium text-amber-700">Same number as {sameNumber(t)[0].name}</span>
+                          )}
                           <span className="text-xs text-stone-300">
                             {new Date(t.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                           </span>
@@ -684,6 +615,7 @@ function PendingQueue() {
         <ReviewDrawer
           tenant={drawerTenant}
           token={token}
+          sameNumber={sameNumber(drawerTenant)}
           onDone={handleApproved}
           onReject={handleReject}
           onClose={() => setDrawerTenant(null)}

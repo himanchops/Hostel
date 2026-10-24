@@ -278,13 +278,9 @@ export const tenantsApi = {
     request<Tenant>("/api/tenants", { method: "POST", body: JSON.stringify(data) }, token),
   update: (token: string, id: number, data: TenantUpdateData) =>
     request<Tenant>(`/api/tenants/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),
-  approve: (token: string, id: number, data: {
-    bed_id?: number;
-    rent_amount?: number;
-    deposit_amount?: number;
-    rent_cycle?: string;
-    start_date?: string;
-  }) => request<Tenant>(`/api/tenants/${id}/approve`, { method: "POST", body: JSON.stringify(data) }, token),
+  /** Puts a pending registration on the books. The stay, if any, is made
+   *  afterwards with staysApi.create, the same way Add tenant does it. */
+  approve: (token: string, id: number, data: { notes?: string } = {}) => request<Tenant>(`/api/tenants/${id}/approve`, { method: "POST", body: JSON.stringify(data) }, token),
   reject: (token: string, id: number) =>
     request<void>(`/api/tenants/${id}/reject`, { method: "DELETE" }, token),
   /** Permanently deletes the tenant with every stay, payment and settlement. */

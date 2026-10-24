@@ -434,15 +434,15 @@ def main():
     call("POST", f"/public/register/{owner_id}", {
         "name": "Meera Pillai", "phone": "9845110018",
         "password": TENANT_PASSWORD, "workplace": "Cred",
+        "emergency_contact_name": "Suresh Pillai",
+        "emergency_contact_phone": "9847110018",
         "id_proof_front_url": demo_id,
     })
     pending = api("GET", "/api/tenants?pending=true")
     meera = next(x for x in pending if x["name"] == "Meera Pillai")
-    api("POST", f"/api/tenants/{meera['id']}/approve", {
-        "bed_id": beds["HSR/Room 1/1L"],
-        "rent_amount": 700000, "deposit_amount": 1400000,
-        "rent_cycle": "monthly", "start_date": months_ago(2, 1),
-    })
+    # Approving only approves; the stay is its own call, as in the app.
+    api("POST", f"/api/tenants/{meera['id']}/approve", {})
+    stay(meera, "HSR/Room 1/1L", 700000, 1400000, months_ago(2, 1))
     t_auth = call("POST", "/tenant-auth/login",
                   {"phone": "9845110018", "password": TENANT_PASSWORD})
     t_stays = call("GET", "/tenant/stays", token=t_auth["token"])
