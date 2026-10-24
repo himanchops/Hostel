@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, loginAs, TEST_ID_KEY } from "../helpers/api";
+import { createOwner, loginAs, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -17,7 +17,7 @@ test("approving with agreed terms records no money unless it was paid", async ({
   const { token, owner } = await createOwner(request, `terms-${RUN_ID}`);
   const name = `Terms Applicant ${RUN_ID}`;
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name, phone: `94${RUN_ID.slice(-8)}`, password: "applicant1", id_proof_front_url: TEST_ID_KEY },
+    data: { name, phone: `94${RUN_ID.slice(-8)}`, password: "applicant1", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
   });
   expect(reg.ok()).toBeTruthy();
   const applicant = await reg.json();
@@ -27,18 +27,17 @@ test("approving with agreed terms records no money unless it was paid", async ({
   await page.getByRole("button", { name: new RegExp(name) }).first().click();
 
   const drawer = page.getByRole("dialog");
-  await drawer.getByRole("button", { name: "Approve", exact: true }).click();
-  await drawer.getByRole("radio", { name: /Approve & book a place/ }).check();
+  await drawer.getByRole("button", { name: "Booking", exact: true }).click();
 
-  // No promise of money anywhere in the step.
+  // No promise of money anywhere in the drawer.
   await expect(drawer).not.toContainText(/collect (a )?deposit|record deposit/i);
-  await expect(drawer).toContainText("record anything paid to hold it");
+  await expect(drawer.getByRole("region", { name: "Paid to book" })).toBeVisible();
 
   await drawer.getByLabel(/^Monthly rent/).fill("8000");
   await drawer.getByLabel("Deposit (₹)").fill("16000");
   await drawer.getByRole("button", { name: "They haven\u2019t paid yet" }).click();
   await drawer.getByRole("button", { name: "Approve & book", exact: true }).click();
-  await expect(page.getByText(`${name} approved`)).toBeVisible();
+  await expect(page.getByText(`${name} approved, booked from`, { exact: false })).toBeVisible();
 
   // The terms were saved; no money was. The tenant page says both.
   await page.goto(`/tenants/${applicant.id}`);

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { createOwner } from "../helpers/api";
+import { createOwner, TEST_EMERGENCY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -20,7 +20,7 @@ const PNG = Buffer.from(
 
 /** Registration requires the front of an ID; every submitting test attaches one. */
 async function attachIdFront(page: Page) {
-  await page.getByLabel(/ID proof — front/).setInputFiles({
+  await page.getByLabel("ID front").setInputFiles({
     name: "id-front.png",
     mimeType: "image/png",
     buffer: PNG,
@@ -35,7 +35,8 @@ test.describe("Public registration", () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
 
-    expect(body.name).toBe(owner.name);
+    // No site yet, so no property to name — and never the owner's own name.
+    expect(body.name).toBe("");
     // Owner ids are small integers and therefore enumerable. This endpoint is
     // a directory of hostel names; it must never become a directory of contact
     // details. Asserting the exact key set fails the moment a field is added.
@@ -47,7 +48,7 @@ test.describe("Public registration", () => {
 
   // The header is a trust signal for a stranger at the door, so it names the
   // property, not the account holder. With several sites there is no single
-  // property the link belongs to, so it falls back to the owner's name.
+  // property the link belongs to, so it names nobody.
   test("the registration header names the hostel, not its owner", async ({ page, request }) => {
     const { token, owner } = await createOwner(request, `pub-site-${RUN_ID}`);
     const auth = { Authorization: `Bearer ${token}` };
@@ -55,15 +56,20 @@ test.describe("Public registration", () => {
     await request.post(`${BASE}/api/sites`, { headers: auth, data: { name: hostel } });
 
     await page.goto(`/register/${owner.id}`);
-    await expect(page.getByRole("heading", { name: `Register with ${hostel}` })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Welcome to ${hostel}` })).toBeVisible();
+    await expect(page.getByText("Hostel Manager")).toHaveCount(0);
 
     await request.post(`${BASE}/api/sites`, { headers: auth, data: { name: `Second site ${RUN_ID}` } });
     const body = await (await request.get(`${BASE}/public/owners/${owner.id}`)).json();
-    expect(body).toEqual({ name: owner.name });
+    expect(body).toEqual({ name: "" });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Welcome", exact: true })).toBeVisible();
   });
 
   test("a stranger registers end-to-end at 375px", async ({ page, request }) => {
     const { token, owner } = await createOwner(request, `pub-reg-${RUN_ID}`);
+    const hostel = `Lakeview PG ${RUN_ID}`;
+    await request.post(`${BASE}/api/sites`, { headers: { Authorization: `Bearer ${token}` }, data: { name: hostel } });
     const applicant = `Priya Nair ${RUN_ID}`;
     const phone = `9${RUN_ID.slice(-9)}`;
 
@@ -71,12 +77,14 @@ test.describe("Public registration", () => {
 
     // The trust signal: the page names the property you are registering with.
     // Without it the form is indistinguishable from a phishing page.
-    await expect(page.getByRole("heading", { name: `Register with ${owner.name}` })).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Welcome to ${hostel}` })).toBeVisible();
 
-    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(phone);
-    await page.getByPlaceholder("Company or college name").fill("Zoho");
-    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await page.getByLabel("Workplace / College").fill("Zoho");
+    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel("Their phone").fill("9000000001");
     await attachIdFront(page);
 
     // Nothing may overflow the viewport on the way down — this page is long and
@@ -90,8 +98,8 @@ test.describe("Public registration", () => {
 
     // The success screen: what happened, and what happens next.
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
-    await expect(page.getByText(`Your details have gone to ${owner.name} for review.`)).toBeVisible();
-    await expect(page.getByText("The owner checks your details and assigns you a bed.")).toBeVisible();
+    await expect(page.getByText(`Your details have gone to ${hostel} for review.`)).toBeVisible();
+    await expect(page.getByText("The owner checks your details.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Go to the tenant portal →" })).toHaveAttribute(
       "href",
       "/my/login"
@@ -119,11 +127,13 @@ test.describe("Public registration", () => {
     await page.route("**/public/owners/*", (route) => route.abort());
     await page.goto(`/register/${owner.id}`);
 
-    await expect(page.getByRole("heading", { name: "Tenant registration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome", exact: true })).toBeVisible();
 
-    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`8${RUN_ID.slice(-9)}`);
-    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel("Their phone").fill("9000000001");
     await attachIdFront(page);
     await page.getByRole("button", { name: "Submit registration" }).click();
 
@@ -147,11 +157,13 @@ test.describe("Public registration", () => {
 
     await page.goto(`/register/${owner.id}`);
 
-    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`7${RUN_ID.slice(-9)}`);
-    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel("Their phone").fill("9000000001");
 
-    await page.getByLabel(/Your photo/).setInputFiles({
+    await page.getByLabel("Your photo").setInputFiles({
       name: "selfie.png",
       mimeType: "image/png",
       buffer: PNG,
@@ -209,10 +221,12 @@ test.describe("Public registration", () => {
       return c.toDataURL("image/png").split(",")[1];
     });
 
-    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`4${RUN_ID.slice(-9)}`);
-    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
-    await page.getByLabel(/ID proof — front/).setInputFiles({
+    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel("Their phone").fill("9000000001");
+    await page.getByLabel("ID front").setInputFiles({
       name: "id-front.png",
       mimeType: "image/png",
       buffer: Buffer.from(big, "base64"),
@@ -246,13 +260,15 @@ test.describe("Public registration", () => {
     const applicant = `No ID ${RUN_ID}`;
 
     await page.goto(`/register/${owner.id}`);
-    await page.getByPlaceholder("Your full name").fill(applicant);
+    await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`6${RUN_ID.slice(-9)}`);
-    await page.getByPlaceholder("Min. 6 characters").fill("testpassword123");
+    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel("Their phone").fill("9000000001");
     await page.getByRole("button", { name: "Submit registration" }).click();
 
     // The browser stops the submit at the field, not with a banner at the top.
-    const idFront = page.getByLabel(/ID proof — front/);
+    const idFront = page.getByLabel("ID front");
     expect(await idFront.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
     await expect(page.getByRole("heading", { name: "You're registered" })).toHaveCount(0);
 
@@ -269,6 +285,23 @@ test.describe("Public registration", () => {
     expect((await pending.json()).some((t: { name: string }) => t.name === applicant)).toBe(false);
   });
 
+  // The owner wants someone to call for everyone who registers (Oct 2026).
+  test("an emergency contact is required to register", async ({ page, request }) => {
+    const { owner } = await createOwner(request, `pub-sos-${RUN_ID}`);
+    await page.goto(`/register/${owner.id}`);
+    for (const label of ["Emergency contact", "Their phone"]) {
+      expect(await page.getByLabel(label).evaluate((el: HTMLInputElement) => el.required)).toBe(true);
+    }
+    // No email: the owner dropped it from the form.
+    await expect(page.getByLabel("Email")).toHaveCount(0);
+
+    const direct = await request.post(`${BASE}/public/register/${owner.id}`, {
+      data: { name: `No SOS ${RUN_ID}`, phone: `3${RUN_ID.slice(-9)}`, password: "testpassword123", id_proof_front_url: "public/e2e00000000000000000000000000000.jpg" },
+    });
+    expect(direct.status()).toBe(400);
+    expect((await direct.json()).error).toBe("Add an emergency contact and their phone.");
+  });
+
   // Before uploads went private, the only check was the file extension, so a
   // registration could store any host's ".jpg" and the owner's browser would
   // fetch it when the profile rendered — a tracking pixel aimed at one person.
@@ -280,6 +313,7 @@ test.describe("Public registration", () => {
         phone: `5${RUN_ID.slice(-9)}`,
         password: "testpassword123",
         id_proof_front_url: "https://anywhere.example/pixel.jpg",
+        ...TEST_EMERGENCY,
       },
     });
     expect(res.status()).toBe(400);
@@ -295,17 +329,27 @@ test.describe("Public registration", () => {
     const { owner } = await createOwner(request, `pub-hint-${RUN_ID}`);
     await page.goto(`/register/${owner.id}`);
 
-    await expect(
-      page.getByText("For contact only — you sign in with your phone number.")
-    ).toBeVisible();
+    // Said once, beside the field it is about.
+    await expect(page.getByText("You'll sign in with this.")).toBeVisible();
+  });
 
-    // And the password hint names the number they just typed.
-    await page.getByPlaceholder("10-digit number").fill("9876500000");
-    await expect(page.getByText(/sign in to your tenant portal with your phone number \(9876500000\)/)).toBeVisible();
+  /**
+   * "(optional)" beside most fields read as permission to skip them, so only
+   * what is required is marked, with the asterisk the rest of the app uses
+   * (Oct 2026). The groups match the owner's Add tenant form.
+   */
+  test("the form marks what is required and nothing else", async ({ page, request }) => {
+    const { owner } = await createOwner(request, `pub-plain-${RUN_ID}`);
+    await page.goto(`/register/${owner.id}`);
+    await expect(page.getByRole("heading", { name: "ID and emergency contact" })).toBeVisible();
+    await expect(page.getByText("(optional)")).toHaveCount(0);
+    await expect(page.getByLabel("Aadhaar number")).toHaveAttribute("inputmode", "numeric");
   });
 
   test("the portal login page says it too", async ({ page }) => {
     await page.goto("/my/login");
-    await expect(page.getByText("Sign in with your phone number — not your email.")).toBeVisible();
+    await expect(page.getByText("Sign in with your phone number.", { exact: true })).toBeVisible();
+    // Registration asks for no email, so nothing here should mention one.
+    await expect(page.getByText(/email/i)).toHaveCount(0);
   });
 });

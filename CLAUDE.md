@@ -180,6 +180,12 @@ Key conventions to carry forward:
   because the owner promises a place, not a bed. One that ends without ever
   having a bed was cancelled and bills nothing (`endedCycles`). The move-out
   sheet cancels it (`booking` mode), keeping what was paid by default.
+- **Approving a registration only approves** (`POST /api/tenants/:id/approve`,
+  Oct 2026). The pending drawer then makes the stay and records the money with
+  the same calls as Add tenant, and asks the same `Arrival` question
+  (`StayForm.tsx`). Don't give approve a stay again; that was a second copy of
+  `POST /api/stays`. Public registration requires the ID front and an emergency
+  contact; owner-created tenants need only name and phone.
 - **A stay that has ended is billed through `cyclesThroughEnd`** (`helpers.go`):
   every cycle that began before the leaving day, never one that starts on it.
   This applies to the settlement, the tenant summary and Insights alike. An

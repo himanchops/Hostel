@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
-import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY, approveIntoStay, TEST_EMERGENCY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -81,13 +81,11 @@ for (const device of [
       // a pending proof.
       const phone = `93${RUN_ID.slice(-7)}${device.viewport.width % 10}`;
       const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-        data: { name: `Tara ${RUN_ID}`, phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY },
+        data: { name: `Tara ${RUN_ID}`, phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
       });
       if (!reg.ok()) throw new Error(`register failed: ${await reg.text()}`);
       const tenant = await reg.json();
-      await post(request, token, `/api/tenants/${tenant.id}/approve`, {
-        bed_id: bedId, rent_amount: 600000, deposit_amount: 0, rent_cycle: "monthly", start_date: monthStart(-1),
-      });
+      await approveIntoStay(request, token, tenant.id, { bed_id: bedId, rent_amount: 600000, deposit_amount: 0, start_date: monthStart(-1) });
       const tenantToken = (await (await request.post(`${BASE}/tenant-auth/login`, {
         data: { phone, password: "tenant1234" },
       })).json()).token;

@@ -196,17 +196,19 @@ func (h *TenantHandler) PublicOwner(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid owner id"))
 	}
 
-	// The property's name, not the account holder's: "Register with Chopra
+	// The property's name, never the account holder's: "Welcome to Chopra
 	// Boys Hostel" is what a stranger at the door expects to read, and the
 	// owner's personal name on a public, enumerable page is both less
-	// reassuring and more than it needs to say. With several sites there is
-	// no single property this link belongs to, so it falls back to the
-	// owner's name until links are per site.
+	// reassuring and more than it needs to say. With no site, or several,
+	// there is no single property this link belongs to, so the name is empty
+	// and the page says "Welcome" alone until links are per site. It once fell
+	// back to the owner's own name, which read as "Welcome to Rahul Shetty"
+	// (Oct 2026).
 	var name string
 	if err := h.db.Get(&name,
 		`SELECT CASE WHEN (SELECT COUNT(*) FROM hostel_sites WHERE owner_id = o.id) = 1
 		             THEN (SELECT name FROM hostel_sites WHERE owner_id = o.id)
-		             ELSE o.name END
+		             ELSE '' END
 		 FROM owners o WHERE o.id = $1`, ownerID); err != nil {
 		// Only a genuinely absent row is a bad link. Mapping every error here
 		// to 404 told a tenant standing in a corridor that the sticker they
@@ -266,6 +268,14 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	if req.IDProofFrontURL == "" && req.IDProofURL == "" {
 		return c.JSON(http.StatusBadRequest, errorResponse("Add a photo of the front of your ID."))
 	}
+	// So is someone to call. The owner asked for it on every registration
+	// (Oct 2026); like the ID, it is asked at the one moment the person is
+	// standing there, and owner-created tenants are not held to it.
+	req.EmergencyContactName = strings.TrimSpace(req.EmergencyContactName)
+	req.EmergencyContactPhone = strings.TrimSpace(req.EmergencyContactPhone)
+	if req.EmergencyContactName == "" || req.EmergencyContactPhone == "" {
+		return c.JSON(http.StatusBadRequest, errorResponse("Add an emergency contact and their phone."))
+	}
 	files := []struct {
 		name string
 		v    string
@@ -323,13 +333,17 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 }
 
 type approveRequest struct {
-	BedID         *int64 `json:"bed_id"`
-	RentAmount    int64  `json:"rent_amount"`
-	DepositAmount int64  `json:"deposit_amount"`
-	RentCycle     string `json:"rent_cycle"`
-	StartDate     string `json:"start_date"`
+	// Notes is the owner's own note, written while approving. Nil leaves
+	// whatever is there (nothing, for a fresh registration).
+	Notes *string `json:"notes"`
 }
 
+// Approve puts a pending registration on the owner's books, and that is all
+// it does. It once made the stay as well, from a bed and terms in the body,
+// which was a second copy of POST /api/stays: the pending queue now approves
+// and then makes the stay and records what was paid through the same calls as
+// Add tenant, so a bed check or booking rule cannot hold in one and not the
+// other (Oct 2026).
 func (h *TenantHandler) Approve(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 	tenantID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -341,79 +355,28 @@ func (h *TenantHandler) Approve(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid request body"))
 	}
+	var notes *string
+	if req.Notes != nil {
+		if trimmed := strings.TrimSpace(*req.Notes); trimmed != "" {
+			notes = &trimmed
+		}
+	}
 
+	// Only a registration still waiting: approving someone already on the
+	// books did nothing useful and answered as if it had.
 	var tenant models.Tenant
 	err = h.db.QueryRowx(
-		`UPDATE tenants SET is_approved = true, updated_at = $1
-		 WHERE id = $2 AND owner_id = $3
+		`UPDATE tenants SET is_approved = true, notes = COALESCE($1, notes), updated_at = $2
+		 WHERE id = $3 AND owner_id = $4 AND is_approved = false
 		 RETURNING `+tenantCols,
-		time.Now(), tenantID, ownerID,
+		notes, time.Now(), tenantID, ownerID,
 	).StructScan(&tenant)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
-	}
-
-	// Create stay if either a bed is provided (full assignment) or a deposit is being collected (pending assignment)
-	if req.BedID != nil || req.RentAmount > 0 {
-		if req.RentCycle != "daily" && req.RentCycle != "weekly" && req.RentCycle != "monthly" {
-			req.RentCycle = "monthly"
-		}
-
-		startDate := time.Now()
-		if req.StartDate != "" {
-			startDate, err = time.Parse("2006-01-02", req.StartDate)
-			if err != nil {
-				return c.JSON(http.StatusBadRequest, errorResponse("invalid start date"))
-			}
-		}
-
-		if req.BedID != nil {
-			// Validate bed belongs to this owner
-			var ownerCheck int64
-			err = h.db.QueryRow(
-				`SELECT hs.owner_id FROM beds b
-				 JOIN rooms r ON r.id = b.room_id
-				 JOIN hostel_sites hs ON hs.id = r.site_id
-				 WHERE b.id = $1`,
-				*req.BedID,
-			).Scan(&ownerCheck)
-			if err != nil || ownerCheck != ownerID {
-				return c.JSON(http.StatusForbidden, errorResponse("bed not found"))
-			}
-
-			// Check bed is not already occupied
-			var activeStays int
-			if err := h.db.Get(&activeStays, `SELECT COUNT(*) FROM stays WHERE bed_id = $1 AND end_date IS NULL`, *req.BedID); err != nil {
-				return serverError(c, err, "failed to approve tenant")
-			}
-			if activeStays > 0 {
-				return c.JSON(http.StatusConflict, errorResponse("bed is already occupied"))
-			}
-		}
-
-		// Check tenant doesn't already have an active stay
-		var activeTenantStays int
-		if err := h.db.Get(&activeTenantStays, `SELECT COUNT(*) FROM stays WHERE tenant_id = $1 AND end_date IS NULL`, tenantID); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return serverError(c, err, "failed to approve tenant")
 		}
-		if activeTenantStays > 0 {
-			return c.JSON(http.StatusConflict, errorResponse("tenant already has an active stay"))
-		}
-
-		_, err = h.db.Exec(
-			`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, created_at, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
-			tenantID, req.BedID, req.RentAmount, req.DepositAmount, req.RentCycle, startDate, time.Now(),
-		)
-		if err != nil {
-			// The message stays specific because a partial success is worth
-			// telling the client about — the tenant IS approved. The raw
-			// error does not go with it: it can carry query text and column
-			// values, and it now goes to the log instead.
-			return serverError(c, err, "tenant approved but failed to create stay")
-		}
+		return c.JSON(http.StatusNotFound, errorResponse("pending tenant not found"))
 	}
-
 	return h.respondTenant(c, http.StatusOK, &tenant)
 }
 

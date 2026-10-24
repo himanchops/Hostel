@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, loginAs, TEST_ID_KEY, approveIntoStay, TEST_EMERGENCY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -26,12 +26,9 @@ test.describe("Rejecting a payment proof", () => {
 
     const phone = `94${RUN_ID.slice(-8)}`;
     const tenant = await (await request.post(`${BASE}/public/register/${owner.id}`, {
-      data: { name: `Ravi ${RUN_ID}`, phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY },
+      data: { name: `Ravi ${RUN_ID}`, phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
     })).json();
-    await request.post(`${BASE}/api/tenants/${tenant.id}/approve`, {
-      headers: oAuth,
-      data: { bed_id: bedId, rent_amount: 600000, deposit_amount: 0, rent_cycle: "monthly", start_date: monthStart(0) },
-    });
+    await approveIntoStay(request, token, tenant.id, { bed_id: bedId, rent_amount: 600000, deposit_amount: 0, start_date: monthStart(0) });
     const tenantToken = (await (await request.post(`${BASE}/tenant-auth/login`, {
       data: { phone, password: "tenant1234" },
     })).json()).token;

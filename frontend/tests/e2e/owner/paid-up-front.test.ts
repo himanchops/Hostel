@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = `paid-${Date.now()}`;
@@ -158,10 +158,10 @@ test("Paid today, when assigning a vacant bed on the grid", async ({ page, reque
 
 test("Paid today, when approving a registration into a bed", async ({ page, request }) => {
   const { token, owner } = await createOwner(request, `${RUN_ID}-f`);
-  const { siteId } = await createSiteRoomBed(request, token, `${RUN_ID}-f`);
+  await createSiteRoomBed(request, token, `${RUN_ID}-f`);
   const name = `Approved Arrival ${RUN_ID}`;
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name, phone: "9812400006", password: "applicant1", id_proof_front_url: TEST_ID_KEY },
+    data: { name, phone: "9812400006", password: "applicant1", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
   });
   expect(reg.ok(), await reg.text()).toBeTruthy();
   const applicant = await reg.json();
@@ -170,16 +170,14 @@ test("Paid today, when approving a registration into a bed", async ({ page, requ
   await page.goto("/pending");
   await page.getByRole("button", { name: new RegExp(name) }).first().tap();
   const drawer = page.getByRole("dialog");
-  await drawer.getByRole("button", { name: "Approve", exact: true }).tap();
-  await drawer.getByRole("radio", { name: /Approve & assign bed/ }).check();
-  await drawer.getByLabel("Site").selectOption(String(siteId));
-  await drawer.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 1 — Bed A" });
+  // Moving in is already chosen, as on Add tenant.
+  await drawer.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 1 · Bed A" });
   await drawer.getByLabel("Monthly rent (₹)").fill("7000");
   await drawer.getByLabel("Deposit (₹)").fill("14000");
   await drawer.getByRole("region", { name: "Paid today" }).getByRole("button", { name: "UPI" }).tap();
-  await drawer.getByRole("button", { name: "Approve & assign · ₹21,000 paid" }).tap();
+  await drawer.getByRole("button", { name: "Approve & move in · ₹21,000 paid" }).tap();
 
-  await expect(page.getByText(`${name} approved · ₹21,000 paid`)).toBeVisible();
+  await expect(page.getByText(`${name} approved and placed in Room 1 · Bed A · ₹21,000 paid`)).toBeVisible();
   expect(await paymentsOf(request, token, applicant.id)).toEqual([
     { amount: 14_000_00, kind: "deposit", payment_type: "online", payment_date: isoDaysAgo(0) },
     { amount: 7_000_00, kind: "rent", payment_type: "online", payment_date: isoDaysAgo(0) },

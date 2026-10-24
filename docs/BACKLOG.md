@@ -348,7 +348,15 @@ registrations that were rejected.
   `lib/payMethod.ts`; the stored value is still `online`). The nudge says "at your convenience" to
   someone 70 days late and carries no UPI handle.
 - The registration-link panel promises "or a QR code pointing to it" and the app
-  never makes one; the Copy button failed outright.
+  never makes one; the Copy button failed outright. *Copy is fixed. The QR code
+  is deliberately later (Oct 2026): a printable "Scan to register" sticker,
+  probably drawn by a small Go library so the frontend keeps its four
+  dependencies.*
+- **Later, owner's call (Oct 2026):** let the registration form ask "When are
+  you moving in?" and "Paid anything yet?" (amount, Cash/UPI, screenshot), to
+  fill in the approval. Both need a migration, because a payment needs a stay
+  and a pending registration has none. Worth it only if people start
+  registering before they arrive; today they register at the desk.
 - 404s land on Next.js's raw black page; a missing tenant or site redirects
   silently with no message.
 - `BASE_URL` does not follow `PORT`, so a local backend on a non-default port
@@ -516,7 +524,9 @@ so the history splits in two. Tenant login then picks between the two records
 by phone (`tenant_auth.go`, `QueryRow`), so it may sign them into the wrong one.
 Wants a phone check: the owner form offers "this is Anjali Menon, open her
 page", and approving a registration whose phone matches an existing tenant
-offers to link them. Raised by the owner looking at a settled demo tenant
+offers to link them. *Half done (Oct 2026): approving a registration now warns
+"Same number as …" and links to that tenant. The owner form, and linking the
+two records, are still to do.* Raised by the owner looking at a settled demo tenant
 (Oct 2026).
 
 ### ~~The tenant page's money tiles overflow on a narrow screen~~ ✅ fixed on `quick-ui-fixes` (Oct 2026)

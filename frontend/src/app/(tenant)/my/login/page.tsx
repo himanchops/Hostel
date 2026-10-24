@@ -36,11 +36,11 @@ export default function TenantLoginPage() {
     <div className="flex min-h-[70vh] items-center justify-center">
       <div className="w-full max-w-sm">
         <h1 className="mb-2 text-center font-display text-2xl font-bold text-stone-900">Tenant login</h1>
-        {/* Said out loud because the registration form asks for an email and
-            people reasonably assume that is the login. It never was: email is
-            stored for contact only and takes no part in authentication. */}
+        {/* It once added "— not your email", when registration asked for an
+            email and people took that for the login. Registration no longer
+            asks (Oct 2026), so the warning would only raise the question. */}
         <p className="mb-6 text-center text-sm text-stone-500">
-          Sign in with your phone number — not your email.
+          Sign in with your phone number.
         </p>
 
         <Card padding="none" className="p-6 sm:p-8">
