@@ -14,9 +14,12 @@ import {
   today,
 } from "@/lib/api";
 import { dueDay } from "@/lib/due";
+import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
-import { Badge, Button, Card, EmptyState, Field, FormError, Input, useToast, FileInput } from "@/components/ui";
+import {
+  Badge, Button, Card, EmptyState, Field, FormError, Input, SegmentedControl, useConfirm, useToast, FileInput,
+} from "@/components/ui";
 
 export default function TenantPortalPage() {
   const { token, isAuthenticated, isLoading } = useTenantAuth();
@@ -189,6 +192,9 @@ function StayCard({ stay, token, suggested, onUpdate }: {
   const booking = stay.bed_id == null;
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  // No default: cash and UPI are both normal here, and a guessed method is
+  // how every tenant payment was once filed as UPI.
+  const [method, setMethod] = useState<PayMethod | null>(null);
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -200,25 +206,39 @@ function StayCard({ stay, token, suggested, onUpdate }: {
   // The tenant could previously say THAT they were leaving but not WHEN — the
   // old confirm promised the owner would ring them for the date instead.
   const [leaveDate, setLeaveDate] = useState("");
+  const [changingDate, setChangingDate] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   function openPaymentForm() {
     setAmount(suggested > 0 ? String(suggested / 100) : "");
+    setMethod(null);
     setShowPaymentForm(true);
+  }
+
+  function closePaymentForm() {
+    setShowPaymentForm(false);
+    setPaymentError("");
+    setScreenshot(null);
   }
 
   async function handleSubmitPayment(e: React.FormEvent) {
     e.preventDefault();
     if (!amount) return;
     setPaymentError("");
+    if (!method) {
+      setPaymentError("Choose cash or UPI.");
+      return;
+    }
     setPaymentLoading(true);
     try {
       let proofUrl: string | undefined;
-      if (screenshot) {
+      if (screenshot && method === "online") {
         proofUrl = await uploadApi.tenantUpload(screenshot, token);
       }
       const payment = await tenantPortalApi.submitPayment(token, stay.id, {
         amount: Math.round(parseFloat(amount) * 100),
+        payment_type: method,
         notes: notes || undefined,
         proof_url: proofUrl,
       });
@@ -226,6 +246,7 @@ function StayCard({ stay, token, suggested, onUpdate }: {
       setAmount("");
       setNotes("");
       setScreenshot(null);
+      setMethod(null);
       setShowPaymentForm(false);
       toast.success("Sent to the owner to confirm");
     } catch (err) {
@@ -246,8 +267,10 @@ function StayCard({ stay, token, suggested, onUpdate }: {
         notice_date: updated.notice_date as string | undefined,
         expected_end_date: updated.expected_end_date as string | undefined,
       });
+      const changed = changingDate;
       setNoticeOpen(false);
-      toast.success("Notice submitted — your owner has been notified");
+      setChangingDate(false);
+      toast.success(changed ? "Leaving date changed" : "Notice submitted — your owner has been notified");
     } catch (err) {
       // Inline rather than a toast: the message is about the date field sitting
       // directly above it.
@@ -256,6 +279,24 @@ function StayCard({ stay, token, suggested, onUpdate }: {
       );
     } finally {
       setNoticeLoading(false);
+    }
+  }
+
+  async function withdrawNotice() {
+    const ok = await confirm({
+      title: "Withdraw your notice?",
+      message: "You'll be staying on. If you give notice again later, it counts from that day.",
+      confirmLabel: "Withdraw notice",
+      cancelLabel: "Keep it",
+    });
+    if (!ok) return;
+    try {
+      await tenantPortalApi.withdrawNotice(token, stay.id);
+      onUpdate({ ...stay, notice_date: undefined, expected_end_date: undefined });
+      setChangingDate(false);
+      toast.success("Notice withdrawn — you're staying");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't withdraw your notice. Please try again.");
     }
   }
 
@@ -284,14 +325,69 @@ function StayCard({ stay, token, suggested, onUpdate }: {
             {status}
           </Badge>
         </div>
-
-        {isActive && stay.expected_end_date && (
-          <p className="mt-2 text-xs text-stone-500">Leaving on {longDate(stay.expected_end_date)}</p>
-        )}
-        {isActive && stay.notice_date && !stay.expected_end_date && (
-          <p className="mt-2 text-xs text-amber-600">Notice given on {longDate(stay.notice_date)}</p>
-        )}
       </div>
+
+      {/* Notice given: the most important thing on the card until they go,
+          so it gets a panel of its own rather than a line of small print, and
+          they can change the date or take it back. The owner can do both
+          from their side ("They're staying"); so can the tenant. */}
+      {isActive && hasNotice && (
+        <div className="border-b border-amber-200 bg-amber-50 px-5 py-4">
+          <p className="font-display text-lg font-bold text-amber-900">
+            {stay.expected_end_date
+              ? `You’re leaving on ${longDate(stay.expected_end_date)}`
+              : "You’ve given notice"}
+          </p>
+          <p className="mt-0.5 text-sm text-amber-800">
+            Notice given {longDate(stay.notice_date!)}.
+            {!stay.expected_end_date && " No leaving date yet."}
+            {" "}Rent runs until the owner confirms you’ve moved out.
+          </p>
+
+          {changingDate ? (
+            <form onSubmit={submitNotice} className="mt-3 space-y-2">
+              <Field label={stay.expected_end_date ? "New leaving date" : "Leaving date"}>
+                <Input
+                  type="date"
+                  required
+                  value={leaveDate}
+                  min={today()}
+                  onChange={(e) => setLeaveDate(e.target.value)}
+                />
+              </Field>
+              {noticeError && <FormError>{noticeError}</FormError>}
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" loading={noticeLoading}>Save date</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setChangingDate(false); setNoticeError(""); }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setLeaveDate(stay.expected_end_date?.slice(0, 10) ?? "");
+                  setNoticeError("");
+                  setChangingDate(true);
+                }}
+              >
+                {stay.expected_end_date ? "Change date" : "Add a date"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={withdrawNotice}>
+                Withdraw notice
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Payment history */}
       <div className="px-5 py-4">
@@ -309,16 +405,20 @@ function StayCard({ stay, token, suggested, onUpdate }: {
         )}
       </div>
 
-      {/* Actions */}
+      {/* Actions. Payments the owner records show above as Confirmed; this is
+          for a tenant to put one on record themselves, cash or UPI. */}
       {isActive && (
         <div className="border-t border-stone-100 px-5 py-4 space-y-3">
-          {/* Most rent is paid at the desk and recorded by the owner. This is
-              for the odd payment made from somewhere else. */}
           {!showPaymentForm ? (
-            <Button onClick={openPaymentForm}>I’ve paid by UPI</Button>
+            <Button onClick={openPaymentForm}>Record a payment</Button>
           ) : (
             <form onSubmit={handleSubmitPayment} className="space-y-3">
               {paymentError && <FormError>{paymentError}</FormError>}
+              {/* Not a Field: its <label> would name the first button "Paid by". */}
+              <div>
+                <p className="mb-1 text-[13px] font-medium text-stone-600">Paid by</p>
+                <SegmentedControl options={PAY_METHODS} value={method} onChange={setMethod} ariaLabel="Paid by" />
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Input
                   required
@@ -333,20 +433,22 @@ function StayCard({ stay, token, suggested, onUpdate }: {
                 />
                 <Input
                   type="text"
-                  placeholder="UTR or note"
-                  aria-label="UTR or note"
+                  placeholder={method === "cash" ? "Who you gave it to" : "UTR or note"}
+                  aria-label="Note"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="min-w-0 flex-1"
                 />
               </div>
-              <Field label="Screenshot">
-                <FileInput
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
-                />
-              </Field>
-              {screenshot && <p className="-mt-2 text-xs text-stone-400">{screenshot.name}</p>}
+              {method === "online" && (
+                <Field label="Screenshot">
+                  <FileInput
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setScreenshot(e.target.files?.[0] ?? null)}
+                  />
+                </Field>
+              )}
+              {method === "online" && screenshot && <p className="-mt-2 text-xs text-stone-400">{screenshot.name}</p>}
               <div className="flex gap-2">
                 <Button type="submit" loading={paymentLoading}>
                   {paymentLoading ? "Sending…" : "Send"}
@@ -354,7 +456,7 @@ function StayCard({ stay, token, suggested, onUpdate }: {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => { setShowPaymentForm(false); setPaymentError(""); setScreenshot(null); }}
+                  onClick={closePaymentForm}
                 >
                   Cancel
                 </Button>
@@ -431,6 +533,7 @@ function PaymentRow({ payment }: { payment: Payment }) {
           {new Date(payment.payment_date).toLocaleDateString("en-IN", {
             day: "numeric", month: "short",
           })}
+          {payMethodLabel(payment.payment_type) && ` · ${payMethodLabel(payment.payment_type)}`}
         </span>
         <PaymentStatus payment={payment} audience="tenant" />
       </div>

@@ -35,7 +35,7 @@ test.describe("Rejecting a payment proof", () => {
     const tAuth = { Authorization: `Bearer ${tenantToken}` };
     const stayId = (await (await request.get(`${BASE}/tenant/stays`, { headers: tAuth })).json())[0].id;
     const proof = await (await request.post(`${BASE}/tenant/stays/${stayId}/payments`, {
-      headers: tAuth, data: { amount: 600000, notes: "UPI ref 4411" },
+      headers: tAuth, data: { amount: 600000, payment_type: "online", notes: "UPI ref 4411" },
     })).json();
 
     const balanceBefore = (await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: oAuth })).json()).balance;
@@ -43,14 +43,14 @@ test.describe("Rejecting a payment proof", () => {
     // ── The owner says no, and why ──
     await loginAs(page, token);
     await page.goto("/pending");
-    await page.getByRole("button", { name: /Payment Proofs/ }).tap();
+    await page.getByRole("button", { name: /Tenant payments/ }).tap();
     await page.getByRole("button", { name: "Reject" }).tap();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("stays on their ledger as Not accepted");
     await dialog.getByLabel("Reason").fill("No UPI payment of ₹6,000 arrived that day");
     await dialog.getByRole("button", { name: "Mark not accepted" }).tap();
     await expect(page.getByText(/Marked not accepted/)).toBeVisible();
-    await expect(page.getByText("No payment proofs")).toBeVisible();
+    await expect(page.getByText("No payments to confirm")).toBeVisible();
 
     // ── The row is kept, marked, and still not money ──
     const listed = await (await request.get(`${BASE}/api/stays/${stayId}/payments`, { headers: oAuth })).json();

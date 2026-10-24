@@ -3061,9 +3061,27 @@ two months behind saw a green "Active" and a green "Confirmed".
   The figures come from `GET /tenant/summary`, which is the owner's tenant
   summary (`loadTenantSummary`, pulled out of `Summary`). The e2e test checks
   the two responses are equal.
-- **"I've paid by UPI"** replaces "Submit payment". Most rent is paid at the
-  desk, so this is for the odd payment made from elsewhere. It fills in what
-  they owe, and the form lost its "(optional)"s.
+- **"Record a payment"** replaces "Submit payment", for cash or UPI. The
+  tenant picks Cash or UPI, with nothing picked for them, and the
+  screenshot field shows only for UPI. It fills in what they owe, and the
+  form lost its "(optional)"s. Before this every tenant payment was saved as
+  UPI whatever they had done, because the handler hard-coded `online`.
+  - The backend refuses a payment with no method.
+  - The owner's pending queue shows the method on each row ("Meera · ₹3,000
+    · Cash"). Its tab is renamed from "Payment Proofs" to "Tenant payments",
+    since a cash payment has no proof.
+  - Every payment row in the portal shows its method beside the date,
+    including the ones the owner records. Those show as Confirmed, as they
+    always did.
+- **Notice to vacate gets a panel of its own.** It was two lines of small
+  print. Now it reads "You're leaving on 14 Nov 2026", with when notice was
+  given and that rent runs until the owner confirms. Two buttons sit under it:
+  - **Change date** (or **Add a date**) moves the leaving date. It keeps the
+    original notice date, which decides whether the deposit comes back
+    (`noticeBy`). It used to reset to the day of the change.
+  - **Withdraw notice** asks first, then clears both dates
+    (`DELETE /tenant/stays/:id/notice`), just like the owner's "They're
+    staying". Notice given again later counts from that day.
 - **Empty and failed are different answers:**
   - Approved with no stay yet (the owner chose "Just approve") reads "You're
     approved. Your room will show here once it's set up."
@@ -3103,7 +3121,7 @@ password. **House rules on the registration form** are next
 (`docs/BACKLOG.md`, round two).
 
 No migration. Tests:
-- `tenant/portal-money.test.ts` (8 tests)
+- `tenant/portal-money.test.ts` (13 tests)
 - `tests/unit/phone.test.ts`
 - `phone_test.go`
 - Four existing test files had invented numbers like `5…` or `2…`. They
@@ -3112,7 +3130,7 @@ No migration. Tests:
   more, so it gets one by rewriting the board response, the way a record from
   before the rule would come back.
 
-Full suite: 178 e2e and 73 unit tests, plus `go test ./...`.
+Full suite: 183 e2e and 70 unit tests, plus `go test ./...`.
 
 ---
 

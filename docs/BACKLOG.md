@@ -287,13 +287,14 @@ digits. Aadhaar still accepts any characters.*
 ### The tenant portal is a stub wearing the product's logo — M, mostly done
 No balance (the number is already computed and correct on the owner's screen for
 the same tenant), no deposit, no headings at all, no way to contact the owner,
-no payment date or method field, and its two forms are visibly from different
+no payment date or method field (*method done*), and its two forms are visibly from different
 eras. `/my/page.tsx` was untouched by Phase 16.
 *Done on `tenant-portal` (Oct 2026): what they owe and when, and the deposit,
 from the owner's own summary (`GET /tenant/summary`); the hostel's name in the
 header; "You're approved" and "Couldn't load" instead of "No stays found";
-bookings read as bookings; the payment button is "I've paid by UPI" and fills
-in the amount. Left, on purpose: a way to reach the owner, the notice rule
+bookings read as bookings; "Record a payment" takes cash or UPI and fills in
+the amount; notice to vacate has its own panel, with Change date and Withdraw
+notice. Left, on purpose: a way to reach the owner, the notice rule
 ("give notice by … to get your deposit back"), a refund line after moving out,
 and tenants changing their own password. He chose to wait on all four.*
 

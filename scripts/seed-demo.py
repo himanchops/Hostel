@@ -447,7 +447,8 @@ def main():
                   {"phone": "9845110018", "password": TENANT_PASSWORD})
     t_stays = call("GET", "/tenant/stays", token=t_auth["token"])
     call("POST", f"/tenant/stays/{t_stays[0]['id']}/payments",
-         {"amount": 700000, "notes": "Paid by UPI this morning — screenshot to follow"},
+         {"amount": 700000, "payment_type": "online",
+          "notes": "Paid by UPI this morning — screenshot to follow"},
          token=t_auth["token"])
 
     total_beds = len(beds)

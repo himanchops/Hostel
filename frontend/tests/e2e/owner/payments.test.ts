@@ -169,7 +169,7 @@ test.describe("Payments", () => {
       data: { phone: behind.phone, password: "tenant1234" },
     })).json()).token;
     const proof = await request.post(`${BASE}/tenant/stays/${ids["Behind Tenant"].stay}/payments`, {
-      headers: { Authorization: `Bearer ${tenantToken}` }, data: { amount: 100000, notes: "UPI" },
+      headers: { Authorization: `Bearer ${tenantToken}` }, data: { amount: 100000, payment_type: "online", notes: "UPI" },
     });
     expect(proof.ok(), await proof.text()).toBeTruthy();
 

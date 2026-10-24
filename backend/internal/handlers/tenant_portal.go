@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -100,9 +102,13 @@ func (h *TenantPortalHandler) GetSummary(c echo.Context) error {
 }
 
 type tenantSubmitPaymentRequest struct {
-	Amount   int64  `json:"amount"` // in paise
-	Notes    string `json:"notes"`
-	ProofURL string `json:"proof_url"`
+	Amount int64 `json:"amount"` // in paise
+	// "cash" or "online" (shown as UPI). It was always "online" before Oct
+	// 2026, whatever the tenant had actually done, so a cash payment handed
+	// to someone at the desk came into the owner's queue labelled UPI.
+	PaymentType string `json:"payment_type"`
+	Notes       string `json:"notes"`
+	ProofURL    string `json:"proof_url"`
 }
 
 func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
@@ -128,6 +134,9 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 	if req.Amount <= 0 {
 		return c.JSON(http.StatusBadRequest, errorResponse("amount must be positive"))
 	}
+	if req.PaymentType != "cash" && req.PaymentType != "online" {
+		return c.JSON(http.StatusBadRequest, errorResponse("Say whether you paid by cash or UPI."))
+	}
 
 	if !validFileRef(req.ProofURL) {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid proof_url"))
@@ -143,9 +152,9 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 		// (42P08, "inconsistent types deduced for parameter $3"). This is why
 		// no tenant-submitted payment ever reached the database.
 		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at)
-		 VALUES ($1, $2, 'online', $3, $4, $5, false, $6)
+		 VALUES ($1, $2, $7, $3, $4, $5, false, $6)
 		 RETURNING `+paymentColumns,
-		stayID, req.Amount, now, proofURL, req.Notes, now,
+		stayID, req.Amount, now, proofURL, req.Notes, now, req.PaymentType,
 	).StructScan(&payment)
 	if err != nil {
 		return serverError(c, err, "failed to submit payment")
@@ -204,13 +213,43 @@ func (h *TenantPortalHandler) SubmitNotice(c echo.Context) error {
 
 	var stay models.Stay
 	err = h.db.QueryRowx(
-		`UPDATE stays SET notice_date = $1, expected_end_date = COALESCE($4, expected_end_date), updated_at = $2
+		// COALESCE on notice_date: changing the leaving date is not a new
+		// notice. When they first told the owner decides whether the deposit
+		// comes back (noticeBy), so moving the date must not move it.
+		`UPDATE stays SET notice_date = COALESCE(notice_date, $1), expected_end_date = COALESCE($4, expected_end_date), updated_at = $2
 		 WHERE id = $3
 		 RETURNING id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, expected_end_date, created_at, updated_at`,
 		noticeDate, time.Now(), stayID, expectedEnd,
 	).StructScan(&stay)
 	if err != nil {
 		return serverError(c, err, "failed to submit notice")
+	}
+	return c.JSON(http.StatusOK, stay)
+}
+
+// WithdrawNotice takes back a notice to vacate: both dates, as the owner's
+// "They're staying" does. A tenant who pressed the button by mistake, or
+// changed their mind, had no way back from the portal; only the owner could
+// undo it. Notice given again later is dated that day.
+func (h *TenantPortalHandler) WithdrawNotice(c echo.Context) error {
+	tenantID := appMiddleware.GetTenantID(c)
+	stayID, err := strconv.ParseInt(c.Param("stayId"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid stay id"))
+	}
+
+	var stay models.Stay
+	err = h.db.QueryRowx(
+		`UPDATE stays SET notice_date = NULL, expected_end_date = NULL, updated_at = $1
+		 WHERE id = $2 AND tenant_id = $3 AND end_date IS NULL
+		 RETURNING id, tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, end_date, notice_date, expected_end_date, created_at, updated_at`,
+		time.Now(), stayID, tenantID,
+	).StructScan(&stay)
+	if errors.Is(err, sql.ErrNoRows) {
+		return c.JSON(http.StatusNotFound, errorResponse("active stay not found"))
+	}
+	if err != nil {
+		return serverError(c, err, "failed to withdraw notice")
 	}
 	return c.JSON(http.StatusOK, stay)
 }

@@ -92,7 +92,7 @@ for (const device of [
       const stayId = (await (await request.get(`${BASE}/tenant/stays`, {
         headers: { Authorization: `Bearer ${tenantToken}` },
       })).json())[0].id;
-      await post(request, tenantToken, `/tenant/stays/${stayId}/payments`, { amount: 100000, notes: "UPI" });
+      await post(request, tenantToken, `/tenant/stays/${stayId}/payments`, { amount: 100000, payment_type: "online", notes: "UPI" });
       await request.put(`${BASE}/api/stays/${stayId}`, {
         headers: { Authorization: `Bearer ${token}` }, data: { notice_date: monthStart(0) },
       });
@@ -120,7 +120,7 @@ for (const device of [
       await check("/payments, recording");
 
       await page.goto("/pending");
-      await page.getByRole("button", { name: /Payment Proofs/ }).tap();
+      await page.getByRole("button", { name: /Tenant payments/ }).tap();
       await expect(page.getByText(/Tara/).first()).toBeVisible();
       await check("/pending, proofs");
 
@@ -145,7 +145,7 @@ for (const device of [
       await page.goto("/my");
       await page.waitForLoadState("networkidle");
       await check("/my");
-      await page.getByRole("button", { name: "I’ve paid by UPI" }).tap();
+      await page.getByRole("button", { name: "Record a payment" }).tap();
       await check("/my, paying");
 
       expect(failures, failures.join("\n")).toEqual([]);

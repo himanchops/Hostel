@@ -43,6 +43,7 @@ import {
   paidTodayError, paidTodaySuffix, recordPaidToday,
   Arrival, arrivalOptions, ARRIVAL_HINT,
 } from "@/components/StayForm";
+import { payMethodLabel } from "@/lib/payMethod";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -384,7 +385,7 @@ function PendingQueue() {
     if (!token) return;
     pendingPaymentsApi.list(token)
       .then(setPendingPayments)
-      .catch(() => toast.error("Could not load payment proofs — reload the page"))
+      .catch(() => toast.error("Could not load tenant payments — reload the page"))
       .finally(() => setPayLoading(false));
   }, [token, toast]);
 
@@ -451,7 +452,7 @@ function PendingQueue() {
               tab === t ? "bg-white text-stone-900" : "text-stone-500 hover:text-stone-700"
             }`}
           >
-            {t === "registrations" ? "Registrations" : "Payment Proofs"}
+            {t === "registrations" ? "Registrations" : "Tenant payments"}
             {t === "registrations" && pending.length > 0 && (
               <CountBadge tone="warning">{pending.length}</CountBadge>
             )}
@@ -563,8 +564,8 @@ function PendingQueue() {
           ) : pendingPayments.length === 0 ? (
             <EmptyState
               icon={<ReceiptIcon className="h-8 w-8" />}
-              title="No payment proofs"
-              message="Screenshots submitted from the tenant portal appear here."
+              title="No payments to confirm"
+              message="Payments tenants record in their portal appear here."
             />
           ) : (
             <div className="space-y-3">
@@ -572,7 +573,11 @@ function PendingQueue() {
                 <Card key={p.id}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="font-medium tabular-nums text-stone-900">{p.tenant_name} · {formatCurrency(p.amount)}</p>
+                      <p className="font-medium tabular-nums text-stone-900">
+                        {p.tenant_name} · {formatCurrency(p.amount)}
+                        {/* Cash is checked against the drawer, UPI against the bank. */}
+                        {payMethodLabel(p.payment_type) && ` · ${payMethodLabel(p.payment_type)}`}
+                      </p>
                       <p className="text-sm text-stone-500">{p.site_name} · {p.room_name} · {p.bed_name}</p>
                       {p.notes && <p className="mt-0.5 text-xs text-stone-400">&quot;{p.notes}&quot;</p>}
                       <p className="mt-0.5 text-xs text-stone-400">

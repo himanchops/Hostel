@@ -22,7 +22,8 @@ export function SegmentedControl<T extends string | number>({
   ariaLabel,
 }: {
   options: readonly { value: T; label: string }[];
-  value: T;
+  /** null selects nothing, for a choice that must be made, not defaulted. */
+  value: T | null;
   onChange: (value: T) => void;
   ariaLabel?: string;
 }) {
