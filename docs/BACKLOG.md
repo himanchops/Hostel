@@ -544,7 +544,9 @@ guest paid up to that date would stop showing as owing every morning. The
 owner thought it might apply to any stay, not only daily ones. Open: whether a
 nightly guest is priced per night or as one amount for the stay.
 
-### A tenant who comes back has no obvious way back in — S/M
+### ~~A tenant who comes back has no obvious way back in~~ ✅ done on `move-bed-and-return` (Oct 2026)
+*Done: "Start a new stay" on the tenant page, and Add tenant warns "Same number as …" with a link to their page. Linking two records that already exist is still to do.*
+
 A returning tenant can be given a new stay today, but only from Sites → grid →
 a vacant bed → search their name. Their own page, where the owner looks, has no
 "Start a new stay" once the last one ended; it should, reusing `StayForm`'s
@@ -578,6 +580,22 @@ while there.
 The help text around Delete tenant, the vacating-notice controls and similar
 is good the first time and clutter after that. Move it behind an on-demand
 info control. Circle back once the items above are done.
+
+### Discounts: a price agreed in advance, or money let go after — talk first
+Owner, 24 Oct 2026: "8,000 instead of 9,000 for the first month", or "8,500
+this month and next, then 8,700", without anything showing as owed. Two
+different things:
+- **Agreed before the month:** that's a price, and Change rent from a date
+  already bills it exactly (one step per change). The gaps are that it can't
+  be set while adding the tenant, and it reads as a rent change, not a
+  discount. Does the owner want the word "discount" on screen?
+- **Decided after ("let the ₹1,000 go"):** forgiving money that is owed. A
+  per-cycle adjustment to *billed* rent, applied inside `rentSchedule.billed`,
+  would lower what's owed without touching what was collected. That avoids
+  the waiver-as-payment trap in "Nothing can be corrected, anywhere", and
+  belongs with that design session.
+
+The owner wanted to talk both through before anything is built.
 
 ### No sign of anything between tapping a page and its code arriving — S, later
 Owner, 24 Oct 2026, after #51. `PageLoader` covers a slow API response, and

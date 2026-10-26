@@ -44,6 +44,7 @@ import {
   Arrival, arrivalOptions, ARRIVAL_HINT,
 } from "@/components/StayForm";
 import { payMethodLabel } from "@/lib/payMethod";
+import { phoneKey } from "@/lib/phone";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -114,11 +115,6 @@ function IdProofTile({ label, url, isImage }: { label: string; url: string; isIm
 // ── Review and approve, on one screen ───────────────────────────────────────
 
 const ARRIVALS = arrivalOptions("Just approve");
-
-/** Digits only, the last ten: "+91 98450 11001" and "9845011001" are one number. */
-function phoneKey(phone: string): string {
-  return phone.replace(/\D/g, "").slice(-10);
-}
 
 /**
  * Who they said they are, then their stay and the money last, beside the

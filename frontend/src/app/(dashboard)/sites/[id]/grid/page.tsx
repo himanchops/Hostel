@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import {
   gridApi, sitesApi, tenantsApi, staysApi, paymentsApi,
-  GridRoom, GridBed, BedStatus, Site, Tenant, Payment, PaymentKind,
+  GridRoom, GridBed, BedStatus, Site, Stay, Tenant, Payment, PaymentKind,
   formatCurrency, today, latestPaymentDate,
   ApiError,
 } from "@/lib/api";
@@ -47,6 +47,7 @@ import {
   paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
+import { MoveBedDialog } from "@/components/MoveBedDialog";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ export default function GridPage() {
   const siteId = Number(id);
   const { token } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   const [site, setSite] = useState<Site | null>(null);
   const [grid, setGrid] = useState<GridRoom[]>([]);
@@ -73,6 +75,8 @@ export default function GridPage() {
   // Which stay the end-stay dialog is for, if any.
   const [movingOut, setMovingOut] = useState<GridBed | null>(null);
   const [noticeBed, setNoticeBed] = useState<GridBed | null>(null);
+  // The grid's bed carries no rent cycle, so a move loads the stay first.
+  const [movingBed, setMovingBed] = useState<Stay | null>(null);
 
   const fetchGrid = useCallback(() => {
     if (!token) return;
@@ -98,6 +102,14 @@ export default function GridPage() {
     setSelectedBed(bed);
     setShowAssign(bed.status === "vacant");
     setShowPayment(false);
+  }
+
+  function openMove(bed: GridBed) {
+    if (!token || !bed.stay_id) return;
+    const room = grid.find((r) => r.beds.some((b) => b.id === bed.id));
+    staysApi.get(token, bed.stay_id)
+      .then((stay) => setMovingBed({ ...stay, room_name: room?.name ?? null, bed_name: bed.name }))
+      .catch((err) => toast.error(err instanceof ApiError ? err.message : "Could not load the stay"));
   }
 
   function closePanel() {
@@ -306,6 +318,7 @@ export default function GridPage() {
             onPaymentAdded={handlePaymentAdded}
             onMoveOut={() => setMovingOut(selectedBed)}
             onRecordNotice={() => setNoticeBed(selectedBed)}
+            onMoveBed={() => openMove(selectedBed)}
           />
         ))}
       </Drawer>
@@ -320,6 +333,19 @@ export default function GridPage() {
         tenantName={movingOut?.tenant?.name}
         onDone={handleMovedOut}
         onClose={() => setMovingOut(null)}
+      />
+
+      <MoveBedDialog
+        open={movingBed !== null}
+        stay={movingBed}
+        token={token ?? ""}
+        tenantName={selectedBed?.tenant?.name}
+        onMoved={() => {
+          setMovingBed(null);
+          setSelectedBed(null);
+          fetchGrid();
+        }}
+        onClose={() => setMovingBed(null)}
       />
 
       {/* Same dialog as the tenant page, for the same reason. */}
@@ -585,7 +611,7 @@ function AssignPanel({
 // ─── Occupied panel ───────────────────────────────────────────────────────────
 
 function OccupiedPanel({
-  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onMoveOut, onRecordNotice,
+  token, bed, showPaymentForm, onShowPayment, onPaymentAdded, onMoveOut, onRecordNotice, onMoveBed,
 }: {
   token: string;
   bed: GridBed;
@@ -594,6 +620,7 @@ function OccupiedPanel({
   onPaymentAdded: () => void;
   onMoveOut: () => void;
   onRecordNotice: () => void;
+  onMoveBed: () => void;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -718,6 +745,9 @@ function OccupiedPanel({
               <Button variant="secondary" size="sm" onClick={onRecordNotice}
                       title="They are planning to leave — this does not free the bed">
                 {bed.notice_date || bed.expected_end_date ? "Update notice" : "Record notice"}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={onMoveBed}>
+                Move bed
               </Button>
               <Button variant="secondary" size="sm" onClick={onMoveOut}>
                 Move out

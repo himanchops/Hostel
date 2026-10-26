@@ -3222,6 +3222,67 @@ deferred; see `docs/BACKLOG.md`.
 
 ---
 
+## Moving beds, and tenants who come back (Oct 2026)
+
+Owner, 24 Oct 2026: "I cannot move a tenant from one room to another", and
+someone who moved out and came back had no way back in.
+
+**Move bed** (migration 014, `stay_moves`). It's on the tenant's stay card
+and in the grid's bed drawer, and opens `MoveBedDialog`.
+- **The stay carries on.** The deposit, payments, balance and rent day don't
+  change. Only `stays.bed_id` changes, so the grid, dashboard and Payments
+  needed nothing. The old bed is free straight away.
+- **A row in `stay_moves`** (from bed, to bed, day) records each move. The
+  stay card shows "Moved from Room 2 · 1L on 18 Oct 2026".
+- **Insights' "By room" follows it.** Nights split by `roomSpans`. A rent
+  payment counts to the room they were in on the day they paid: the bed the
+  next move left, or the current one.
+- **A new rent starts with a whole cycle, never a split one.** The owner
+  picks "This month" (the cycle the move falls in) or "Next month".
+  - "This month" is the owner's own case: he moved after a day and paid the
+    whole month's difference.
+  - There's no day-counting, at the owner's request.
+  - `moveRentFrom` works out the date. `setRentFrom` writes the schedule,
+    shared with Change rent, and handles a first-month move by repricing from
+    move-in.
+- **The server refuses** a taken bed, the same bed, a stay that ended or has
+  no bed yet, a date before move-in or before the last move, and a date in the
+  future (the same day's slack as a payment date).
+- **Swaps are out of scope**, at the owner's call.
+
+**Start a new stay.** It's on the tenant page whenever nobody has an open stay
+(and "Start a stay" on a tenant who never had one), and opens `NewStayDialog`.
+That is Add tenant's "Their stay" card (moving in or booking, bed, terms, paid
+today) without the person. It's a fresh stay with its own deposit; the owner
+said "most likely new deposit, let's not overcomplicate". The tenant page's
+`reloadStays` now reloads the ledgers too, so a new stay doesn't sit at
+"Paid —".
+
+**Add tenant notices a returning number.** "Same number as Ajayraja, already
+on your books" links to their page. It's a warning, not a block. `phoneKey`
+moved to `lib/phone.ts`, shared with the pending queue.
+
+**Talked about, not built:** discounts. A price agreed in advance can already
+be done with Change rent; letting owed money go belongs with the corrections
+design. See `docs/BACKLOG.md` → "Discounts".
+
+**Migration 014 is new rows only.** Existing stays have no moves and read as
+before, so the live account needs no backfill. **Production migrates before
+the merge.**
+
+Tests:
+- `owner/move-bed.test.ts` (6): a move from the tenant page with "this
+  month" rent (owes ₹9,500, not ₹10,000), "next month" via the API (₹9,000,
+  new rent dated the 1st of next month), a move from the grid keeping the
+  rent, the server's refusals, a returning tenant's new stay, and the
+  same-number warning.
+- `moves_test.go`: `moveRentFrom` on the owner's dates, `roomSpans`, and a
+  move splitting October 17/14 between two rooms.
+
+Full suite: 195 e2e and 70 unit tests, plus `go test ./...`.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

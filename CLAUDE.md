@@ -175,6 +175,16 @@ Key conventions to carry forward:
     line so the settlement still adds up
 
   A refund says how it went back (`refund_method`, migration 013).
+- **Moving beds keeps the stay** (migration 014). `POST /api/stays/:id/move`
+  changes `stays.bed_id` and writes a `stay_moves` row, and the deposit,
+  payments and rent day stay put. `stays.bed_id` is always the bed they're in
+  *now*. Anything historical that asks "which room was this night, or this
+  payment, in?" goes through the moves (`roomSpans`, or the bed the next move
+  left), as Insights' "By room" does. A move's new rent starts with a whole
+  cycle, this one or the next (`moveRentFrom`), and is written by
+  `setRentFrom`, shared with Change rent. A tenant who left and came back
+  gets a new stay from their own page (`NewStayDialog`), never a second
+  tenant record.
 - **A stay with no bed is a booking** (Oct 2026): someone who paid to hold a
   place and gets a bed on arrival. Nothing on the grid holds a bed for them,
   because the owner promises a place, not a bed. One that ends without ever

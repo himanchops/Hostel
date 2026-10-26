@@ -53,3 +53,17 @@ export function firstDueOnOrAfter(start: string, cycle: Cycle, date: string): st
   }
   return date.slice(0, 10);
 }
+
+/**
+ * The start of the cycle `date` falls in: the latest due date on or before it.
+ * A move's "this month" rent starts here (backend moveRentFrom).
+ */
+export function cycleContaining(start: string, cycle: Cycle, date: string): string {
+  let current = start.slice(0, 10);
+  for (let n = 2; n < 10000; n++) {
+    const d = cycleStart(start, n, cycle);
+    if (d > date.slice(0, 10)) return current;
+    current = d;
+  }
+  return current;
+}

@@ -466,6 +466,22 @@ export interface Stay {
    * Absent when the rent never changed — rent_amount is then the whole story.
    */
   rent_changes?: RentChange[];
+  /**
+   * Every move to another bed during the stay, oldest first (migration 014).
+   * Only the tenant's stay list and a move's response send it.
+   */
+  moves?: StayMove[];
+}
+
+/** One move to another bed. Names are null for a bed deleted since. */
+export interface StayMove {
+  moved_on: string;
+  from_bed_id: number | null;
+  from_room_name: string | null;
+  from_bed_name: string | null;
+  to_bed_id: number | null;
+  to_room_name: string | null;
+  to_bed_name: string | null;
 }
 
 export interface RentChange {
@@ -527,6 +543,20 @@ export const staysApi = {
    */
   correctRent: (token: string, id: number, rentAmount: number) =>
     request<Stay>(`/api/stays/${id}`, { method: "PUT", body: JSON.stringify({ rent_amount: rentAmount }) }, token),
+
+  get: (token: string, id: number) => request<Stay>(`/api/stays/${id}`, {}, token),
+
+  /**
+   * Move an active stay to another bed. The stay carries on; with a new rent,
+   * rent_from says whether it starts with the cycle the move falls in or the
+   * next one.
+   */
+  move: (token: string, stayId: number, data: {
+    bed_id: number;
+    moved_on: string;
+    rent_amount?: number;
+    rent_from?: "this_cycle" | "next_cycle";
+  }) => request<Stay>(`/api/stays/${stayId}/move`, { method: "POST", body: JSON.stringify(data) }, token),
 
   assignBed: (token: string, stayId: number, data: { bed_id: number }) =>
     request<Stay>(`/api/stays/${stayId}/assign-bed`, { method: "PUT", body: JSON.stringify(data) }, token),
