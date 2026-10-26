@@ -15,7 +15,7 @@ When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
 `### <title> (#NN)`. Items with no write-up just leave the board.
 
-### A "Leaving on" date when someone moves in (#PRNUM)
+### A "Leaving on" date when someone moves in (#55)
 Raised 23 Oct 2026, for later. Some stays are short and agreed up front: a
 guest for five nights, or someone who says at the door they're here for one
 month. The forms could take a "Leaving on" date with the terms. That would
