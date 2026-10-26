@@ -3300,6 +3300,49 @@ two say it the same way, and both now add "in 4 days" or "today".
 
 ---
 
+## A leaving date when someone moves in (Oct 2026)
+
+Owner, 26 Oct 2026, raised again from 23 Oct: a guest for five nights, or
+someone here for a month, says so at the door, but the date could only be
+set afterwards on the tenant page. So a daily guest who had paid for the
+whole stay showed as owing every morning.
+
+- **"+ Leaving date, if known"** under the start date in `StayTermsFields`,
+  folded away until tapped, so the form is no longer for the open-ended
+  stays that are most of them. "No leaving date" folds it back. Being in
+  `StayForm.tsx`, it reaches all four forms: Add tenant, the grid's assign
+  drawer, the pending drawer and New stay.
+- **Priced per night** (the owner's answer to the write-up's open question).
+  For a daily stay the field says "5 nights", and Paid today's rent becomes
+  the whole stay: "Rent · 5 nights (₹)", ₹500 × 5 = ₹2,500, still editable.
+  The leaving day is not a night, which is the backend's count too
+  (`cyclesThroughEnd`). `stayNights` and `rentForNights` in `lib/rent.ts`.
+  Weekly and monthly stays keep one period in Paid today.
+- **`POST /api/stays` takes `expected_end_date`**, which must come after
+  `start_date`. It also sets `notice_date` to the start date: they told you
+  on arrival. Without it the move-out sheet would say "no notice given" and
+  keep the deposit by default.
+- Nothing ends the stay on the day. As with any leaving date, a passed one
+  turns the bed purple and asks the owner to confirm.
+
+No native `min` on the date: it blocked submitting before the form's own
+message could say why, and it allowed the start day itself, which the
+server refuses.
+
+### Verification
+- `tests/unit/rent.test.ts`: nights across a month end, one night, a
+  monthly stay, a date before arrival; ₹333.33 × 3 is ₹999.99.
+- `tests/e2e/owner/leaving-date.test.ts` at 768×1024 under touch:
+  - a five-night guest's Paid today follows the rate, records ₹2,500,
+    saves both dates, and the bed is Vacating and owes nothing
+  - the grid drawer's monthly stay keeps one month
+  - a date before arrival shows the inline error, "No leaving date" saves an
+    open stay
+  - the API refuses a leaving date on the start day
+- Screenshots of the form at 375, 768 and 1024.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

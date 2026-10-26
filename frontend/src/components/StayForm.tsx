@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { Button, Field, FormError, Input, SegmentedControl, Select } from "@/components/ui";
 import { PAY_METHODS, PayMethod } from "@/lib/payMethod";
+import { rentForNights, stayNights as nightsBetween } from "@/lib/rent";
 
 /**
  * The two halves of "put this person in that bed", shared by every screen that
@@ -39,10 +40,17 @@ export interface StayTerms {
   /** Rupees, as typed. */
   deposit: string;
   startDate: string;
+  /** A leaving date known on arrival, YYYY-MM-DD, or "" for an open stay. */
+  leavingOn: string;
 }
 
 export function emptyStayTerms(): StayTerms {
-  return { cycle: "monthly", rent: "", deposit: "", startDate: today() };
+  return { cycle: "monthly", rent: "", deposit: "", startDate: today(), leavingOn: "" };
+}
+
+/** Nights a daily guest with a leaving date will stay, or 0 when it isn't one. */
+export function stayNights(terms: StayTerms): number {
+  return nightsBetween(terms.cycle, terms.startDate, terms.leavingOn);
 }
 
 /** Rupees → paise, in one place, because getting this wrong is a money bug. */
@@ -52,6 +60,7 @@ export function stayTermsPayload(terms: StayTerms) {
     deposit_amount: Math.round(parseFloat(terms.deposit || "0") * 100),
     rent_cycle: terms.cycle,
     start_date: terms.startDate,
+    ...(terms.leavingOn ? { expected_end_date: terms.leavingOn } : {}),
   };
 }
 
@@ -60,6 +69,7 @@ export function stayTermsError(terms: StayTerms): string {
   if (!terms.rent.trim()) return "Enter the rent amount.";
   if (Number.isNaN(parseFloat(terms.rent))) return "Rent must be a number.";
   if (!terms.startDate) return "Pick a start date.";
+  if (terms.leavingOn && terms.leavingOn <= terms.startDate) return "The leaving date must be after the start date.";
   return "";
 }
 
@@ -90,6 +100,10 @@ export function StayTermsFields({
   startLabel?: string;
 }) {
   const set = (patch: Partial<StayTerms>) => onChange({ ...value, ...patch });
+  // Folded away until asked for: most stays are open-ended, and the form is
+  // long enough. A date already set (a form filled earlier) shows open.
+  const [leavingOpen, setLeavingOpen] = useState(value.leavingOn !== "");
+  const nights = stayNights(value);
   const wrap =
     layout === "grid"
       ? "grid grid-cols-1 gap-3 sm:grid-cols-2"
@@ -109,13 +123,49 @@ export function StayTermsFields({
           ariaLabel="Billing cycle"
         />
       </div>
-      <Field label={startLabel} required>
-        <Input
-          type="date"
-          value={value.startDate}
-          onChange={(e) => set({ startDate: e.target.value })}
-        />
-      </Field>
+      {/* The date and its "Leaving on" partner are one cell of the grid
+          layout. The toggles sit outside each Field, whose <label> would
+          otherwise swallow a button into its name. */}
+      <div>
+        <Field label={startLabel} required>
+          <Input
+            type="date"
+            value={value.startDate}
+            onChange={(e) => set({ startDate: e.target.value })}
+          />
+        </Field>
+        {leavingOpen ? (
+          <>
+            <Field
+              label="Leaving on"
+              className="mt-3"
+              hint={nights > 0 ? `${nights} ${nights === 1 ? "night" : "nights"}` : undefined}
+            >
+              <Input
+                type="date"
+                value={value.leavingOn}
+                onChange={(e) => set({ leavingOn: e.target.value })}
+              />
+            </Field>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-3 mt-1"
+              onClick={() => {
+                set({ leavingOn: "" });
+                setLeavingOpen(false);
+              }}
+            >
+              No leaving date
+            </Button>
+          </>
+        ) : (
+          <Button type="button" variant="ghost" size="sm" className="-ml-3 mt-1" onClick={() => setLeavingOpen(true)}>
+            + Leaving date, if known
+          </Button>
+        )}
+      </div>
       <Field label={rentLabel(value.cycle)} required>
         <Input
           type="number"
@@ -165,14 +215,29 @@ export interface PaidToday {
 export interface PaidSuggestion {
   rent: string;
   deposit: string;
+  /** The rent box's label when it isn't one period: "Rent · 5 nights (₹)". */
+  rentLabel?: string;
 }
 
 export function emptyPaidToday(): PaidToday {
   return { rent: null, deposit: null, method: "cash", none: false };
 }
 
-/** A move-in: one rent period and the deposit agreed. */
+/**
+ * A move-in: one rent period and the deposit agreed. A daily guest with a
+ * leaving date pays for the whole stay up front, priced per night, so they
+ * don't show as owing every morning until they go.
+ */
 export function suggestedFromTerms(terms: StayTerms): PaidSuggestion {
+  const nights = stayNights(terms);
+  const whole = rentForNights(terms.rent, nights);
+  if (whole) {
+    return {
+      rent: whole,
+      deposit: terms.deposit,
+      rentLabel: `Rent \u00b7 ${nights} ${nights === 1 ? "night" : "nights"} (₹)`,
+    };
+  }
   return { rent: terms.rent, deposit: terms.deposit };
 }
 
@@ -296,7 +361,7 @@ export function PaidTodayFields({
           {/* Sized by the section, not the screen: three across on a page,
               two in a drawer, one on a phone. */}
           <div className="grid grid-cols-1 gap-3 @xs:grid-cols-2 @xl:grid-cols-3">
-            <Field label={rentLabel ?? firstPeriodLabel(cycle)}>
+            <Field label={rentLabel ?? suggested.rentLabel ?? firstPeriodLabel(cycle)}>
               <Input
                 type="number"
                 min="0"

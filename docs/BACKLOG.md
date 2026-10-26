@@ -127,21 +127,6 @@ owner-scoped, paginated payments endpoint and a page to match.
 
 ---
 
-## Tenants and stays
-
-### A "Leaving on" date when someone moves in
-Raised 23 Oct 2026, for later. Some stays are short and agreed up front: a
-guest for five nights, or someone who says at the door they're here for one
-month. The forms could take a "Leaving on" date with the terms. That would
-fill in Paid today as the whole stay (nights × rate for a daily guest), and a
-guest paid up to that date would stop showing as owing every morning. The
-owner thought it might apply to any stay, not only daily ones.
-
-Open question, not answered yet: is a nightly guest priced per night or as one
-amount for the stay?
-
----
-
 ## Screens
 
 ### A loader between pages

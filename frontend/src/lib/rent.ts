@@ -67,3 +67,25 @@ export function cycleContaining(start: string, cycle: Cycle, date: string): stri
   }
   return current;
 }
+
+/**
+ * Nights a daily guest stays, from the day they arrive to the day they leave.
+ * The leaving day is not a night: in on the 26th, out on the 31st is five,
+ * the same count the backend bills (`cyclesThroughEnd`, every cycle that began
+ * before the leaving day). 0 for anything else.
+ */
+export function stayNights(cycle: string, start: string, leaving: string): number {
+  if (cycle !== "daily" || !start || !leaving) return 0;
+  return Math.max(0, Math.round((utc(leaving).getTime() - utc(start).getTime()) / 86_400_000));
+}
+
+/**
+ * The whole stay at a nightly rate, in rupees as a form holds them: "2500"
+ * for ₹500 × 5. Guests are priced per night (owner, 26 Oct 2026), never as
+ * one amount for the stay. "" when the rate isn't a number yet.
+ */
+export function rentForNights(nightly: string, nights: number): string {
+  const rate = parseFloat(nightly);
+  if (Number.isNaN(rate) || nights <= 0) return "";
+  return String(Math.round(rate * 100 * nights) / 100);
+}
