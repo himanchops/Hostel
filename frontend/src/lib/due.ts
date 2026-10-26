@@ -1,4 +1,4 @@
-import { formatCurrency } from "./api";
+import { formatCurrency, formatDay } from "./api";
 
 /**
  * When rent is next due, as the backend works it out (handlers/due.go). The
@@ -82,6 +82,58 @@ export function dueChip(due: Due, today: string): { text: string; tone: "danger"
   if (due.due_state === "due_today") return { text: "due today", tone: "warning" };
   if (dueSoon(due, today)) return { text: `due ${dueDay(due.due_date)}`, tone: "warning" };
   return null;
+}
+
+/**
+ * A notice carries two dates that mean different things: when the tenant told
+ * you, and when they say they are going. The dashboard once printed both bare
+ * under one heading — "Notice: 2026-08-31" on one row, "Leaving 2026-09-30" on
+ * the next — and three testers read the first as "he left nine days ago"; one
+ * would have re-let the bed (UX audit). Each date now carries its own verb,
+ * and a missing leaving date is said rather than left out. The dashboard's
+ * Vacating Soon and the grid's bed panel say it the same way.
+ */
+export function departureFacts(
+  stay: { notice_date?: string; expected_end_date?: string },
+  today: string,
+): string[] {
+  const facts: string[] = [];
+  if (stay.notice_date) facts.push(`gave notice ${formatDay(stay.notice_date)}`);
+  const date = stay.expected_end_date?.slice(0, 10);
+  if (!date) {
+    facts.push("no leaving date yet");
+  } else {
+    const days = daysUntil(date, today);
+    const plural = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+    if (days < 0) facts.push(`was due to leave ${formatDay(date)}, ${plural(-days)} ago`);
+    else if (days === 0) facts.push("leaving today");
+    else facts.push(`leaving ${formatDay(date)}, in ${plural(days)}`);
+  }
+  return facts.map((f, i) => (i === 0 ? f[0].toUpperCase() + f.slice(1) : f));
+}
+
+export interface Leaving {
+  status: string;
+  notice_date?: string;
+  expected_end_date?: string;
+}
+
+/**
+ * When a vacating tenant goes, in the few words a grid tile has room for, or
+ * null for anyone else. On their tile it takes the rent date's place: what is
+ * owed still shows as an amount, and the date that matters is the leaving one.
+ *
+ * A passed date is a question, because nothing ends a stay on its own: the
+ * owner confirms they went.
+ */
+export function leavingChip(bed: Leaving, today: string): string | null {
+  const date = bed.expected_end_date?.slice(0, 10);
+  if (bed.status === "departure_due" && date) return `left ${dueDay(date)}?`;
+  if (bed.status !== "vacating_soon") return null;
+  if (!date) return "notice given";
+  // "leaves tomorrow" does not fit a tile; tomorrow's date does.
+  if (daysUntil(date, today) === 0) return "leaves today";
+  return `leaves ${dueDay(date)}`;
 }
 
 /** Today in the owner's own timezone, as "YYYY-MM-DD". */
