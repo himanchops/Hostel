@@ -7,11 +7,9 @@ import {
   dashboardApi,
   paymentsBoardApi,
   DashboardData,
-  VacatingTenant,
   formatCurrency,
-  formatDay,
 } from "@/lib/api";
-import { dueSoon, localToday } from "@/lib/due";
+import { departureFacts, dueSoon, localToday } from "@/lib/due";
 import { payMethodLabel } from "@/lib/payMethod";
 import {
   AlertIcon,
@@ -27,28 +25,6 @@ import {
   buttonClasses,
   TOUCH_TARGET,
 } from "@/components/ui";
-
-/**
- * A notice carries two dates that mean different things: when the tenant told
- * you, and when they say they are going. This card used to print both bare
- * under one heading — "Notice: 2026-08-31" on one row, "Leaving 2026-09-30" on
- * the next — and three testers read the first as "he left nine days ago"; one
- * would have re-let the bed (UX audit). Each date now carries its own verb,
- * and a missing leaving date is said rather than left out.
- */
-function departureFacts(v: VacatingTenant): string[] {
-  const facts: string[] = [];
-  if (v.notice_date) facts.push(`Gave notice ${formatDay(v.notice_date)}`);
-  if (!v.expected_end_date) {
-    facts.push("no leaving date yet");
-  } else if (v.days_overdue > 0) {
-    const ago = `${v.days_overdue} day${v.days_overdue === 1 ? "" : "s"} ago`;
-    facts.push(`was due to leave ${formatDay(v.expected_end_date)}, ${ago}`);
-  } else {
-    facts.push(`leaving ${formatDay(v.expected_end_date)}`);
-  }
-  return facts.map((f, i) => (i === 0 ? f[0].toUpperCase() + f.slice(1) : f));
-}
 
 export default function DashboardPage() {
   const { owner, token } = useAuth();
@@ -236,7 +212,7 @@ export default function DashboardPage() {
                           {v.site_name} · {v.room_name} · {v.bed_name}
                         </p>
                         <p className="mt-0.5 text-xs text-stone-700">
-                          {departureFacts(v).map((fact, i) => (
+                          {departureFacts(v, localToday()).map((fact, i) => (
                             <span key={i}>
                               {i > 0 && " · "}
                               <span className="whitespace-nowrap">{fact}</span>
