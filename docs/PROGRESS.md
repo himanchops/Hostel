@@ -1642,80 +1642,11 @@ behaviour this removed.
 
 ## Deferred
 
-Things we decided are worth doing, but not now. Nothing here is half-built —
-if it were, it would be under Known Issues instead.
-
-### Go-live blockers, deliberately bypassed for the alpha 🅿️
-
-**Decision (Aug 2026):** deploy without multi-tenancy isolation tests and
-without password reset. Both were raised as go-live blockers in a status
-report; the owner's call is that the alpha does not need them.
-
-The reasoning holds, and it is worth writing down so this is not re-argued:
-with exactly one owner account there is nobody for an isolation bug to leak
-*to*, so the risk is unobservable. Every handler already scopes by `owner_id`
-(42 query sites) — what is missing is the test proving it, not the scoping.
-
-**The trigger is a second owner signing up, not the deploy.** Before anyone
-else gets an account, write the 12b multi-tenancy tests: owner A must not be
-able to read or mutate owner B's sites, rooms, beds, tenants, stays or
-payments — one test per endpoint family.
-
-Password reset stays parked, but the reasoning above does **not** transfer to
-it, and saying it did was a mistake worth correcting (Sep 2026). Isolation bugs
-need a second owner to leak *to*; a forgotten password needs nobody but you.
-The trigger is not "a second human signs up" — it is the first human, and that
-is already the case.
-
-What makes it survivable meanwhile is that the manual path genuinely works and
-is now **written down and rehearsed** rather than asserted:
-`docs/DEPLOYMENT.md` → "Password recovery". Two commands, and the `$2y$`
-prefix that looks wrong is fine.
-
-What that path cannot do is serve a person who is not you. So the real trigger
-for building reset is the same one as the isolation tests: **before anyone else
-has an account.** Someone locked out who cannot reach the database has no
-recovery at all, and "email me your new password" is worse than no reset.
-
-Sizing, so it is not mistaken for a papercut: an email sender (Resend or
-Postmark), a `password_reset_tokens` table with expiry and single use, a
-request endpoint with its own rate limit, and a reset form. A session on its
-own. A signed-in **change password** form is separate and much smaller — it
-closes the "typed it into the password manager wrong" case, though not lockout.
-
-Also unaddressed and worth the same note: there is no rate limiting on
-`/auth/login` or `/public/register/:ownerId`. ✅ **Done Sep 2026** (see
-"Pre-import hardening"). Low risk while the registration
-link is not public; a problem the day it is printed on a QR code by the door.
-
-### Automated design review 🅿️
-
-**The idea:** screenshot every page at 1280px and 375px with Playwright, send
-the images to Claude's vision API with the "Design direction" section of
-`docs/DESIGN_PLAN.md` as the rubric, and write the critique to
-`test-results/design-review.md`. Run it before and after each design phase and
-diff the two — a second pair of eyes on work that no test can assert.
-
-**Status (Aug 2026): removed, not written.** `make review-design` existed as a
-Makefile target from Phase 6 and `docs/` described the script as shipped, but
-`scripts/review-design.ts` was never committed — the Phase 5–6 commit
-(`6234f1c`) adds only `fix-tests.ts` and the package files. The target guarded
-on `ANTHROPIC_API_KEY` and would then have failed on a missing file, which is
-exactly the sort of trap that costs someone twenty minutes. Target, npm script,
-and the now-unused `@anthropic-ai/sdk` dependency have been removed.
-
-**To build it** (roughly 80 lines in `scripts/review-design.ts`, plus putting
-the SDK dependency back):
-1. Reuse the Playwright setup to visit each owner route at both viewports and
-   save PNGs.
-2. Base64 the images into one `messages.create` call with the design direction
-   as the rubric.
-3. Write the response to `test-results/design-review.md`, and restore the
-   `review-design` Makefile target with its `ANTHROPIC_API_KEY` guard.
-
-**Worth it when** design phases are still landing and the before/after
-comparison earns its keep. Phases E and F are the last two, so if it does not
-get built before those, it probably should not be built at all.
+Moved out of this file on 26 Oct 2026. What is deferred is on the board
+(`~/Projects/board/lists/hostel.md`, under "Parked"), with write-ups in
+`docs/BACKLOG.md`: the isolation tests and password reset, both due before a
+second owner. The automated design review was dropped; its write-up is in
+`docs/DONE.md` → "Dropped".
 
 ---
 

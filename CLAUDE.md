@@ -39,14 +39,28 @@ hostel/
 
 ## Current Status
 
-**See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session. `docs/BACKLOG.md` holds the loose ends that are too small to be a phase.
+**See `docs/PROGRESS.md` for the full phase-by-phase build log.** Always read this first when resuming a session — it is the canonical handoff document and is kept up to date at the end of every session.
+
+**What's left to do is on the board, not in this repo** (Oct 2026). The list
+is `~/Projects/board/lists/hostel.md`, one line per item, and `make board`
+draws it as sticky notes. `~/Projects/board/README.md` is the workflow; read it
+before adding, finishing or dropping anything. In short:
+- An observation goes on the list the moment it comes up, not at the end of
+  the session.
+- `docs/BACKLOG.md` holds a write-up only when an item needs more than a line,
+  under a heading that matches the line's title word for word.
+- When an item ships, its write-up moves to `docs/DONE.md` in the same PR, and
+  its line comes off the list once the PR merges.
+
+GitHub issues, TODO comments, memory notes and "Deferred" sections are not
+task lists.
 
 Current state (Sep 2026): Phases 0–9.1, **design Phases A–F complete**, **Phase 10 (Collections & WhatsApp nudges)** and **Phase 11 (Settlement calculator)** are merged, along with two stabilization passes — **S1 data integrity** (partial stay updates, correctable stays, month-end cycle clamping) and **S2 money-math unit tests** (`computeBedStatus`, dashboard revenue, `formatCurrency`). Deployment is done and the app is live (Phase 9.2–9.6), and **Phase 9.7 wired up error tracking** (Sentry, EU region — `docs/DEPLOYMENT.md` → "Where the logs go"). It is live and verified in both projects (Sep 2026).
 
 **Phase 15 (Insights)** added the app's first historical view — `GET /api/insights?months=N` and `/insights`, with collected-vs-billed by month, occupancy in bed-nights, and a per-room breakdown. No migration: every figure was already derivable from `payments.payment_date` and `stays.start_date`/`end_date`. 15b widened `seed-demo` to 20 beds over 15 months so the charts have a shape; 15c added hover readouts and folding panels; 15d made the dashboard's two lists linkable and bounded. **A real account is on production**: Chopra Boys Hostel, owner #4, site #1, 45 beds — see `docs/DEPLOYMENT.md` → "The live owner account".
 
 **Phase 16** closed the eight items the owner found running the live hostel
-(`docs/BACKLOG.md` → "Feedback from running the real hostel", all ✅): delete
+(`docs/DONE.md` → "Feedback from running the real hostel", all ✅): delete
 guards on rooms and beds, `expected_end_date` + the `departure_due` status
 (migration 006), settled stays reading as square, owner-set portal passwords,
 renaming rooms and beds, placing a tenant in a bed from the new-tenant form, a
@@ -55,7 +69,7 @@ password. Four of the last five were a capability the backend already had that
 no screen ever offered — check for that before building.
 
 **The UX audit (Sep 2026)** — seven strangers walked the app cold; report in
-`docs/UX_REVIEW.md`, work list in `docs/BACKLOG.md` → "Found by the UX audit".
+`docs/UX_REVIEW.md`, its work list is now in `docs/DONE.md` → "Found by the UX audit".
 Its three blockers and first two majors are fixed on `ux-audit-blockers`:
 deposits are their own payment kind and only money received is refunded
 (migration 007), hover-only controls are reachable by touch and keyboard, owners
@@ -73,7 +87,7 @@ the grid an "Owes money" filter that ignores bed status. A fourth
 (`TOUCH_TARGET`, `components/ui/touch.ts`), kept rejected payment proofs with a
 reason instead of deleting them, kept tenants who settled short on Collections
 under "Moved out — still owes", and let an owner whose session ended sign in
-again without losing a half-typed form. The rest of that list is open.
+again without losing a half-typed form. What is left of it is on the board.
 **Pre-import hardening** (PR #38, migration 010) made uploads private (keys
 in the database, presigned links on read; the bucket's public URL is disabled,
 verified in production 23 Sep 2026), required the front of
@@ -85,8 +99,8 @@ added owner-only free text beside Workplace / College, and
 `scripts/import-notebook.py` backfills the paper notebook through the API.
 Its data lives in gitignored `.hostel-import/`, and it replaces the old
 `cmd/import`, which was broken and wrote to the database directly. Corrections and write-offs still
-wait for a dedicated design session (`docs/BACKLOG.md` → "Nothing can be
-corrected, anywhere").
+wait for a dedicated design session (`docs/BACKLOG.md` → "Corrections and
+write-offs").
 
 **The primary device is probably an iPad**, in either orientation — which puts
 it on both sides of the 1024px sidebar breakpoint. Test layout and interaction
@@ -215,7 +229,7 @@ Key conventions to carry forward:
   `password_hash`, and portal login requires one — so an owner-created tenant
   can never log in, and a portal-exclusive action is unreachable for them
   forever, not merely inconvenient. Recording a vacating notice is the case
-  that proved it. See `docs/BACKLOG.md` → "Feedback from running the real
+  that proved it. See `docs/DONE.md` → "Feedback from running the real
   hostel".
 - **Never put a tenant's own data into an error message.** Errors now leave the
   process — `serverError` and `reportError` forward to Sentry — and the scrubber
