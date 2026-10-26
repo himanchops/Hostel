@@ -15,6 +15,20 @@ When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
 `### <title> (#NN)`. Items with no write-up just leave the board.
 
+### A "Leaving on" date when someone moves in (#PRNUM)
+Raised 23 Oct 2026, for later. Some stays are short and agreed up front: a
+guest for five nights, or someone who says at the door they're here for one
+month. The forms could take a "Leaving on" date with the terms. That would
+fill in Paid today as the whole stay (nights × rate for a daily guest), and a
+guest paid up to that date would stop showing as owing every morning. The
+owner thought it might apply to any stay, not only daily ones.
+
+Open question, not answered yet: is a nightly guest priced per night or as one
+amount for the stay?
+
+Answered 26 Oct 2026: per night. A nightly guest's Paid today is nights ×
+rate; a monthly or weekly stay keeps one period, with the date saved.
+
 ### A returning tenant can start a new stay (#52)
 A returning tenant can be given a new stay today, but only from Sites → grid →
 a vacant bed → search their name. Their own page, where the owner looks, has no

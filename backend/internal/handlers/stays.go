@@ -40,6 +40,9 @@ type createStayRequest struct {
 	DepositAmount int64  `json:"deposit_amount"` // in paise
 	RentCycle     string `json:"rent_cycle"`     // "daily"|"weekly"|"monthly"
 	StartDate     string `json:"start_date"`     // YYYY-MM-DD
+	// ExpectedEndDate is a leaving date known on arrival: a guest for five
+	// nights, someone here for a month. Optional, YYYY-MM-DD, after start_date.
+	ExpectedEndDate string `json:"expected_end_date"`
 }
 
 // stayPatch is a partial update. Every field is optional, and a field that is
@@ -146,6 +149,21 @@ func (h *StayHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid start_date format, use YYYY-MM-DD"))
 	}
 
+	// A leaving date given at the door was given with notice: they told you
+	// the day they arrived. Without notice_date the move-out sheet would say
+	// "no notice given" and keep their deposit by default.
+	var expectedEnd, noticeDate *time.Time
+	if req.ExpectedEndDate != "" {
+		end, err := time.Parse("2006-01-02", req.ExpectedEndDate)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errorResponse("invalid expected_end_date format, use YYYY-MM-DD"))
+		}
+		if !end.After(startDate) {
+			return c.JSON(http.StatusBadRequest, errorResponse("expected_end_date must be after start_date"))
+		}
+		expectedEnd, noticeDate = &end, &startDate
+	}
+
 	// Verify tenant belongs to owner
 	var tenantCount int
 	if err := h.db.Get(&tenantCount, `SELECT COUNT(*) FROM tenants WHERE id = $1 AND owner_id = $2`, req.TenantID, ownerID); err != nil {
@@ -192,11 +210,12 @@ func (h *StayHandler) Create(c echo.Context) error {
 
 	var stay models.Stay
 	err = h.db.QueryRowx(
-		`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+		`INSERT INTO stays (tenant_id, bed_id, rent_amount, deposit_amount, rent_cycle, start_date,
+		                    notice_date, expected_end_date, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 		 RETURNING `+stayCols,
 		req.TenantID, req.BedID, req.RentAmount, req.DepositAmount,
-		req.RentCycle, startDate, time.Now(),
+		req.RentCycle, startDate, noticeDate, expectedEnd, time.Now(),
 	).StructScan(&stay)
 	if err != nil {
 		return serverError(c, err, "failed to create stay")
