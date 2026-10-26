@@ -7,9 +7,11 @@ const RUN_ID = Date.now().toString();
 /**
  * Owner, 24 Oct 2026: "I cannot move a tenant from one room to another", and
  * a tenant who left and came back had no way back in. A move keeps the stay
- * (deposit, payments, rent day), frees the old bed, and can change the rent
- * from this month or the next. A returning tenant gets "Start a new stay" on
- * their own page, and Add tenant notices their number.
+ * (deposit, payments, rent day) and frees the old bed. The rent question was
+ * reworked on 26 Oct to the owner's words: from next month rent is X, and
+ * this month they pay the old rent, the new rent, or an agreed amount. A
+ * second move on the same day corrects the first. A returning tenant gets
+ * "Start a new stay" on their own page, and Add tenant notices their number.
  *
  * The stay starts on the 1st of last month at ₹4,500, so whatever day this
  * runs, the move falls in the cycle that began on the 1st of this month.
@@ -62,7 +64,7 @@ async function bedStatus(request: APIRequestContext, token: string, siteId: numb
 test.describe("Moving a tenant to another bed", () => {
   test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: true });
 
-  test("from their page, with a new rent from this month", async ({ page, request }) => {
+  test("from their page, paying the new rent for this whole month", async ({ page, request }) => {
     const { token, siteId, bedA, bedB, tenant, stay } = await seedMover(request, "this");
     await loginAs(page, token);
     await page.goto(`/tenants/${tenant.id}`);
@@ -71,9 +73,13 @@ test.describe("Moving a tenant to another bed", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Now in Room 2 · 1L")).toBeVisible();
     await dialog.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 4 · 2U" });
-    await dialog.getByRole("button", { name: "New rent" }).click();
-    await dialog.getByLabel("New rent (₹)").fill("5000");
-    await dialog.getByRole("button", { name: /^This month/ }).click();
+    await expect(dialog.getByTestId("rent-summary")).toContainText("Rent stays ₹4,500 a month.");
+    await dialog.getByRole("button", { name: "Yes" }).click();
+    await dialog.getByLabel(/From next month .* rent is/).fill("5000");
+    await dialog.getByRole("button", { name: "The new rent, ₹5,000" }).click();
+    // Says what it means before saving: this month ₹5,000, nothing paid, so
+    // last month's ₹4,500 and this month's ₹5,000 are due.
+    await expect(dialog.getByTestId("rent-summary")).toContainText("is ₹5,000, and none of it is paid yet. ₹9,500 is due now.");
     await dialog.getByRole("button", { name: "Move", exact: true }).click();
 
     await expect(page.getByText(/Moved to Room 4 · 2U/)).toBeVisible();
@@ -96,11 +102,11 @@ test.describe("Moving a tenant to another bed", () => {
     expect((await bedStatus(request, token, siteId, bedB)).stay_id).toBe(stay.id);
   });
 
-  test("next month leaves this month at the old rent", async ({ request }) => {
+  test("the old rent this month leaves the new rent for next month", async ({ request }) => {
     const { token, bedB, tenant, stay } = await seedMover(request, "next");
     await post(request, token, `/api/stays/${stay.id}/move`, {
       bed_id: bedB, moved_on: new Date().toISOString().slice(0, 10),
-      rent_amount: 500000, rent_from: "next_cycle",
+      rent: { next_rent: 500000, this_cycle: "old" },
     });
     // Two months begun, both at ₹4,500; ₹5,000 starts on the 1st of next month.
     const summary = await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth(token) })).json();
@@ -108,6 +114,56 @@ test.describe("Moving a tenant to another bed", () => {
     const stays = await (await request.get(`${BASE}/api/tenants/${tenant.id}/stays`, { headers: auth(token) })).json();
     expect(stays[0].rent_changes.at(-1)).toMatchObject({ rent_amount: 500000 });
     expect(stays[0].rent_changes.at(-1).effective_date.slice(0, 10)).toBe(monthStart(1));
+  });
+
+  test("an agreed amount this month, the new rent from next", async ({ request }) => {
+    const { token, bedB, tenant, stay } = await seedMover(request, "agreed");
+    await post(request, token, `/api/stays/${stay.id}/move`, {
+      bed_id: bedB, moved_on: new Date().toISOString().slice(0, 10),
+      rent: { next_rent: 500000, this_cycle: "agreed", agreed: 480000 },
+    });
+    // ₹4,500 last month and the agreed ₹4,800 this month.
+    const summary = await (await request.get(`${BASE}/api/tenants/${tenant.id}/summary`, { headers: auth(token) })).json();
+    expect(summary.balance).toBe(930000);
+    const stays = await (await request.get(`${BASE}/api/tenants/${tenant.id}/stays`, { headers: auth(token) })).json();
+    expect(stays[0].rent_changes.map((c: { rent_amount: number }) => c.rent_amount)).toEqual([450000, 480000, 500000]);
+  });
+
+  test("a second move on the same day corrects the first", async ({ request }) => {
+    const { token, siteId, bedA, bedB, tenant, stay } = await seedMover(request, "again");
+    const today = new Date().toISOString().slice(0, 10);
+    const bedC = await post(request, token, `/api/sites/${siteId}/rooms`, { name: "Room 5", floor: 1 })
+      .then((room) => post(request, token, `/api/sites/${siteId}/rooms/${room.id}/beds`, { name: "3L" }));
+    const moves = async () =>
+      (await (await request.get(`${BASE}/api/tenants/${tenant.id}/stays`, { headers: auth(token) })).json())[0].moves ?? [];
+
+    await post(request, token, `/api/stays/${stay.id}/move`, { bed_id: bedB, moved_on: today });
+    await post(request, token, `/api/stays/${stay.id}/move`, { bed_id: bedC.id, moved_on: today });
+    // One move, from where they started the day to where they ended it.
+    const one = await moves();
+    expect(one).toHaveLength(1);
+    expect(one[0]).toMatchObject({ from_bed_id: bedA, to_bed_id: bedC.id, from_room_name: "Room 2", to_room_name: "Room 5" });
+
+    // Back where they started: no move at all.
+    await post(request, token, `/api/stays/${stay.id}/move`, { bed_id: bedA, moved_on: today });
+    expect(await moves()).toHaveLength(0);
+    expect((await bedStatus(request, token, siteId, bedA)).stay_id).toBe(stay.id);
+  });
+
+  test("from an empty bed, picking someone who already lives here", async ({ page, request }) => {
+    const { token, siteId, bedA, bedB, tenant, stay } = await seedMover(request, "empty");
+    await loginAs(page, token);
+    await page.goto(`/sites/${siteId}/grid`);
+
+    await page.getByText("Bed 2U").click();
+    await page.getByRole("button", { name: new RegExp(tenant.name) }).click();
+    const dialog = page.getByRole("dialog", { name: `Move ${tenant.name}` });
+    await expect(dialog.getByText("Moving to Room 4 · 2U")).toBeVisible();
+    await dialog.getByRole("button", { name: "Move", exact: true }).click();
+
+    await expect(page.getByText(/Moved to Room 4 · 2U/)).toBeVisible();
+    expect((await bedStatus(request, token, siteId, bedA)).status).toBe("vacant");
+    expect((await bedStatus(request, token, siteId, bedB)).stay_id).toBe(stay.id);
   });
 
   test("from the grid, keeping the rent", async ({ page, request }) => {

@@ -5,56 +5,11 @@ import (
 	"time"
 )
 
-// The owner's case (24 Oct 2026): moved in 17 Sep at ₹4,500 a month, moved
-// to a ₹5,000 room on 18 Oct, one day into the second month, and paid the
-// whole month's difference. "This month" reprices the cycle that began 17 Oct;
-// "next month" leaves it and starts the new rent on 17 Nov.
+// The owner's case: moved in 17 Sep, moved rooms on 18 Oct.
 var (
 	moveStart = date(2026, time.September, 17)
 	movedOn   = date(2026, time.October, 18)
 )
-
-func TestMoveRentFrom_ThisCycleIsTheCycleTheMoveFallsIn(t *testing.T) {
-	got := moveRentFrom(moveStart, "monthly", movedOn, "this_cycle")
-	if want := date(2026, time.October, 17); !got.Equal(want) {
-		t.Errorf("this cycle = %s, want %s", got.Format("2006-01-02"), want.Format("2006-01-02"))
-	}
-}
-
-func TestMoveRentFrom_NextCycleIsTheNextRentDay(t *testing.T) {
-	got := moveRentFrom(moveStart, "monthly", movedOn, "next_cycle")
-	if want := date(2026, time.November, 17); !got.Equal(want) {
-		t.Errorf("next cycle = %s, want %s", got.Format("2006-01-02"), want.Format("2006-01-02"))
-	}
-}
-
-// A move on the rent day itself starts that day's cycle, not the one before.
-func TestMoveRentFrom_OnTheRentDay(t *testing.T) {
-	got := moveRentFrom(moveStart, "monthly", date(2026, time.October, 17), "this_cycle")
-	if want := date(2026, time.October, 17); !got.Equal(want) {
-		t.Errorf("this cycle = %s, want %s", got.Format("2006-01-02"), want.Format("2006-01-02"))
-	}
-}
-
-// A move in the first month, "this month", reprices from move-in: the first
-// cycle is the stay's own start date.
-func TestMoveRentFrom_FirstMonthIsTheStartDate(t *testing.T) {
-	got := moveRentFrom(moveStart, "monthly", date(2026, time.September, 18), "this_cycle")
-	if !got.Equal(moveStart) {
-		t.Errorf("this cycle = %s, want the start date", got.Format("2006-01-02"))
-	}
-}
-
-// With the rent stepped up from the cycle the move falls in, the stay bills
-// ₹4,500 for Sep and ₹5,000 from Oct: ₹9,500 by 24 Oct, not 2 × ₹5,000.
-func TestMoveRentFrom_BillsTheOldMonthAtTheOldRent(t *testing.T) {
-	from := moveRentFrom(moveStart, "monthly", movedOn, "this_cycle")
-	sched := rentSchedule{{From: moveStart, Rent: 450000}, {From: from, Rent: 500000}}
-	cycles := cyclesElapsed(moveStart, date(2026, time.October, 24), "monthly")
-	if got := sched.billed(moveStart, "monthly", 0, cycles); got != 950000 {
-		t.Errorf("billed = %d, want 950000 (₹9,500)", got)
-	}
-}
 
 func TestRoomSpans_NoMovesIsOneSpan(t *testing.T) {
 	end := date(2026, time.November, 1)

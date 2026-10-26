@@ -473,6 +473,30 @@ export interface Stay {
   moves?: StayMove[];
 }
 
+/**
+ * A rent change as the owner says it: from next cycle the rent is next_rent,
+ * and this cycle they pay the old rent, the new rent, or an agreed amount
+ * (handlers/rentplan.go). Amounts in paise.
+ */
+export interface RentPlan {
+  next_rent: number;
+  this_cycle: "old" | "new" | "agreed";
+  agreed?: number;
+}
+
+/** What a rent change will mean, worked out by the server. Paise. */
+export interface RentPreview {
+  this_start: string;
+  this_end: string;
+  next_start: string;
+  this_rent: number;
+  next_rent: number;
+  /** How much of this cycle's rent is already paid. */
+  paid_this: number;
+  /** Billed so far less paid: positive is owed now, negative paid ahead. */
+  balance: number;
+}
+
 /** One move to another bed. Names are null for a bed deleted since. */
 export interface StayMove {
   moved_on: string;
@@ -547,16 +571,22 @@ export const staysApi = {
   get: (token: string, id: number) => request<Stay>(`/api/stays/${id}`, {}, token),
 
   /**
-   * Move an active stay to another bed. The stay carries on; with a new rent,
-   * rent_from says whether it starts with the cycle the move falls in or the
-   * next one.
+   * Move an active stay to another bed. The stay carries on. With a rent
+   * plan, "this cycle" is the one the move day falls in. A second move on
+   * the same day corrects the first.
    */
-  move: (token: string, stayId: number, data: {
-    bed_id: number;
-    moved_on: string;
-    rent_amount?: number;
-    rent_from?: "this_cycle" | "next_cycle";
-  }) => request<Stay>(`/api/stays/${stayId}/move`, { method: "POST", body: JSON.stringify(data) }, token),
+  move: (token: string, stayId: number, data: { bed_id: number; moved_on: string; rent?: RentPlan }) =>
+    request<Stay>(`/api/stays/${stayId}/move`, { method: "POST", body: JSON.stringify(data) }, token),
+
+  /** Change rent the owner's way, from today. */
+  setRent: (token: string, stayId: number, plan: RentPlan) =>
+    request<Stay>(`/api/stays/${stayId}/rent`, { method: "POST", body: JSON.stringify(plan) }, token),
+
+  /** What a rent plan would mean, changing nothing. No plan: the rent as it stands. */
+  rentPreview: (token: string, stayId: number, refDate: string, plan?: RentPlan) =>
+    request<RentPreview>(`/api/stays/${stayId}/rent-preview`, {
+      method: "POST", body: JSON.stringify({ ref_date: refDate, ...plan }),
+    }, token),
 
   assignBed: (token: string, stayId: number, data: { bed_id: number }) =>
     request<Stay>(`/api/stays/${stayId}/assign-bed`, { method: "PUT", body: JSON.stringify(data) }, token),

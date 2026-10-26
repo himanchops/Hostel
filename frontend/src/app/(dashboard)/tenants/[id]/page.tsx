@@ -742,8 +742,10 @@ export default function TenantDetailPage() {
                           </>
                         : <>{formatCurrency(stay.rent_amount)}/{stay.rent_cycle}</>}
                     </p>
-                    {stay.moves?.map((m) => (
-                      <p key={m.moved_on + (m.to_bed_id ?? "")} className="mt-0.5 text-xs text-stone-500">
+                    {/* Keyed by position: moving A → B → A on one day repeats
+                        both the date and the bed. */}
+                    {stay.moves?.map((m, i) => (
+                      <p key={i} className="mt-0.5 text-xs text-stone-500">
                         Moved from {m.from_room_name && m.from_bed_name ? `${m.from_room_name} · ${m.from_bed_name}` : "a bed since removed"}
                         {" "}on {formatDay(m.moved_on)}
                       </p>

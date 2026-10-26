@@ -3237,14 +3237,36 @@ and in the grid's bed drawer, and opens `MoveBedDialog`.
 - **Insights' "By room" follows it.** Nights split by `roomSpans`. A rent
   payment counts to the room they were in on the day they paid: the bed the
   next move left, or the current one.
-- **A new rent starts with a whole cycle, never a split one.** The owner
-  picks "This month" (the cycle the move falls in) or "Next month".
-  - "This month" is the owner's own case: he moved after a day and paid the
-    whole month's difference.
-  - There's no day-counting, at the owner's request.
-  - `moveRentFrom` works out the date. `setRentFrom` writes the schedule,
-    shared with Change rent, and handles a first-month move by repricing from
-    move-in.
+- **The rent question is the owner's own words** (reworked 26 Oct 2026, after
+  she tried the first version on the demo and found it hard to predict). "Does
+  the rent change?" defaults to No. Yes asks two things:
+  - "From next month, rent is ₹___"
+  - "This month, they pay": the old rent, the new rent, or an amount you agreed
+
+  That covers all three of the owner's ways to settle a move: new rent from
+  next month, the whole month's difference now, or an agreed amount now. A
+  line under the questions (`RentSummary`) says what it will mean before
+  saving, for example "This month (1 Oct – 31 Oct) is ₹9,000, and ₹8,500 of it
+  is paid. ₹500 is due now. From 1 Nov, ₹9,500 a month." The server works
+  that out (`POST /stays/:id/rent-preview`, `previewRent`), so it can't
+  disagree with the tenant's page.
+- **Underneath, it's still rent steps.** `planRent` turns the answers into a
+  schedule: earlier cycles keep their rent, steps after next month are
+  replaced, and a step repeating the one before is merged. `writeSchedule`
+  saves it, and one step goes back to a flat rent with no rows.
+- **Change rent asks the same two questions** (`POST /stays/:id/rent`, from
+  today), which also covers a discount agreed up front. "A different date"
+  (the old date picker) and "Entered it wrong at move-in?" stay as links.
+- **The labels use this month's rent from the server, never
+  `stays.rent_amount`.** That is the latest scheduled rent, and the first
+  version called next month's rent "the old rent".
+- **A second move on the same day corrects the first** instead of adding a
+  line, and moving back to the morning's bed removes the move. The owner's
+  demo had one tenant moved three times in a minute.
+- **Move from the empty bed:** on the grid, picking someone who already lives
+  here in an empty bed's drawer opens the move, fixed to that bed. It used to
+  end in "tenant already has an active stay". Someone with a booking gets a
+  pointer to their page.
 - **The server refuses** a taken bed, the same bed, a stay that ended or has
   no bed yet, a date before move-in or before the last move, and a date in the
   future (the same day's slack as a payment date).
@@ -3271,15 +3293,23 @@ before, so the live account needs no backfill. **Production migrates before
 the merge.**
 
 Tests:
-- `owner/move-bed.test.ts` (6): a move from the tenant page with "this
-  month" rent (owes ₹9,500, not ₹10,000), "next month" via the API (₹9,000,
-  new rent dated the 1st of next month), a move from the grid keeping the
-  rent, the server's refusals, a returning tenant's new stay, and the
-  same-number warning.
-- `moves_test.go`: `moveRentFrom` on the owner's dates, `roomSpans`, and a
-  move splitting October 17/14 between two rooms.
+- `owner/move-bed.test.ts` (9):
+  - a move from the tenant page paying the new rent this month, with the
+    summary checked (₹9,500 due)
+  - the old rent this month, and an agreed amount
+  - same-day corrections
+  - a move from an empty bed, and from the grid keeping the rent
+  - the server's refusals
+  - a returning tenant's new stay, and the same-number warning
+- `owner/change-rent.test.ts`: the new questions, "a different date", and a
+  stay with a rise already scheduled.
+- `rentplan_test.go`: the three answers on the owner's dates, a first-month
+  move, merging, replacing later steps, a discount agreed up front, and
+  validation.
+- `moves_test.go`: `roomSpans`, and a move splitting October 17/14 between
+  two rooms.
 
-Full suite: 195 e2e and 70 unit tests, plus `go test ./...`.
+Full suite: 200 e2e and 70 unit tests, plus `go test ./...`.
 
 ---
 

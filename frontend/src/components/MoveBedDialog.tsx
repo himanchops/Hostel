@@ -1,38 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { staysApi, Stay, ApiError, formatCurrency, formatDay, today } from "@/lib/api";
-import { cycleContaining, nextDueDate } from "@/lib/rent";
+import { staysApi, Stay, ApiError, formatCurrency, today } from "@/lib/api";
 import { BedPicker, VacantBed } from "@/components/StayForm";
-import { Button, Field, FormError, Input, Modal, SegmentedControl, useToast } from "@/components/ui";
-
-type RentChoice = "keep" | "new";
-type RentFrom = "this_cycle" | "next_cycle";
-
-const CYCLE_WORD = { monthly: "month", weekly: "week", daily: "day" } as const;
-
-/** "17 Oct": short enough for two choices side by side at 375px. */
-function shortDay(date: string): string {
-  return new Date(`${date.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-IN", {
-    day: "numeric", month: "short", timeZone: "UTC",
-  });
-}
+import {
+  RentChoiceFields, RentChoiceValue, RentSummary, emptyRentChoice, rentPlanOf, useRentPreview,
+} from "@/components/RentChoice";
+import { Button, Field, FormError, Input, Modal, SegmentedControl, TOUCH_LINK, useToast } from "@/components/ui";
 
 /**
- * Moving a tenant to another bed (owner, 24 Oct 2026). The stay carries on, so
- * the deposit, payments, balance and rent day are untouched; the old bed is
- * free straight away.
+ * Moving a tenant to another bed. The stay carries on, so the deposit,
+ * payments, balance and rent day are untouched, and the old bed is free
+ * straight away.
  *
- * A different room can mean a different rent. The app bills whole cycles, so
- * the new rent starts with the cycle the move falls in or the next one, and
- * the owner picks which. "This month" is the owner's own case: moved after a
- * day and paid the whole month's difference. No day-counting, on purpose.
+ * The everyday move is pick a bed, press Move: the day is today unless the
+ * owner says otherwise, and the rent stays unless she says it changes. When it
+ * does, the question is the owner's own (RentChoice.tsx), with the move day as
+ * "this month", and a line that says what it will mean before she saves.
+ *
+ * `targetBed` fixes the bed: the grid's empty-bed drawer opens this for
+ * someone who already lives here (owner, 26 Oct 2026).
  */
 export function MoveBedDialog({
   open,
   stay,
   token,
   tenantName,
+  targetBed,
   onMoved,
   onClose,
 }: {
@@ -40,15 +34,16 @@ export function MoveBedDialog({
   stay: Pick<Stay, "id" | "rent_amount" | "rent_cycle" | "start_date" | "room_name" | "bed_name"> | null;
   token: string;
   tenantName?: string;
+  targetBed?: VacantBed;
   onMoved: (stay: Stay) => void;
   onClose: () => void;
 }) {
   const toast = useToast();
   const [movedOn, setMovedOn] = useState("");
+  const [pickDay, setPickDay] = useState(false);
   const [bed, setBed] = useState<VacantBed | null>(null);
-  const [rentChoice, setRentChoice] = useState<RentChoice>("keep");
-  const [rent, setRent] = useState("");
-  const [rentFrom, setRentFrom] = useState<RentFrom>("this_cycle");
+  const [changes, setChanges] = useState<"no" | "yes">("no");
+  const [rent, setRent] = useState<RentChoiceValue>(emptyRentChoice());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -56,40 +51,42 @@ export function MoveBedDialog({
   useEffect(() => {
     if (!open || !stay) return;
     setMovedOn(today());
-    setBed(null);
-    setRentChoice("keep");
-    setRent("");
-    setRentFrom("this_cycle");
+    setPickDay(false);
+    setBed(targetBed ?? null);
+    setChanges("no");
+    setRent(emptyRentChoice());
     setError("");
-  }, [open, stay]);
+  }, [open, stay, targetBed]);
+
+  const plan = changes === "yes" ? rentPlanOf(rent) : null;
+  // The rent as it stands, for the labels: this cycle's, not the latest set.
+  const { preview: current } = useRentPreview(token, open && stay ? stay.id : null, movedOn, null);
+  const { preview, error: previewError } = useRentPreview(
+    token,
+    open && stay ? stay.id : null,
+    movedOn,
+    plan && !("error" in plan) ? plan : null,
+  );
 
   if (!stay) return null;
-
   const start = stay.start_date.slice(0, 10);
-  const word = CYCLE_WORD[stay.rent_cycle];
-  const thisCycle = movedOn ? cycleContaining(start, stay.rent_cycle, movedOn) : "";
-  const nextCycle = movedOn ? nextDueDate(start, stay.rent_cycle, movedOn) : "";
-  const paise = Math.round(parseFloat(rent || "0") * 100);
-  const from = rentFrom === "this_cycle" ? thisCycle : nextCycle;
+  const target = targetBed ?? bed;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!stay) return;
     setError("");
     if (!movedOn) { setError("Pick the day they moved."); return; }
-    if (!bed) { setError("Pick the bed they're moving to."); return; }
-    if (rentChoice === "new" && !(paise > 0)) { setError("Enter the new rent."); return; }
+    if (!target) { setError("Pick the bed they're moving to."); return; }
+    if (plan && "error" in plan) { setError(plan.error); return; }
     setLoading(true);
     try {
       const updated = await staysApi.move(token, stay.id, {
-        bed_id: bed.id,
+        bed_id: target.id,
         moved_on: movedOn,
-        ...(rentChoice === "new" ? { rent_amount: paise, rent_from: rentFrom } : {}),
+        ...(plan ? { rent: plan } : {}),
       });
-      toast.success(
-        `Moved to ${bed.roomName} · ${bed.name}` +
-        (rentChoice === "new" ? `, ${formatCurrency(paise)} from ${formatDay(from)}` : ""),
-      );
+      toast.success(`Moved to ${target.roomName} · ${target.name}`);
       onMoved(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to move them");
@@ -102,64 +99,46 @@ export function MoveBedDialog({
     <Modal open={open} onClose={onClose} title={tenantName ? `Move ${tenantName}` : "Move to another bed"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-stone-600">
-          Now in {stay.room_name && stay.bed_name ? `${stay.room_name} · ${stay.bed_name}` : "their bed"} at{" "}
-          {formatCurrency(stay.rent_amount)}/{stay.rent_cycle}.
+          Now in {stay.room_name && stay.bed_name ? `${stay.room_name} · ${stay.bed_name}` : "their bed"}
+          {current && <> at {formatCurrency(current.this_rent)} a {stay.rent_cycle === "monthly" ? "month" : stay.rent_cycle === "weekly" ? "week" : "day"}</>}.
         </p>
 
-        <Field label="Moving on" required>
-          <Input type="date" required value={movedOn} min={start} onChange={(e) => setMovedOn(e.target.value)} />
-        </Field>
+        {targetBed ? (
+          <p className="text-sm font-medium text-stone-800">Moving to {targetBed.roomName} · {targetBed.name}</p>
+        ) : (
+          <BedPicker token={token} value={bed} onChange={setBed} />
+        )}
 
-        <BedPicker token={token} value={bed} onChange={setBed} />
+        {pickDay ? (
+          <Field label="Moved on" required>
+            <Input type="date" required value={movedOn} min={start} onChange={(e) => setMovedOn(e.target.value)} />
+          </Field>
+        ) : (
+          <button type="button" onClick={() => setPickDay(true)}
+            className={`${TOUCH_LINK} text-sm font-medium text-indigo-700 hover:underline`}>
+            Moved on an earlier day?
+          </button>
+        )}
 
         <div>
-          <p className="mb-1 text-[13px] font-medium text-stone-600">Rent</p>
+          <p className="mb-1 text-[13px] font-medium text-stone-600">Does the rent change?</p>
           <SegmentedControl
+            ariaLabel="Does the rent change?"
             options={[
-              { value: "keep", label: `Keep ${formatCurrency(stay.rent_amount)}` },
-              { value: "new", label: "New rent" },
+              { value: "no", label: current ? `No, stays ${formatCurrency(current.this_rent)}` : "No" },
+              { value: "yes", label: "Yes" },
             ] as const}
-            value={rentChoice}
-            onChange={(v) => setRentChoice(v as RentChoice)}
-            ariaLabel="Rent"
+            value={changes}
+            onChange={(v) => setChanges(v)}
           />
         </div>
 
-        {rentChoice === "new" && (
-          <>
-            <Field label="New rent (₹)" required>
-              <Input
-                type="number"
-                inputMode="decimal"
-                min="1"
-                step="any"
-                required
-                placeholder={String(stay.rent_amount / 100)}
-                value={rent}
-                onChange={(e) => setRent(e.target.value)}
-              />
-            </Field>
-            <div>
-              <p className="mb-1 text-[13px] font-medium text-stone-600">New rent starts</p>
-              <SegmentedControl
-                options={[
-                  {
-                    value: "this_cycle",
-                    label: thisCycle === start ? `From move-in · ${shortDay(start)}` : `This ${word} · ${shortDay(thisCycle)}`,
-                  },
-                  { value: "next_cycle", label: `Next ${word} · ${shortDay(nextCycle)}` },
-                ] as const}
-                value={rentFrom}
-                onChange={(v) => setRentFrom(v as RentFrom)}
-                ariaLabel="New rent starts"
-              />
-              <p className="mt-1 text-xs text-stone-500">
-                {from === start
-                  ? "The whole stay is billed at the new rent."
-                  : `Rent due before ${formatDay(from)} stays at what it was billed at.`}
-              </p>
-            </div>
-          </>
+        {changes === "yes" && movedOn && (
+          <RentChoiceFields stay={stay} refDate={movedOn} currentRent={current?.this_rent ?? null} value={rent} onChange={setRent} />
+        )}
+
+        {(changes === "no" || (plan && !("error" in plan))) && (
+          <RentSummary preview={preview} error={previewError} cycle={stay.rent_cycle} unchanged={changes === "no"} />
         )}
 
         {error && <FormError>{error}</FormError>}

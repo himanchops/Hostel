@@ -22,30 +22,18 @@ import (
 // so history (the tenant's page, Insights' "By room") knows where they slept
 // on a given night.
 //
-// A move can also change the rent. The app bills whole cycles and never splits
-// one, so the owner picks which cycle the new rent starts with: the one the
-// move falls in ("this month", for someone who moved early and paid the
-// month's difference), or the next ("next month"). No day-counting: the owner
-// asked for it to stay simple (24 Oct 2026).
+// A move can also change the rent, asked the same way as Change rent
+// (rentplan.go), with the move day as "this month".
+//
+// A second move on the same day corrects the first rather than adding a line:
+// it is almost always "wrong bed, try again" (owner, 26 Oct 2026). Moving back
+// to where they started that day removes the move altogether.
 
 type moveRequest struct {
 	BedID   int64  `json:"bed_id"`
 	MovedOn string `json:"moved_on"` // YYYY-MM-DD
-	// RentAmount is the new rent in paise, or 0 to keep the rent as it is.
-	RentAmount int64 `json:"rent_amount"`
-	// RentFrom is "this_cycle" or "next_cycle"; required with a new rent.
-	RentFrom string `json:"rent_from"`
-}
-
-// moveRentFrom is the date a move's new rent starts from: the start of the
-// cycle the move falls in, or of the one after it.
-func moveRentFrom(start time.Time, cycle string, movedOn time.Time, rentFrom string) time.Time {
-	start, movedOn = dateOnly(start), dateOnly(movedOn)
-	n := cyclesElapsed(start, movedOn, cycle)
-	if rentFrom == "next_cycle" {
-		n++
-	}
-	return cycleStart(start, n, cycle)
+	// Rent is the new rent, or nil to keep the rent as it is.
+	Rent *rentPlanRequest `json:"rent"`
 }
 
 // Move puts an active stay in another bed.
@@ -68,11 +56,10 @@ func (h *StayHandler) Move(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorResponse("Pick the day they moved."))
 	}
-	if req.RentAmount < 0 {
-		return c.JSON(http.StatusBadRequest, errorResponse("Enter the new rent."))
-	}
-	if req.RentAmount > 0 && req.RentFrom != "this_cycle" && req.RentFrom != "next_cycle" {
-		return c.JSON(http.StatusBadRequest, errorResponse("Pick when the new rent starts."))
+	if req.Rent != nil {
+		if msg := req.Rent.validate(); msg != "" {
+			return c.JSON(http.StatusBadRequest, errorResponse(msg))
+		}
 	}
 	// The same day-ahead allowance as a payment date, for an owner in India
 	// ahead of the server's UTC clock.
@@ -116,13 +103,24 @@ func (h *StayHandler) Move(c echo.Context) error {
 	if dateOnly(movedOn).Before(dateOnly(stay.StartDate)) {
 		return c.JSON(http.StatusBadRequest, errorResponse("That's before they moved in."))
 	}
-	var lastMove sql.NullTime
-	if err := tx.Get(&lastMove, `SELECT MAX(moved_on) FROM stay_moves WHERE stay_id = $1`, stayID); err != nil {
+	var last struct {
+		ID        int64     `db:"id"`
+		MovedOn   time.Time `db:"moved_on"`
+		FromBedID *int64    `db:"from_bed_id"`
+	}
+	hasLast := true
+	err = tx.Get(&last,
+		`SELECT id, moved_on, from_bed_id FROM stay_moves WHERE stay_id = $1
+		 ORDER BY moved_on DESC, id DESC LIMIT 1`, stayID)
+	if errors.Is(err, sql.ErrNoRows) {
+		hasLast = false
+	} else if err != nil {
 		return serverError(c, err, "failed to move stay")
 	}
-	if lastMove.Valid && dateOnly(movedOn).Before(dateOnly(lastMove.Time)) {
+	if hasLast && dateOnly(movedOn).Before(dateOnly(last.MovedOn)) {
 		return c.JSON(http.StatusBadRequest, errorResponse("That's before their last move."))
 	}
+	sameDay := hasLast && dateOnly(movedOn).Equal(dateOnly(last.MovedOn))
 
 	var bedCount int
 	if err := tx.Get(&bedCount,
@@ -145,26 +143,31 @@ func (h *StayHandler) Move(c echo.Context) error {
 		return c.JSON(http.StatusConflict, errorResponse("Someone is already in that bed."))
 	}
 
-	if req.RentAmount > 0 {
-		from := moveRentFrom(stay.StartDate, string(stay.RentCycle), movedOn, req.RentFrom)
+	if req.Rent != nil {
 		schedules, err := rentSchedulesTx(tx, []int64{stayID})
 		if err != nil {
 			return serverError(c, err, "failed to move stay")
 		}
 		sched := scheduleFor(schedules, stayID, stay.StartDate, stay.RentAmount)
-		// Re-sending the rent they already pay is "keep the rent", not a
-		// schedule step that changes nothing.
-		if sched.at(from) != req.RentAmount {
-			if err := setRentFrom(tx, stay.Stay, from, req.RentAmount); err != nil {
-				return serverError(c, err, "failed to move stay")
-			}
+		planned := planRent(sched, stay.StartDate, string(stay.RentCycle), movedOn, *req.Rent)
+		if err := writeSchedule(tx, stayID, planned); err != nil {
+			return serverError(c, err, "failed to move stay")
 		}
 	}
 
-	if _, err := tx.Exec(
-		`INSERT INTO stay_moves (stay_id, from_bed_id, to_bed_id, moved_on) VALUES ($1, $2, $3, $4)`,
-		stayID, *stay.BedID, req.BedID, dateOnly(movedOn),
-	); err != nil {
+	switch {
+	case sameDay && last.FromBedID != nil && *last.FromBedID == req.BedID:
+		// Back where they started the day: no move happened.
+		_, err = tx.Exec(`DELETE FROM stay_moves WHERE id = $1`, last.ID)
+	case sameDay:
+		_, err = tx.Exec(`UPDATE stay_moves SET to_bed_id = $1 WHERE id = $2`, req.BedID, last.ID)
+	default:
+		_, err = tx.Exec(
+			`INSERT INTO stay_moves (stay_id, from_bed_id, to_bed_id, moved_on) VALUES ($1, $2, $3, $4)`,
+			stayID, *stay.BedID, req.BedID, dateOnly(movedOn),
+		)
+	}
+	if err != nil {
 		return serverError(c, err, "failed to move stay")
 	}
 	var updated models.Stay

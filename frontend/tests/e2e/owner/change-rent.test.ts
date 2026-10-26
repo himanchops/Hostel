@@ -21,7 +21,7 @@ function firstOfMonth(offset: number) {
  * the whole stay, so a rise turned months already paid into arrears.
  */
 test.describe("Changing rent", () => {
-  test("a rise from the next due date leaves a paid-up tenant paid up", async ({ page, request }) => {
+  test("a rise from next month leaves a paid-up tenant paid up", async ({ page, request }) => {
     const { token } = await createOwner(request, `rent-${RUN_ID}`);
     const auth = { Authorization: `Bearer ${token}` };
     const { bedId } = await createSiteRoomBed(request, token, `rent-${RUN_ID}`);
@@ -47,9 +47,13 @@ test.describe("Changing rent", () => {
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("pays ₹5,000/monthly");
-    // Pre-filled with the next due date — the first cycle not yet begun.
-    await expect(dialog.getByLabel(/Starting from/)).toHaveValue(firstOfMonth(1));
-    await dialog.getByLabel(/New rent/).fill("5500");
+    // Asked the owner's way (26 Oct 2026): the rent from next month, and what
+    // they pay this month, which starts at the old rent.
+    await dialog.getByLabel(/From next month .* rent is/).fill("5500");
+    await expect(dialog.getByRole("button", { name: "The old rent, ₹5,000" })).toHaveAttribute("aria-pressed", "true");
+    await expect(dialog.getByTestId("rent-summary")).toContainText("From 1 ");
+    await expect(dialog.getByTestId("rent-summary")).toContainText("₹5,500 a month");
+    await expect(dialog.getByTestId("rent-summary")).toContainText("Nothing more is due.");
     await dialog.getByRole("button", { name: "Save" }).click();
 
     await expect(page.getByText(/Rent is ₹5,500 from/)).toBeVisible();
@@ -116,7 +120,7 @@ test.describe("Changing rent", () => {
     await page.goto(`/tenants/${tenant.id}`);
     await page.getByRole("button", { name: "Change rent" }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: "Correct the whole stay instead" }).click();
+    await dialog.getByRole("button", { name: "Entered it wrong at move-in?" }).click();
     await expect(dialog).toContainText("Use this only to fix a mistake");
     await dialog.getByLabel(/New rent/).fill("5000");
     await dialog.getByRole("button", { name: "Correct whole stay" }).click();
@@ -145,5 +149,54 @@ test.describe("Changing rent", () => {
       headers: auth, data: { rent_amount: 600000, effective_date: firstOfMonth(-1) },
     });
     expect(res.status()).toBe(409);
+  });
+
+  test("a different date is still there for a deal further out", async ({ page, request }) => {
+    const { token } = await createOwner(request, `rent-date-${RUN_ID}`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { bedId } = await createSiteRoomBed(request, token, `rent-date-${RUN_ID}`);
+    const tenant = await createTenantViaApi(request, token, { name: `Far Out ${RUN_ID}`, phone: "9000000006" });
+    await request.post(`${BASE}/api/stays`, {
+      headers: auth,
+      data: { tenant_id: tenant.id, bed_id: bedId, rent_amount: 500000, deposit_amount: 0, rent_cycle: "monthly", start_date: firstOfMonth(-1) },
+    });
+
+    await loginAs(page, token);
+    await page.goto(`/tenants/${tenant.id}`);
+    await page.getByRole("button", { name: "Change rent" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "A different date" }).click();
+    await dialog.getByLabel(/New rent/).fill("6000");
+    await dialog.getByLabel(/Starting from/).fill(firstOfMonth(2));
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(/Rent is ₹6,000 from/)).toBeVisible();
+  });
+
+  /**
+   * stays.rent_amount is the latest scheduled rent. With a rise already set
+   * for next month, the dialogs once called that "the old rent" while the
+   * summary below said otherwise (owner's demo, 26 Oct 2026).
+   */
+  test("with a rise already scheduled, the old rent is this month's", async ({ page, request }) => {
+    const { token } = await createOwner(request, `rent-sched-${RUN_ID}`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { bedId } = await createSiteRoomBed(request, token, `rent-sched-${RUN_ID}`);
+    const tenant = await createTenantViaApi(request, token, { name: `Scheduled ${RUN_ID}`, phone: "9000000007" });
+    const stay = await (await request.post(`${BASE}/api/stays`, {
+      headers: auth,
+      data: { tenant_id: tenant.id, bed_id: bedId, rent_amount: 850000, deposit_amount: 0, rent_cycle: "monthly", start_date: firstOfMonth(-1) },
+    })).json();
+    await request.post(`${BASE}/api/stays/${stay.id}/rent-changes`, {
+      headers: auth, data: { rent_amount: 900000, effective_date: firstOfMonth(1) },
+    });
+
+    await loginAs(page, token);
+    await page.goto(`/tenants/${tenant.id}`);
+    await page.getByRole("button", { name: "Change rent" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("pays ₹8,500/monthly, ₹9,000 from");
+    await dialog.getByLabel(/From next month .* rent is/).fill("9500");
+    await expect(dialog.getByRole("button", { name: "The old rent, ₹8,500" })).toBeVisible();
+    await expect(dialog.getByTestId("rent-summary")).toContainText("is ₹8,500");
   });
 });

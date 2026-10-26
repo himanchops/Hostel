@@ -180,11 +180,17 @@ Key conventions to carry forward:
   payments and rent day stay put. `stays.bed_id` is always the bed they're in
   *now*. Anything historical that asks "which room was this night, or this
   payment, in?" goes through the moves (`roomSpans`, or the bed the next move
-  left), as Insights' "By room" does. A move's new rent starts with a whole
-  cycle, this one or the next (`moveRentFrom`), and is written by
-  `setRentFrom`, shared with Change rent. A tenant who left and came back
+  left), as Insights' "By room" does. A tenant who left and came back
   gets a new stay from their own page (`NewStayDialog`), never a second
   tenant record.
+- **A rent change is asked the owner's way** (`handlers/rentplan.go`,
+  `components/RentChoice.tsx`): "from next month rent is X; this month they
+  pay the old rent / the new rent / an agreed amount", with a line from the
+  server (`rent-preview`) saying what it will mean before saving. Move bed
+  and Change rent share it. `planRent` turns the answers into rent steps and
+  `writeSchedule` saves them. A screen that shows "the current rent" takes it
+  from the preview's `this_rent`, never `stays.rent_amount`, which is the
+  latest *scheduled* rent.
 - **A stay with no bed is a booking** (Oct 2026): someone who paid to hold a
   place and gets a bed on arrival. Nothing on the grid holds a bed for them,
   because the owner promises a place, not a bed. One that ends without ever

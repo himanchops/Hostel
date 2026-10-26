@@ -219,6 +219,8 @@ func main() {
 	api.POST("/stays/:id/rent-changes", stayHandler.ChangeRent)
 	api.PUT("/stays/:id/assign-bed", stayHandler.AssignBed)
 	api.POST("/stays/:id/move", stayHandler.Move)
+	api.POST("/stays/:id/rent", stayHandler.SetRent)
+	api.POST("/stays/:id/rent-preview", stayHandler.PreviewRent)
 
 	// Settlements (move-out money reckoning)
 	api.GET("/stays/:id/settlement-preview", settlementHandler.Preview)

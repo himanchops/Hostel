@@ -15,6 +15,7 @@ import { dueChip, dueLine, localToday } from "@/lib/due";
 import {
   Avatar,
   Badge,
+  Banner,
   BedIcon,
   FilterIcon,
   Button,
@@ -43,7 +44,7 @@ import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
-  PaidTodayFields, PaidToday, emptyPaidToday, suggestedFromTerms, paidTodayDate,
+  PaidTodayFields, PaidToday, emptyPaidToday, suggestedFromTerms, paidTodayDate, VacantBed,
   paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
@@ -77,6 +78,9 @@ export default function GridPage() {
   const [noticeBed, setNoticeBed] = useState<GridBed | null>(null);
   // The grid's bed carries no rent cycle, so a move loads the stay first.
   const [movingBed, setMovingBed] = useState<Stay | null>(null);
+  const [movingName, setMovingName] = useState("");
+  // Set when the move starts from the empty bed it is going to.
+  const [moveTo, setMoveTo] = useState<VacantBed | undefined>(undefined);
 
   const fetchGrid = useCallback(() => {
     if (!token) return;
@@ -108,7 +112,11 @@ export default function GridPage() {
     if (!token || !bed.stay_id) return;
     const room = grid.find((r) => r.beds.some((b) => b.id === bed.id));
     staysApi.get(token, bed.stay_id)
-      .then((stay) => setMovingBed({ ...stay, room_name: room?.name ?? null, bed_name: bed.name }))
+      .then((stay) => {
+        setMoveTo(undefined);
+        setMovingName(bed.tenant?.name ?? "");
+        setMovingBed({ ...stay, room_name: room?.name ?? null, bed_name: bed.name });
+      })
       .catch((err) => toast.error(err instanceof ApiError ? err.message : "Could not load the stay"));
   }
 
@@ -308,6 +316,12 @@ export default function GridPage() {
             bed={selectedBed}
             onDone={handleAssigned}
             onCancel={closePanel}
+            onMove={(stay, name) => {
+              const room = grid.find((r) => r.beds.some((b) => b.id === selectedBed.id));
+              setMoveTo({ id: selectedBed.id, name: selectedBed.name, roomName: room?.name ?? "", siteId });
+              setMovingName(name);
+              setMovingBed(stay);
+            }}
           />
         ) : (
           <OccupiedPanel
@@ -339,7 +353,8 @@ export default function GridPage() {
         open={movingBed !== null}
         stay={movingBed}
         token={token ?? ""}
-        tenantName={selectedBed?.tenant?.name}
+        tenantName={movingName}
+        targetBed={moveTo}
         onMoved={() => {
           setMovingBed(null);
           setSelectedBed(null);
@@ -456,10 +471,12 @@ function BedTile({ bed, selected, onClick }: { bed: GridBed; selected: boolean; 
 // ─── Assign panel ─────────────────────────────────────────────────────────────
 
 function AssignPanel({
-  token, bed, onDone, onCancel,
+  token, bed, onDone, onCancel, onMove,
 }: {
   token: string; bed: GridBed;
   onDone: () => void; onCancel: () => void;
+  /** Someone already in a bed was picked: move them here instead. */
+  onMove: (stay: Stay, name: string) => void;
 }) {
   const toast = useToast();
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -482,6 +499,24 @@ function AssignPanel({
   useEffect(() => {
     tenantsApi.list(token).then(setTenants).catch(() => {});
   }, [token]);
+
+  // Picking someone who already lives here is a move, not a second stay: the
+  // owner's first instinct for moving someone was to tap the empty bed
+  // (26 Oct 2026), and it used to end in "tenant already has an active stay".
+  const [booked, setBooked] = useState<Tenant | null>(null);
+  async function pick(t: Tenant) {
+    setError("");
+    setBooked(null);
+    try {
+      const current = (await tenantsApi.stays(token, t.id)).find((s) => !s.end_date);
+      if (current?.bed_id) { onMove(current, t.name); return; }
+      if (current) { setBooked(t); return; }
+      setTenantId(t.id);
+      setStep("stay");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not check their stays");
+    }
+  }
 
   const filtered = tenants.filter((t) =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -530,6 +565,13 @@ function AssignPanel({
   return (
     <div>
       {error && <div className="mb-3"><FormError>{error}</FormError></div>}
+      {booked && (
+        <div className="mb-3">
+          <Banner tone="warning" href={`/tenants/${booked.id}`}>
+            <span>{booked.name} has a booking. Give them a bed from their page.</span>
+          </Banner>
+        </div>
+      )}
 
       {step === "select" ? (
         <div className="space-y-3">
@@ -544,7 +586,7 @@ function AssignPanel({
             {filtered.map((t) => (
               <button
                 key={t.id}
-                onClick={() => { setTenantId(t.id); setStep("stay"); setError(""); }}
+                onClick={() => pick(t)}
                 className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition duration-150 ease-out hover:bg-indigo-50"
               >
                 <span className="text-sm font-medium text-stone-800">{t.name}</span>
