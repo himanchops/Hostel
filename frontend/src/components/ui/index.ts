@@ -28,6 +28,7 @@ export * from "./icons";
 export { ToastProvider, useToast } from "./Toast";
 export { Meter } from "./Meter";
 export { SegmentedControl } from "./SegmentedControl";
+export { ChoiceList } from "./ChoiceList";
 export { Collapsible } from "./Collapsible";
 export { HOVER_REVEAL } from "./reveal";
 export { TOUCH_TARGET, TOUCH_LINK } from "./touch";

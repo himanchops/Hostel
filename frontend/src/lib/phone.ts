@@ -37,3 +37,11 @@ export function checkPhones(
   if (!e) return { error: EMERGENCY_PHONE_ERROR };
   return { phone: p, emergency: e };
 }
+
+/**
+ * Digits only, the last ten: "+91 98450 11001" and "9845011001" are one
+ * number. For comparing records, including older ones stored as typed.
+ */
+export function phoneKey(phone: string): string {
+  return (phone ?? "").replace(/\D/g, "").slice(-10);
+}

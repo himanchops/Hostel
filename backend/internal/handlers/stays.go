@@ -508,8 +508,13 @@ func (h *StayHandler) ListByTenant(c echo.Context) error {
 	if err != nil {
 		return serverError(c, err, "failed to fetch rent changes")
 	}
+	moves, err := loadMoves(h.db, ids)
+	if err != nil {
+		return serverError(c, err, "failed to fetch moves")
+	}
 	for i := range stays {
 		stays[i].RentChanges = changes[stays[i].ID]
+		stays[i].Moves = moves[stays[i].ID]
 	}
 	return c.JSON(http.StatusOK, stays)
 }
@@ -607,35 +612,11 @@ func (h *StayHandler) ChangeRent(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("That date is after the stay ended."))
 	}
 
-	// The first change writes the original rent as the schedule's opening
-	// step, so the months before the change keep it.
-	if _, err := tx.Exec(
-		`INSERT INTO stay_rent_changes (stay_id, effective_date, rent_amount)
-		 SELECT $1, $2, $3
-		 WHERE NOT EXISTS (SELECT 1 FROM stay_rent_changes WHERE stay_id = $1)`,
-		stayID, start, stay.RentAmount,
-	); err != nil {
+	if err := setRentFrom(tx, stay.Stay, from, req.RentAmount); err != nil {
 		return serverError(c, err, "failed to change rent")
 	}
-	if _, err := tx.Exec(
-		`INSERT INTO stay_rent_changes (stay_id, effective_date, rent_amount)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (stay_id, effective_date) DO UPDATE SET rent_amount = EXCLUDED.rent_amount`,
-		stayID, from, req.RentAmount,
-	); err != nil {
-		return serverError(c, err, "failed to change rent")
-	}
-	// stays.rent_amount follows the latest scheduled rent, so every screen
-	// that only shows "the rent" shows the new one.
 	var updated models.Stay
-	if err := tx.QueryRowx(
-		`UPDATE stays SET rent_amount = (
-		     SELECT rent_amount FROM stay_rent_changes WHERE stay_id = $1
-		     ORDER BY effective_date DESC LIMIT 1),
-		   updated_at = NOW()
-		 WHERE id = $1 RETURNING `+stayCols,
-		stayID,
-	).StructScan(&updated); err != nil {
+	if err := tx.QueryRowx(`SELECT `+stayCols+` FROM stays WHERE id = $1`, stayID).StructScan(&updated); err != nil {
 		return serverError(c, err, "failed to change rent")
 	}
 	changes, err := loadRentChanges(tx, []int64{stayID})
@@ -647,4 +628,56 @@ func (h *StayHandler) ChangeRent(c echo.Context) error {
 	}
 	updated.RentChanges = changes[stayID]
 	return c.JSON(http.StatusOK, updated)
+}
+
+// setRentFrom bills rent at `rent` from `from` onward, in the caller's
+// transaction. Every cycle that began before `from` keeps the rent it was
+// billed at. ChangeRent and a move to another bed both use it.
+//
+// A date on the stay's own start reprices the stay from its first cycle,
+// which only a move in the first month asks for: a stay with no schedule just
+// takes the new rent, and one with a schedule has its opening step changed.
+func setRentFrom(tx *sqlx.Tx, stay models.Stay, from time.Time, rent int64) error {
+	start := dateOnly(stay.StartDate)
+	from = dateOnly(from)
+	if from.Equal(start) {
+		var steps int
+		if err := tx.Get(&steps, `SELECT COUNT(*) FROM stay_rent_changes WHERE stay_id = $1`, stay.ID); err != nil {
+			return err
+		}
+		if steps == 0 {
+			_, err := tx.Exec(`UPDATE stays SET rent_amount = $1, updated_at = NOW() WHERE id = $2`, rent, stay.ID)
+			return err
+		}
+	} else {
+		// The first change writes the original rent as the schedule's opening
+		// step, so the months before the change keep it.
+		if _, err := tx.Exec(
+			`INSERT INTO stay_rent_changes (stay_id, effective_date, rent_amount)
+			 SELECT $1, $2, $3
+			 WHERE NOT EXISTS (SELECT 1 FROM stay_rent_changes WHERE stay_id = $1)`,
+			stay.ID, start, stay.RentAmount,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO stay_rent_changes (stay_id, effective_date, rent_amount)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (stay_id, effective_date) DO UPDATE SET rent_amount = EXCLUDED.rent_amount`,
+		stay.ID, from, rent,
+	); err != nil {
+		return err
+	}
+	// stays.rent_amount follows the latest scheduled rent, so every screen
+	// that only shows "the rent" shows the new one.
+	_, err := tx.Exec(
+		`UPDATE stays SET rent_amount = (
+		     SELECT rent_amount FROM stay_rent_changes WHERE stay_id = $1
+		     ORDER BY effective_date DESC LIMIT 1),
+		   updated_at = NOW()
+		 WHERE id = $1`,
+		stay.ID,
+	)
+	return err
 }
