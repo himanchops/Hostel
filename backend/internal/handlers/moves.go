@@ -101,7 +101,8 @@ func (h *StayHandler) Move(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("They're already in that bed."))
 	}
 	if dateOnly(movedOn).Before(dateOnly(stay.StartDate)) {
-		return c.JSON(http.StatusBadRequest, errorResponse("That's before they moved in."))
+		return c.JSON(http.StatusBadRequest, errorResponse(
+			"They moved in on "+stay.StartDate.Format("2 Jan 2006")+". Pick that day or later."))
 	}
 	var last struct {
 		ID        int64     `db:"id"`
@@ -118,7 +119,8 @@ func (h *StayHandler) Move(c echo.Context) error {
 		return serverError(c, err, "failed to move stay")
 	}
 	if hasLast && dateOnly(movedOn).Before(dateOnly(last.MovedOn)) {
-		return c.JSON(http.StatusBadRequest, errorResponse("That's before their last move."))
+		return c.JSON(http.StatusBadRequest, errorResponse(
+			"Their last move was on "+last.MovedOn.Format("2 Jan 2006")+". Pick that day or later."))
 	}
 	sameDay := hasLast && dateOnly(movedOn).Equal(dateOnly(last.MovedOn))
 

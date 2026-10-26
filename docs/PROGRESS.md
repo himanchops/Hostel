@@ -3272,6 +3272,21 @@ and in the grid's bed drawer, and opens `MoveBedDialog`.
   future (the same day's slack as a payment date).
 - **Swaps are out of scope**, at the owner's call.
 
+**From the owner's second demo try (26 Oct):**
+- **A plain move shows no money line.** "No, stays ₹8,500" (or "No change"
+  when a rise is already set) is enough. A line about next month's scheduled
+  rent read as if the move changed it.
+- **The date error says the date:** "Their last move was on 26 Oct 2026.
+  Pick that day or later." The same goes for move-in, and the date field's
+  minimum is that day.
+- **Fixed: a page left unscrollable after two overlays closed together.**
+  Each overlay saved `body.overflow` on open and restored it on close. With
+  the grid's drawer and Move bed open at once, the second saved "hidden", and
+  closing both re-locked the page across navigation. The owner had seen this
+  "before". `useOverlay` now counts locks and unlocks on the last close, and
+  reads `onClose` through a ref so a re-render doesn't release and retake the
+  lock.
+
 **Start a new stay.** It's on the tenant page whenever nobody has an open stay
 (and "Start a stay" on a tenant who never had one), and opens `NewStayDialog`.
 That is Add tenant's "Their stay" card (moving in or booking, bed, terms, paid

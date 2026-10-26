@@ -73,7 +73,9 @@ test.describe("Moving a tenant to another bed", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Now in Room 2 · 1L")).toBeVisible();
     await dialog.getByRole("combobox", { name: "Bed", exact: true }).selectOption({ label: "Room 4 · 2U" });
-    await expect(dialog.getByTestId("rent-summary")).toContainText("Rent stays ₹4,500 a month.");
+    // A plain move says nothing about money (owner, 26 Oct 2026).
+    await expect(dialog.getByRole("button", { name: "No, stays ₹4,500" })).toBeVisible();
+    await expect(dialog.getByTestId("rent-summary")).toHaveCount(0);
     await dialog.getByRole("button", { name: "Yes" }).click();
     await dialog.getByLabel(/From next month .* rent is/).fill("5000");
     await dialog.getByRole("button", { name: "The new rent, ₹5,000" }).click();
@@ -144,6 +146,14 @@ test.describe("Moving a tenant to another bed", () => {
     expect(one).toHaveLength(1);
     expect(one[0]).toMatchObject({ from_bed_id: bedA, to_bed_id: bedC.id, from_room_name: "Room 2", to_room_name: "Room 5" });
 
+    // An earlier day than that move is refused, and says which day it was.
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const early = await request.post(`${BASE}/api/stays/${stay.id}/move`, {
+      headers: auth(token), data: { bed_id: bedB, moved_on: yesterday },
+    });
+    expect(early.status()).toBe(400);
+    expect((await early.json()).error).toMatch(/^Their last move was on \d{1,2} \w{3} \d{4}\. Pick that day or later\.$/);
+
     // Back where they started: no move at all.
     await post(request, token, `/api/stays/${stay.id}/move`, { bed_id: bedA, moved_on: today });
     expect(await moves()).toHaveLength(0);
@@ -164,6 +174,11 @@ test.describe("Moving a tenant to another bed", () => {
     await expect(page.getByText(/Moved to Room 4 · 2U/)).toBeVisible();
     expect((await bedStatus(request, token, siteId, bedA)).status).toBe("vacant");
     expect((await bedStatus(request, token, siteId, bedB)).stay_id).toBe(stay.id);
+
+    // The drawer and the dialog closed together. The page used to stay
+    // locked against scrolling after that, even on the next page.
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
   });
 
   test("from the grid, keeping the rent", async ({ page, request }) => {

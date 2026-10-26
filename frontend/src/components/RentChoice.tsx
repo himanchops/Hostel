@@ -178,13 +178,10 @@ export function RentSummary({
   preview,
   error,
   cycle,
-  unchanged,
 }: {
   preview: RentPreview | null;
   error: string;
   cycle: Stay["rent_cycle"];
-  /** The rent is not changing: say only that. */
-  unchanged?: boolean;
 }) {
   if (error) return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>;
   if (!preview) return null;
@@ -197,18 +194,11 @@ export function RentSummary({
   const range = `${shortDay(preview.this_start)} – ${shortDay(preview.this_end)}`;
   return (
     <p data-testid="rent-summary" className="rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-900">
-      {unchanged && preview.next_rent === preview.this_rent ? (
-        <>Rent stays {formatCurrency(preview.this_rent)} a {word}. {owed}</>
-      ) : (
-        <>
-          This {word} ({range}) is {formatCurrency(preview.this_rent)}
-          {preview.paid_this > 0
-            ? `, and ${formatCurrency(preview.paid_this)} of it is paid. `
-            : ", and none of it is paid yet. "}
-          {owed} From {shortDay(preview.next_start)}, {formatCurrency(preview.next_rent)} a {word}
-          {unchanged ? ", as already set." : "."}
-        </>
-      )}
+      This {word} ({range}) is {formatCurrency(preview.this_rent)}
+      {preview.paid_this > 0
+        ? `, and ${formatCurrency(preview.paid_this)} of it is paid. `
+        : ", and none of it is paid yet. "}
+      {owed} From {shortDay(preview.next_start)}, {formatCurrency(preview.next_rent)} a {word}.
     </p>
   );
 }

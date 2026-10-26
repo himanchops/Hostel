@@ -31,7 +31,7 @@ export function MoveBedDialog({
   onClose,
 }: {
   open: boolean;
-  stay: Pick<Stay, "id" | "rent_amount" | "rent_cycle" | "start_date" | "room_name" | "bed_name"> | null;
+  stay: Pick<Stay, "id" | "rent_amount" | "rent_cycle" | "start_date" | "room_name" | "bed_name" | "moves"> | null;
   token: string;
   tenantName?: string;
   targetBed?: VacantBed;
@@ -70,6 +70,9 @@ export function MoveBedDialog({
 
   if (!stay) return null;
   const start = stay.start_date.slice(0, 10);
+  // The earliest day a move can be: move-in, or the last move if later.
+  const lastMove = stay.moves?.at(-1)?.moved_on.slice(0, 10);
+  const earliest = lastMove && lastMove > start ? lastMove : start;
   const target = targetBed ?? bed;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -111,7 +114,7 @@ export function MoveBedDialog({
 
         {pickDay ? (
           <Field label="Moved on" required>
-            <Input type="date" required value={movedOn} min={start} onChange={(e) => setMovedOn(e.target.value)} />
+            <Input type="date" required value={movedOn} min={earliest} onChange={(e) => setMovedOn(e.target.value)} />
           </Field>
         ) : (
           <button type="button" onClick={() => setPickDay(true)}
@@ -125,7 +128,14 @@ export function MoveBedDialog({
           <SegmentedControl
             ariaLabel="Does the rent change?"
             options={[
-              { value: "no", label: current ? `No, stays ${formatCurrency(current.this_rent)}` : "No" },
+              // "Stays ₹8,500" would be wrong for a rent already set to
+              // rise next month, so that case just says no change.
+              {
+                value: "no",
+                label: current && current.next_rent === current.this_rent
+                  ? `No, stays ${formatCurrency(current.this_rent)}`
+                  : "No change",
+              },
               { value: "yes", label: "Yes" },
             ] as const}
             value={changes}
@@ -137,8 +147,10 @@ export function MoveBedDialog({
           <RentChoiceFields stay={stay} refDate={movedOn} currentRent={current?.this_rent ?? null} value={rent} onChange={setRent} />
         )}
 
-        {(changes === "no" || (plan && !("error" in plan))) && (
-          <RentSummary preview={preview} error={previewError} cycle={stay.rent_cycle} unchanged={changes === "no"} />
+        {/* Only a rent change gets the money line. A plain move changes no
+            money, and a line about it read as if it did (owner, 26 Oct). */}
+        {changes === "yes" && plan && !("error" in plan) && (
+          <RentSummary preview={preview} error={previewError} cycle={stay.rent_cycle} />
         )}
 
         {error && <FormError>{error}</FormError>}
