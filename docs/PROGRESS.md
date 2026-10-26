@@ -3326,6 +3326,16 @@ Tests:
 
 Full suite: 200 e2e and 70 unit tests, plus `go test ./...`.
 
+**Production, 26 Oct 2026: live.** The owner ran migration 014 in his own
+terminal before the merge. PR #52 was merged as `906cdfd`, and Vercel and
+Render both reported success. Checked read-only:
+- `/health` 200
+- a tenant's stay list returns, which needs `stay_moves`, so the migration
+  is confirmed
+- `rent-preview` works out Ajayraja's rent (₹4,500 from 17 Oct, square)
+- Insights, the dashboard, the grid, `/tenants/29` and `/sites/1/grid` all
+  serve
+
 ---
 
 ## Architecture Notes
