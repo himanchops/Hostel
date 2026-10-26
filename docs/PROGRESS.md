@@ -3269,6 +3269,30 @@ Render both reported success. Checked read-only:
 
 ---
 
+## Vacating tiles say when (Oct 2026)
+
+Owner, 26 Oct 2026, looking at five orange tiles on the grid: they said who
+was vacating, not when. Now the tile says it, where the rent date would go
+(`leavingChip`, `lib/due.ts`):
+- "leaves 2 Nov", or "leaves today". Not "leaves tomorrow", which doesn't fit
+  a tile at 375px or 768px; tomorrow is a date like any other.
+- "notice given" when they've told you but named no date.
+- "left 24 Oct?" on a purple tile once the date has passed, because nothing
+  ends a stay by itself: the owner confirms they went.
+
+What a vacating tenant owes still shows as an amount in red. Only the rent
+date gives way, and the drawer still has it in full. No backend change: the
+grid already sent `expected_end_date`.
+
+### Verification
+- `tests/unit/due.test.ts`: each wording, and that a tenant with a far-off
+  date and no notice gets none.
+- `tests/e2e/owner/vacating-tiles.test.ts`: the three wordings and the owed
+  amount on one grid, at 375×812, 768×1024 and 1024×768 under touch, and that
+  no line is cut off.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

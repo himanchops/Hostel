@@ -11,7 +11,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
-import { dueChip, dueLine, localToday } from "@/lib/due";
+import { dueChip, dueLine, leavingChip, localToday } from "@/lib/due";
 import {
   Avatar,
   Badge,
@@ -428,6 +428,12 @@ function RoomSummary({ room }: { room: GridRoom }) {
   );
 }
 
+/** A leaving date wears its status's colour; a rent date, red or amber. */
+function chipClass(chip: { className: string } | { tone: "danger" | "warning" }): string {
+  if ("className" in chip) return chip.className;
+  return chip.tone === "danger" ? "text-overdue-700" : "text-amber-700";
+}
+
 /**
  * A bed at a glance. Status is carried by a 3px left stripe plus a pale tint
  * rather than a saturated block: at a wall's distance the stripes are what you
@@ -437,9 +443,15 @@ function BedTile({ bed, selected, onClick }: { bed: GridBed; selected: boolean; 
   const cfg = STATUS_STYLES[bed.status];
   const owes = bed.balance !== undefined && bed.balance < 0 ? -bed.balance : 0;
   const firstName = bed.tenant?.name.trim().split(/\s+/)[0];
-  // A date only when it is worth acting on: since when they are behind, or
-  // due within the week. Everyone else's tile stays as quiet as before.
-  const chip = bed.stay_id ? dueChip(bed, localToday()) : null;
+  // A date only when it is worth acting on: when a vacating tenant goes,
+  // since when they are behind, or due within the week. Everyone else's tile
+  // stays as quiet as before.
+  const leaving = bed.stay_id ? leavingChip(bed, localToday()) : null;
+  const chip = leaving
+    ? { text: leaving, className: cfg.text }
+    : bed.stay_id
+      ? dueChip(bed, localToday())
+      : null;
 
   return (
     <button
@@ -460,7 +472,7 @@ function BedTile({ bed, selected, onClick }: { bed: GridBed; selected: boolean; 
         </p>
       )}
       {chip && (
-        <p className={`mt-0.5 truncate text-[11px] font-medium ${chip.tone === "danger" ? "text-overdue-700" : "text-amber-700"}`}>
+        <p className={`mt-0.5 truncate text-[11px] font-medium ${chipClass(chip)}`}>
           {chip.text}
         </p>
       )}

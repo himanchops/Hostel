@@ -84,6 +84,30 @@ export function dueChip(due: Due, today: string): { text: string; tone: "danger"
   return null;
 }
 
+export interface Leaving {
+  status: string;
+  notice_date?: string;
+  expected_end_date?: string;
+}
+
+/**
+ * When a vacating tenant goes, in the few words a grid tile has room for, or
+ * null for anyone else. On their tile it takes the rent date's place: what is
+ * owed still shows as an amount, and the date that matters is the leaving one.
+ *
+ * A passed date is a question, because nothing ends a stay on its own: the
+ * owner confirms they went.
+ */
+export function leavingChip(bed: Leaving, today: string): string | null {
+  const date = bed.expected_end_date?.slice(0, 10);
+  if (bed.status === "departure_due" && date) return `left ${dueDay(date)}?`;
+  if (bed.status !== "vacating_soon") return null;
+  if (!date) return "notice given";
+  // "leaves tomorrow" does not fit a tile; tomorrow's date does.
+  if (daysUntil(date, today) === 0) return "leaves today";
+  return `leaves ${dueDay(date)}`;
+}
+
 /** Today in the owner's own timezone, as "YYYY-MM-DD". */
 export function localToday(): string {
   const d = new Date();
