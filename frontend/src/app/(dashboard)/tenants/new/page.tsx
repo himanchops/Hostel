@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
-import { tenantsApi, staysApi, uploadApi, TenantUpdateData, ApiError, formatDay, today } from "@/lib/api";
+import { tenantsApi, staysApi, uploadApi, Tenant, TenantUpdateData, ApiError, formatDay, today } from "@/lib/api";
 import {
+  Banner,
   Button,
   Card,
   Field,
@@ -25,7 +26,7 @@ import {
   paidTodayError, paidTodaySuffix, recordPaidToday,
   Arrival, arrivalOptions, ARRIVAL_HINT,
 } from "@/components/StayForm";
-import { checkPhones } from "@/lib/phone";
+import { checkPhones, phoneKey } from "@/lib/phone";
 
 const ARRIVALS = arrivalOptions("Just add");
 
@@ -47,6 +48,18 @@ export default function NewTenantPage() {
   const [idBackFile, setIdBackFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Everyone already on the books, so a returning tenant's number is noticed
+  // before a second record of them is made. Their history is on the first,
+  // and "Start a new stay" on their page is the way back in. A warning, not a
+  // block: two people can share a phone. A failed load only loses the hint.
+  const [onBooks, setOnBooks] = useState<Tenant[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    tenantsApi.list(token).then(setOnBooks).catch(() => {});
+  }, [token]);
+  const typed = phoneKey(phone);
+  const sameNumber = typed.length === 10 ? onBooks.filter((t) => phoneKey(t.phone) === typed) : [];
 
   // Moving in is the default: it is most of what happens at the desk. It was
   // once an opt-in checkbox, because the only alternative to "no bed yet" was
@@ -178,6 +191,14 @@ export default function NewTenantPage() {
               <Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 9876543210" />
             </Field>
           </div>
+          {sameNumber.map((t) => (
+            <Banner key={t.id} tone="warning" href={`/tenants/${t.id}`} className="mt-4">
+              <span>
+                Same number as <strong>{t.name}</strong>, already on your books. If it&apos;s
+                them, open their page and start a new stay there.
+              </span>
+            </Banner>
+          ))}
         </Card>
 
         <Card title="About them">

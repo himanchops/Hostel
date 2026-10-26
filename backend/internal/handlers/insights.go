@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 	appMiddleware "github.com/winnow/hostel/internal/middleware"
 )
 
@@ -73,6 +74,9 @@ type insightStay struct {
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
+	// Moves is every move to another bed (migration 014), oldest first. RoomID
+	// is the room they are in now; roomSpans says which room each night was.
+	Moves []roomMove `db:"-"`
 }
 
 type roomPaid struct {
@@ -275,14 +279,21 @@ func computeRoomInsights(
 ) []RoomInsight {
 	days := overlapDays(from, to, from, to)
 
+	// A night counts to the room they slept in that night, so a tenant who
+	// moved splits between the two rooms.
 	occupiedByRoom := map[int64]int{}
 	for _, s := range stays {
 		if s.RoomID == 0 {
 			continue
 		}
 		sStart, sEnd := stayWindow(s, to)
-		if n := overlapDays(sStart, sEnd, from, to); n > 0 {
-			occupiedByRoom[s.RoomID] += n
+		for _, span := range roomSpans(sStart, sEnd, s.RoomID, s.Moves) {
+			if span.RoomID == 0 {
+				continue
+			}
+			if n := overlapDays(span.From, span.To, from, to); n > 0 {
+				occupiedByRoom[span.RoomID] += n
+			}
 		}
 	}
 
@@ -383,6 +394,29 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	for i := range stays {
 		stays[i].Schedule = schedules[stays[i].StayID]
 	}
+	var moves []struct {
+		StayID   int64     `db:"stay_id"`
+		On       time.Time `db:"moved_on"`
+		FromRoom int64     `db:"from_room"`
+	}
+	if err := h.db.Select(&moves, `
+		SELECT m.stay_id, m.moved_on, COALESCE(b.room_id, 0) AS from_room
+		FROM stay_moves m
+		LEFT JOIN beds b ON b.id = m.from_bed_id
+		WHERE m.stay_id = ANY($1)
+		ORDER BY m.stay_id, m.moved_on, m.id
+	`, pq.Array(stayIDs)); err != nil {
+		return serverError(c, err, "failed to load moves for insights")
+	}
+	stayIndex := make(map[int64]int, len(stays))
+	for i := range stays {
+		stayIndex[stays[i].StayID] = i
+	}
+	for _, m := range moves {
+		if i, ok := stayIndex[m.StayID]; ok {
+			stays[i].Moves = append(stays[i].Moves, roomMove{On: m.On, FromRoom: m.FromRoom})
+		}
+	}
 
 	money, err := loadMoneyByMonth(h.db, ownerID, from, to)
 	if err != nil {
@@ -428,7 +462,13 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 		FROM payments p
 		JOIN stays s     ON s.id = p.stay_id
 		JOIN tenants t   ON t.id = s.tenant_id
-		LEFT JOIN beds b ON b.id = s.bed_id
+		-- The bed they were in on the day they paid: the one the next move
+		-- left, or the bed they are in now if they have not moved since.
+		LEFT JOIN beds b ON b.id = COALESCE(
+		    (SELECT m.from_bed_id FROM stay_moves m
+		     WHERE m.stay_id = s.id AND m.moved_on > p.payment_date
+		     ORDER BY m.moved_on, m.id LIMIT 1),
+		    s.bed_id)
 		LEFT JOIN rooms r ON r.id = b.room_id
 		WHERE t.owner_id = $1
 		  AND p.is_approved = true

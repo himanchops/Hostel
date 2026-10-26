@@ -15,6 +15,28 @@ When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
 `### <title> (#NN)`. Items with no write-up just leave the board.
 
+### A returning tenant can start a new stay (#52)
+A returning tenant can be given a new stay today, but only from Sites → grid →
+a vacant bed → search their name. Their own page, where the owner looks, has no
+"Start a new stay" once the last one ended; it should, reusing `StayForm`'s
+bed picker and terms.
+
+Worse, nothing stops a *second* record for the same person, so the history
+splits in two. Approving a registration now warns "Same number as …" and links
+to that tenant (Oct 2026). Still to do:
+- the owner's Add tenant form checks the phone too, and offers "this is
+  <name>, open their page"
+- linking two records that already exist
+
+Tenant login tries every record with that number, newest first, and the
+password decides, so duplicates no longer sign in at random. Two records with
+the same password still sign in to the newer. Raised by the owner looking at a
+settled demo tenant (Oct 2026).
+
+Shipped in #52: "Start a new stay" on the tenant page, and Add tenant warns
+"Same number as …" with a link to their page. Linking records that already
+exist is still on the board.
+
 ---
 
 ## Dropped

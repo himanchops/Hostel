@@ -3153,6 +3153,122 @@ deferred; see `docs/BACKLOG.md`.
 
 ---
 
+## Moving beds, and tenants who come back (Oct 2026)
+
+Owner, 24 Oct 2026: "I cannot move a tenant from one room to another", and
+someone who moved out and came back had no way back in.
+
+**Move bed** (migration 014, `stay_moves`). It's on the tenant's stay card
+and in the grid's bed drawer, and opens `MoveBedDialog`.
+- **The stay carries on.** The deposit, payments, balance and rent day don't
+  change. Only `stays.bed_id` changes, so the grid, dashboard and Payments
+  needed nothing. The old bed is free straight away.
+- **A row in `stay_moves`** (from bed, to bed, day) records each move. The
+  stay card shows "Moved from Room 2 · 1L on 18 Oct 2026".
+- **Insights' "By room" follows it.** Nights split by `roomSpans`. A rent
+  payment counts to the room they were in on the day they paid: the bed the
+  next move left, or the current one.
+- **The rent question is the owner's own words** (reworked 26 Oct 2026, after
+  she tried the first version on the demo and found it hard to predict). "Does
+  the rent change?" defaults to No. Yes asks two things:
+  - "From next month, rent is ₹___"
+  - "This month, they pay": the old rent, the new rent, or an amount you agreed
+
+  That covers all three of the owner's ways to settle a move: new rent from
+  next month, the whole month's difference now, or an agreed amount now. A
+  line under the questions (`RentSummary`) says what it will mean before
+  saving, for example "This month (1 Oct – 31 Oct) is ₹9,000, and ₹8,500 of it
+  is paid. ₹500 is due now. From 1 Nov, ₹9,500 a month." The server works
+  that out (`POST /stays/:id/rent-preview`, `previewRent`), so it can't
+  disagree with the tenant's page.
+- **Underneath, it's still rent steps.** `planRent` turns the answers into a
+  schedule: earlier cycles keep their rent, steps after next month are
+  replaced, and a step repeating the one before is merged. `writeSchedule`
+  saves it, and one step goes back to a flat rent with no rows.
+- **Change rent asks the same two questions** (`POST /stays/:id/rent`, from
+  today), which also covers a discount agreed up front. "A different date"
+  (the old date picker) and "Entered it wrong at move-in?" stay as links.
+- **The labels use this month's rent from the server, never
+  `stays.rent_amount`.** That is the latest scheduled rent, and the first
+  version called next month's rent "the old rent".
+- **A second move on the same day corrects the first** instead of adding a
+  line, and moving back to the morning's bed removes the move. The owner's
+  demo had one tenant moved three times in a minute.
+- **Move from the empty bed:** on the grid, picking someone who already lives
+  here in an empty bed's drawer opens the move, fixed to that bed. It used to
+  end in "tenant already has an active stay". Someone with a booking gets a
+  pointer to their page.
+- **The server refuses** a taken bed, the same bed, a stay that ended or has
+  no bed yet, a date before move-in or before the last move, and a date in the
+  future (the same day's slack as a payment date).
+- **Swaps are out of scope**, at the owner's call.
+
+**From the owner's second demo try (26 Oct):**
+- **A plain move shows no money line.** "No, stays ₹8,500" (or "No change"
+  when a rise is already set) is enough. A line about next month's scheduled
+  rent read as if the move changed it.
+- **The date error says the date:** "Their last move was on 26 Oct 2026.
+  Pick that day or later." The same goes for move-in, and the date field's
+  minimum is that day.
+- **Fixed: a page left unscrollable after two overlays closed together.**
+  Each overlay saved `body.overflow` on open and restored it on close. With
+  the grid's drawer and Move bed open at once, the second saved "hidden", and
+  closing both re-locked the page across navigation. The owner had seen this
+  "before". `useOverlay` now counts locks and unlocks on the last close, and
+  reads `onClose` through a ref so a re-render doesn't release and retake the
+  lock.
+
+**Start a new stay.** It's on the tenant page whenever nobody has an open stay
+(and "Start a stay" on a tenant who never had one), and opens `NewStayDialog`.
+That is Add tenant's "Their stay" card (moving in or booking, bed, terms, paid
+today) without the person. It's a fresh stay with its own deposit; the owner
+said "most likely new deposit, let's not overcomplicate". The tenant page's
+`reloadStays` now reloads the ledgers too, so a new stay doesn't sit at
+"Paid —".
+
+**Add tenant notices a returning number.** "Same number as Ajayraja, already
+on your books" links to their page. It's a warning, not a block. `phoneKey`
+moved to `lib/phone.ts`, shared with the pending queue.
+
+**Talked about, not built:** discounts. A price agreed in advance can already
+be done with Change rent; letting owed money go belongs with the corrections
+design. See `docs/BACKLOG.md` → "Discounts".
+
+**Migration 014 is new rows only.** Existing stays have no moves and read as
+before, so the live account needs no backfill. **Production migrates before
+the merge.**
+
+Tests:
+- `owner/move-bed.test.ts` (9):
+  - a move from the tenant page paying the new rent this month, with the
+    summary checked (₹9,500 due)
+  - the old rent this month, and an agreed amount
+  - same-day corrections
+  - a move from an empty bed, and from the grid keeping the rent
+  - the server's refusals
+  - a returning tenant's new stay, and the same-number warning
+- `owner/change-rent.test.ts`: the new questions, "a different date", and a
+  stay with a rise already scheduled.
+- `rentplan_test.go`: the three answers on the owner's dates, a first-month
+  move, merging, replacing later steps, a discount agreed up front, and
+  validation.
+- `moves_test.go`: `roomSpans`, and a move splitting October 17/14 between
+  two rooms.
+
+Full suite: 200 e2e and 70 unit tests, plus `go test ./...`.
+
+**Production, 26 Oct 2026: live.** The owner ran migration 014 in his own
+terminal before the merge. PR #52 was merged as `906cdfd`, and Vercel and
+Render both reported success. Checked read-only:
+- `/health` 200
+- a tenant's stay list returns, which needs `stay_moves`, so the migration
+  is confirmed
+- `rent-preview` works out Ajayraja's rent (₹4,500 from 17 Oct, square)
+- Insights, the dashboard, the grid, `/tenants/29` and `/sites/1/grid` all
+  serve
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

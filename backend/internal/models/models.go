@@ -123,6 +123,21 @@ type Stay struct {
 	// from the start date. Empty means the rent never changed. Filled by the
 	// handlers that show a stay's history; not a column.
 	RentChanges []RentChange `db:"-" json:"rent_changes,omitempty"`
+	// Moves is every move to another bed during the stay (migration 014),
+	// oldest first. Filled by the handlers that show a stay's history.
+	Moves []StayMove `db:"-" json:"moves,omitempty"`
+}
+
+// StayMove is one move to another bed partway through a stay. The names are
+// for display; a bed deleted since leaves them null.
+type StayMove struct {
+	MovedOn      time.Time `db:"moved_on" json:"moved_on"`
+	FromBedID    *int64    `db:"from_bed_id" json:"from_bed_id"`
+	FromRoomName *string   `db:"from_room_name" json:"from_room_name"`
+	FromBedName  *string   `db:"from_bed_name" json:"from_bed_name"`
+	ToBedID      *int64    `db:"to_bed_id" json:"to_bed_id"`
+	ToRoomName   *string   `db:"to_room_name" json:"to_room_name"`
+	ToBedName    *string   `db:"to_bed_name" json:"to_bed_name"`
 }
 
 // RentChange is one step of a stay's rent schedule: from EffectiveDate, every

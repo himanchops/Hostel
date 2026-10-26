@@ -39,23 +39,15 @@ The deposit rule must match what the move-out sheet does
 (`moveOutSettlement`, `noticeBy`): notice by the start of the last rent
 month. Today the app says nothing to the tenant about it.
 
-### A returning tenant can start a new stay
-A returning tenant can be given a new stay today, but only from Sites → grid →
-a vacant bed → search their name. Their own page, where the owner looks, has no
-"Start a new stay" once the last one ended; it should, reusing `StayForm`'s
-bed picker and terms.
-
-Worse, nothing stops a *second* record for the same person, so the history
-splits in two. Approving a registration now warns "Same number as …" and links
-to that tenant (Oct 2026). Still to do:
-- the owner's Add tenant form checks the phone too, and offers "this is
-  <name>, open their page"
-- linking two records that already exist
+### Link two records of the same person
+Before #52, nothing stopped a second record for someone who came back, so
+some people may already have their history split across two tenants. Add
+tenant and approving a registration now both warn "Same number as …", which
+stops new duplicates, but nothing merges two records that already exist.
 
 Tenant login tries every record with that number, newest first, and the
-password decides, so duplicates no longer sign in at random. Two records with
-the same password still sign in to the newer. Raised by the owner looking at a
-settled demo tenant (Oct 2026).
+password decides, so duplicates don't sign in at random. Two records with the
+same password still sign in to the newer.
 
 ### Empty nights in "By room"
 Insights → By room shows "Empty nights" per room for the range: 168 for a

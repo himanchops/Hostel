@@ -41,6 +41,8 @@ import {
 import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { ChangeRentDialog } from "@/components/ChangeRentDialog";
+import { MoveBedDialog } from "@/components/MoveBedDialog";
+import { NewStayDialog } from "@/components/NewStayDialog";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
 import { checkPhones } from "@/lib/phone";
 
@@ -336,6 +338,8 @@ export default function TenantDetailPage() {
   // Recording (or amending) a notice — the plan to leave, not the leaving.
   const [noticeStay, setNoticeStay] = useState<Stay | null>(null);
   const [rentStay, setRentStay] = useState<Stay | null>(null);
+  const [movingStay, setMovingStay] = useState<Stay | null>(null);
+  const [startingStay, setStartingStay] = useState(false);
 
   // Assign bed modal
   const [assigningStay, setAssigningStay] = useState<Stay | null>(null);
@@ -345,11 +349,18 @@ export default function TenantDetailPage() {
 
   // Settling ends the stay server-side, and the response is the settlement
   // rather than the stay — so the card's dates come from a refetch.
+  // A new stay arrives with no ledger loaded, so the ledgers come back too.
   const reloadStays = useCallback(() => {
     if (!token) return;
-    tenantsApi.stays(token, tenantId).then(setStays).catch(() => {
-      toast.error("Saved, but the stays did not refresh — reload the page");
-    });
+    tenantsApi.stays(token, tenantId)
+      .then((s) => {
+        setStays(s);
+        return Promise.all(s.map((st) => staysApi.payments(token, st.id).then((p) => [st.id, p] as const)))
+          .then((loaded) => setPayments(Object.fromEntries(loaded)));
+      })
+      .catch(() => {
+        toast.error("Saved, but the stays did not refresh — reload the page");
+      });
   }, [token, tenantId, toast]);
 
   const loadSummary = useCallback(() => {
@@ -624,13 +635,22 @@ export default function TenantDetailPage() {
       )}
 
       {/* Stays */}
-      <h2 className="mb-3 text-base font-semibold text-stone-900">Stays &amp; Ledger</h2>
+      {/* Someone with no open stay can be given a new one: a tenant who left
+          and came back gets a fresh stay here, beside their history, rather
+          than a second record from Add tenant. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold text-stone-900">Stays &amp; Ledger</h2>
+        {stays.length > 0 && !stays.some((s) => !s.end_date) && (
+          <Button size="sm" onClick={() => setStartingStay(true)}>Start a new stay</Button>
+        )}
+      </div>
 
       {stays.length === 0 ? (
         <EmptyState
           icon={<BedIcon className="h-8 w-8" />}
           title="No stays yet"
-          message="Assign this tenant to a bed and their rent ledger starts here."
+          message="Put them in a bed, or book them in, and their rent ledger starts here."
+          action={<Button size="sm" onClick={() => setStartingStay(true)}>Start a stay</Button>}
         />
       ) : (
         <div className="space-y-3">
@@ -722,6 +742,14 @@ export default function TenantDetailPage() {
                           </>
                         : <>{formatCurrency(stay.rent_amount)}/{stay.rent_cycle}</>}
                     </p>
+                    {/* Keyed by position: moving A → B → A on one day repeats
+                        both the date and the bed. */}
+                    {stay.moves?.map((m, i) => (
+                      <p key={i} className="mt-0.5 text-xs text-stone-500">
+                        Moved from {m.from_room_name && m.from_bed_name ? `${m.from_room_name} · ${m.from_bed_name}` : "a bed since removed"}
+                        {" "}on {formatDay(m.moved_on)}
+                      </p>
+                    ))}
                     {deposit && (
                       <p className="mt-0.5 text-xs tabular-nums text-stone-500">{deposit}</p>
                     )}
@@ -760,6 +788,11 @@ export default function TenantDetailPage() {
                     {active && (
                       <Button variant="secondary" size="sm" onClick={() => setRentStay(stay)}>
                         Change rent
+                      </Button>
+                    )}
+                    {active && !booked && (
+                      <Button variant="secondary" size="sm" onClick={() => setMovingStay(stay)}>
+                        Move bed
                       </Button>
                     )}
                     {active && !booked && (
@@ -1046,6 +1079,37 @@ export default function TenantDetailPage() {
             loadSummary();
           }}
           onClose={() => setRentStay(null)}
+        />
+      )}
+
+      {token && (
+        <MoveBedDialog
+          open={movingStay !== null}
+          stay={movingStay}
+          token={token}
+          tenantName={tenant?.name}
+          onMoved={() => {
+            setMovingStay(null);
+            // The response is the bare stay; the list names the new bed.
+            reloadStays();
+            loadSummary();
+          }}
+          onClose={() => setMovingStay(null)}
+        />
+      )}
+
+      {token && tenant && (
+        <NewStayDialog
+          open={startingStay}
+          tenantId={tenant.id}
+          tenantName={tenant.name}
+          token={token}
+          onCreated={() => {
+            setStartingStay(false);
+            reloadStays();
+            loadSummary();
+          }}
+          onClose={() => setStartingStay(false)}
         />
       )}
 
