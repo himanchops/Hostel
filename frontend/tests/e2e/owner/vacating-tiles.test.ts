@@ -8,7 +8,7 @@ const RUN_ID = Date.now().toString();
  * The grid's orange tiles said who was vacating but not when, so "who leaves
  * this week?" meant opening each one. A vacating tile now carries its leaving
  * date where the rent date would go (owner, 26 Oct 2026). What they owe still
- * shows as an amount.
+ * shows as an amount. The bed panel says both dates in full.
  *
  *   Dev     leaving in ten days, owes two months  → "leaves <date>" and ₹10,000
  *   Esha    gave notice, no date yet              → "notice given"
@@ -29,6 +29,13 @@ function monthStart(offset: number): string {
 function short(iso: string): string {
   const [, m, d] = iso.split("-").map(Number);
   return `${d} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]}`;
+}
+
+/** The browser's own "6 Oct 2026", as the panel prints it. */
+function longDay(page: Page, iso: string): Promise<string> {
+  return page.evaluate((d) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+  }), iso);
 }
 
 async function vacating(
@@ -79,6 +86,15 @@ for (const device of [
       await expect(tile(page, "Dev")).not.toContainText("due ");
       await expect(tile(page, "Esha")).toContainText("notice given");
       await expect(tile(page, "Farid")).toContainText(`left ${short(utcDay(-3))}?`);
+
+      // The bed panel says the rest: when they told you, and when they go.
+      await tile(page, "Dev").tap();
+      const panel = page.getByRole("dialog");
+      await expect(panel).toContainText(`Gave notice ${await longDay(page, told)} · leaving ${await longDay(page, utcDay(10))}, in 10 days`);
+      await panel.getByRole("button", { name: "Close" }).tap();
+      await tile(page, "Farid").tap();
+      await expect(panel).toContainText(`was due to leave ${await longDay(page, utcDay(-3))}, 3 days ago`);
+      await panel.getByRole("button", { name: "Close" }).tap();
 
       // The longest wording fits the tile without being cut off.
       for (const first of ["Dev", "Esha", "Farid"]) {

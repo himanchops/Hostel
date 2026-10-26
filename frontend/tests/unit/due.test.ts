@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { dueChip, dueLine, daysUntil, dueSoon, dueWeekday, leavingChip } from "../../src/lib/due";
+import { dueChip, dueLine, daysUntil, dueSoon, dueWeekday, leavingChip, departureFacts } from "../../src/lib/due";
 import { payMethodLabel } from "../../src/lib/payMethod";
+import { formatDay } from "../../src/lib/api";
 
 const today = "2026-10-21";
 
@@ -36,6 +37,21 @@ test("a vacating tile says when they leave, and only a vacating tile", () => {
   expect(leavingChip({ status: "departure_due", expected_end_date: "2026-10-18" }, today)).toBe("left 18 Oct?");
   // A date more than a month away without notice is not vacating yet.
   expect(leavingChip({ status: "paid", expected_end_date: "2026-12-31" }, today)).toBeNull();
+});
+
+test("a notice's two dates each say what they are", () => {
+  const told = formatDay("2026-10-06");
+  expect(departureFacts({ notice_date: "2026-10-06", expected_end_date: "2026-10-25T00:00:00Z" }, today))
+    .toEqual([`Gave notice ${told}`, `leaving ${formatDay("2026-10-25")}, in 4 days`]);
+  expect(departureFacts({ notice_date: "2026-10-06", expected_end_date: "2026-10-22" }, today))
+    .toEqual([`Gave notice ${told}`, `leaving ${formatDay("2026-10-22")}, in 1 day`]);
+  expect(departureFacts({ notice_date: "2026-10-06", expected_end_date: "2026-10-21" }, today))
+    .toEqual([`Gave notice ${told}`, "leaving today"]);
+  expect(departureFacts({ notice_date: "2026-10-06", expected_end_date: "2026-10-18" }, today))
+    .toEqual([`Gave notice ${told}`, `was due to leave ${formatDay("2026-10-18")}, 3 days ago`]);
+  expect(departureFacts({ notice_date: "2026-10-06" }, today)).toEqual([`Gave notice ${told}`, "no leaving date yet"]);
+  // A date with no notice still reads as a sentence.
+  expect(departureFacts({ expected_end_date: "2026-10-25" }, today)).toEqual([`Leaving ${formatDay("2026-10-25")}, in 4 days`]);
 });
 
 test("days until counts calendar days across a month end", () => {

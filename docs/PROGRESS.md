@@ -3284,12 +3284,19 @@ What a vacating tenant owes still shows as an amount in red. Only the rent
 date gives way, and the drawer still has it in full. No backend change: the
 grid already sent `expected_end_date`.
 
+The bed panel says the rest (owner, trying it on the demo): a tinted line
+above the balance, "Gave notice 6 Oct 2026 · leaving 30 Oct 2026, in 4
+days", purple once the date has passed. It is the dashboard's Vacating Soon
+sentence, moved from the dashboard to `departureFacts` (`lib/due.ts`) so the
+two say it the same way, and both now add "in 4 days" or "today".
+
 ### Verification
-- `tests/unit/due.test.ts`: each wording, and that a tenant with a far-off
-  date and no notice gets none.
+- `tests/unit/due.test.ts`: each tile wording, and that a tenant with a
+  far-off date and no notice gets none; each `departureFacts` sentence.
 - `tests/e2e/owner/vacating-tiles.test.ts`: the three wordings and the owed
-  amount on one grid, at 375×812, 768×1024 and 1024×768 under touch, and that
-  no line is cut off.
+  amount on one grid, at 375×812, 768×1024 and 1024×768 under touch, that
+  no line is cut off, and the panel's sentence for an upcoming and a passed
+  date.
 
 ---
 

@@ -11,7 +11,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
-import { dueChip, dueLine, leavingChip, localToday } from "@/lib/due";
+import { departureFacts, dueChip, dueLine, leavingChip, localToday } from "@/lib/due";
 import {
   Avatar,
   Badge,
@@ -766,6 +766,21 @@ function OccupiedPanel({
           )}
           </div>
         </div>
+      )}
+
+      {/* When they're going, in the dashboard's words, before the money:
+          the tile says "leaves 30 Oct" and this says the rest. Purple once
+          the date has passed, because then it is a question for the owner. */}
+      {(bed.notice_date || bed.expected_end_date) && (
+        <p
+          className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${
+            bed.status === "departure_due"
+              ? `${STATUS_STYLES.departure_due.tint} ${STATUS_STYLES.departure_due.text}`
+              : `${STATUS_STYLES.vacating_soon.tint} ${STATUS_STYLES.vacating_soon.text}`
+          }`}
+        >
+          {departureFacts(bed, localToday()).join(" · ")}
+        </p>
       )}
 
       {/* Balance */}
