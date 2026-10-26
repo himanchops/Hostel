@@ -43,6 +43,28 @@ exist is still on the board.
 
 Decided against or overtaken. Each says why, so it is not raised again.
 
+### Discounts: a price agreed in advance, or money let go after
+**Dropped 26 Oct 2026, the owner's call:** "the amount you agreed thing
+works". "An amount you agreed" in Change rent and Move bed (#52) bills a
+discount set before the month, such as ₹8,000 this month and ₹9,000 after,
+with nothing showing as owed. Letting owed money go after the fact stays with
+"Corrections and write-offs". The original write-up:
+
+Owner, 24 Oct 2026: "8,000 instead of 9,000 for the first month", or "8,500
+this month and next, then 8,700", without anything showing as owed. Two
+different things:
+- **Agreed before the month:** that's a price, and Change rent from a date
+  already bills it exactly (one step per change). The gaps are that it can't
+  be set while adding the tenant, and it reads as a rent change, not a
+  discount. Does the owner want the word "discount" on screen?
+- **Decided after ("let the ₹1,000 go"):** forgiving money that is owed. A
+  per-cycle adjustment to *billed* rent, applied inside `rentSchedule.billed`,
+  would lower what's owed without touching what was collected. That avoids
+  the waiver-as-payment trap in "Corrections and write-offs", and belongs
+  with that design session.
+
+The owner wanted to talk both through before anything is built.
+
 ### Automated design review
 Dropped 26 Oct 2026. Its own note said it was worth building only while design
 phases were still landing, and Phases E and F are done. The idea, as it was:
