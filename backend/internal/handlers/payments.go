@@ -55,7 +55,7 @@ func validatePaymentDate(paymentDate, now time.Time) error {
 
 // paymentColumns is every column models.Payment scans, in one place so the
 // four queries that read a payment cannot drift apart again.
-const paymentColumns = `id, stay_id, amount, payment_type, kind, payment_date, proof_url, notes, is_approved, rejected_at, rejection_reason, created_at`
+const paymentColumns = `id, stay_id, amount, payment_type, kind, payment_date, proof_url, notes, is_approved, rejected_at, rejection_reason, from_tenant, created_at`
 
 // qualified prefixes every column in a comma-separated list with a table
 // alias, so a query that joins can return paymentColumns without ambiguity.
@@ -109,6 +109,9 @@ func (h *PaymentHandler) List(c echo.Context) error {
 	}
 	if payments == nil {
 		payments = []models.Payment{}
+	}
+	if err := h.annotate(stayID, payments); err != nil {
+		return serverError(c, err, "failed to fetch payment changes")
 	}
 	if err := signPayments(c, h.storage, payments); err != nil {
 		return serverError(c, err, "failed to prepare payment proofs")
@@ -187,7 +190,7 @@ func (h *PaymentHandler) ListPending(c echo.Context) error {
 	var payments []pendingPayment
 	err := h.db.Select(&payments,
 		`SELECT p.id, p.stay_id, p.amount, p.payment_type, p.kind, p.payment_date,
-		        p.proof_url, p.notes, p.is_approved, p.rejected_at, p.rejection_reason, p.created_at,
+		        p.proof_url, p.notes, p.is_approved, p.rejected_at, p.rejection_reason, p.from_tenant, p.created_at,
 		        t.name AS tenant_name,
 		        COALESCE(b.name, 'Unassigned') AS bed_name,
 		        COALESCE(r.name, '') AS room_name,
@@ -216,6 +219,8 @@ func (h *PaymentHandler) ListPending(c echo.Context) error {
 	return c.JSON(http.StatusOK, payments)
 }
 
+// Approve accepts a tenant's proof, or accepts one that was turned down
+// ("Accept after all"); approving clears the rejection.
 func (h *PaymentHandler) Approve(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 	paymentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -223,10 +228,13 @@ func (h *PaymentHandler) Approve(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid payment id"))
 	}
 
+	// Approving an approved payment changes nothing and stays a no-op, so a
+	// double tap is not an error even on a settled stay.
 	result, err := h.db.Exec(
 		`UPDATE payments p SET is_approved = true, rejected_at = NULL, rejection_reason = NULL
 		 FROM stays s, tenants t
-		 WHERE p.id = $1 AND p.stay_id = s.id AND s.tenant_id = t.id AND t.owner_id = $2`,
+		 WHERE p.id = $1 AND p.stay_id = s.id AND s.tenant_id = t.id AND t.owner_id = $2
+		   AND (p.is_approved OR `+notSettledSQL+`)`,
 		paymentID, ownerID,
 	)
 	if err != nil {
@@ -234,7 +242,7 @@ func (h *PaymentHandler) Approve(c echo.Context) error {
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return c.JSON(http.StatusNotFound, errorResponse("payment not found"))
+		return h.whyNot(c, paymentID, ownerID, "approve")
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "approved"})
 }
@@ -251,10 +259,10 @@ type rejectPaymentRequest struct {
 // tenant can read. It never deletes: the submission, the screenshot and the
 // owner's answer all stay on both ledgers (UX audit M6).
 //
-// Only a proof still waiting can be rejected. An approved payment is money the
-// owner has already counted, and quietly turning it into a rejection would
-// change balances with nothing on the record to say why — that is a delete,
-// and it has its own endpoint and its own confirm.
+// A proof still waiting can be rejected, and so can a tenant's payment the
+// owner accepted and then found was never received ("Not accepted after
+// all"); the reason says why on both ledgers. The owner's own entries are
+// deleted instead, and nothing recorded before a settlement can change.
 // POST /api/payments/:id/reject
 func (h *PaymentHandler) Reject(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
@@ -278,34 +286,16 @@ func (h *PaymentHandler) Reject(c echo.Context) error {
 
 	var payment models.Payment
 	err = h.db.QueryRowx(
-		`UPDATE payments p SET rejected_at = NOW(), rejection_reason = $3
+		`UPDATE payments p SET is_approved = false, rejected_at = NOW(), rejection_reason = $3
 		 FROM stays s, tenants t
 		 WHERE p.id = $1 AND p.stay_id = s.id AND s.tenant_id = t.id AND t.owner_id = $2
-		   AND p.is_approved = false AND p.rejected_at IS NULL
+		   AND ((p.is_approved = false AND p.rejected_at IS NULL)
+		        OR (p.is_approved AND p.from_tenant AND `+notSettledSQL+`))
 		 RETURNING `+qualified("p", paymentColumns),
 		paymentID, ownerID, reasonArg,
 	).StructScan(&payment)
 	if errors.Is(err, sql.ErrNoRows) {
-		// Either not this owner's, or no longer waiting. Tell them apart, so
-		// a double tap reads as "already done" rather than "not found".
-		var state struct {
-			IsApproved bool       `db:"is_approved"`
-			RejectedAt *time.Time `db:"rejected_at"`
-		}
-		lookupErr := h.db.Get(&state,
-			`SELECT p.is_approved, p.rejected_at FROM payments p
-			 JOIN stays s ON s.id = p.stay_id JOIN tenants t ON t.id = s.tenant_id
-			 WHERE p.id = $1 AND t.owner_id = $2`, paymentID, ownerID)
-		switch {
-		case errors.Is(lookupErr, sql.ErrNoRows):
-			return c.JSON(http.StatusNotFound, errorResponse("payment not found"))
-		case lookupErr != nil:
-			return serverError(c, lookupErr, "failed to reject payment")
-		case state.IsApproved:
-			return c.JSON(http.StatusConflict, errorResponse("this payment has already been approved"))
-		default:
-			return c.JSON(http.StatusConflict, errorResponse("this payment has already been rejected"))
-		}
+		return h.whyNot(c, paymentID, ownerID, "reject")
 	}
 	if err != nil {
 		return serverError(c, err, "failed to reject payment")
@@ -316,6 +306,9 @@ func (h *PaymentHandler) Reject(c echo.Context) error {
 	return c.JSON(http.StatusOK, payment)
 }
 
+// Delete removes one of the owner's own entries. A tenant's payment is
+// marked not accepted instead, and nothing recorded before a settlement can
+// go until that settlement is undone.
 func (h *PaymentHandler) Delete(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 	paymentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -323,11 +316,11 @@ func (h *PaymentHandler) Delete(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid payment id"))
 	}
 
-	// Verify ownership via stay → tenant
 	result, err := h.db.Exec(
 		`DELETE FROM payments p
 		 USING stays s, tenants t
-		 WHERE p.id = $1 AND p.stay_id = s.id AND s.tenant_id = t.id AND t.owner_id = $2`,
+		 WHERE p.id = $1 AND p.stay_id = s.id AND s.tenant_id = t.id AND t.owner_id = $2
+		   AND p.from_tenant = false AND `+notSettledSQL,
 		paymentID, ownerID,
 	)
 	if err != nil {
@@ -335,7 +328,7 @@ func (h *PaymentHandler) Delete(c echo.Context) error {
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return c.JSON(http.StatusNotFound, errorResponse("payment not found"))
+		return h.whyNot(c, paymentID, ownerID, "delete")
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "payment deleted"})
 }

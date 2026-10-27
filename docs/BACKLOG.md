@@ -22,44 +22,28 @@ Most items have no write-up; the line on the board is the whole record.
 
 ## Next up
 
-### Corrections and write-offs
-Entry is easy on every screen; correction is absent on most. The owner wants
-to talk the design through before any of it is built, and to rethink how
-corrections look rather than bolt on buttons (23 Sep 2026). The session has
-to cover:
+### Letting owed money go
+What is left of "Corrections and write-offs" after #62 shipped correcting a
+payment. "They owe ₹10,000, we're letting it go", while they are still
+staying; at move-out, "Changed by you" in the move-out sheet already does it,
+and the owner is happy with how that reads (27 Oct 2026).
 
-1. **Writing money off: a discount or a waiver.** "They owe ₹10,000, we're
-   letting it go." Once waived it must stop showing as owed, on Payments and in
-   a settlement. It is **rare**, so it must **not be prominent**: no button
-   beside "Record payment" on every ledger. It must never count as money
-   collected, so the dashboard, Insights and "Collected" stay cash.
-   (Proposed and not adopted: a third payment kind, `waiver`. It is
-   mechanically simple, but every `kind = 'rent'` query would need a decision
-   about whether it means "owed" or "cash".)
-2. **Corrections should be understandable at a glance.** The owner finds the
-   current way of recording corrections hard to read. This is a redesign
-   question, not a list of missing buttons.
-3. **What's missing today:** edit a payment (delete-and-re-add is the only
-   correction), undo a recorded payment, undo a settlement, a confirm step on
-   settling, un-approve a payment proof. Approving clears a rejection already,
-   so a changed mind about a rejected proof is one API call no screen offers.
-   The session decides which of these the redesign absorbs.
-4. **An ended stay's ledger is lopsided** (owner, 23 Oct 2026). Once someone
-   has moved out, the tenant page lets you delete a payment but not add one:
-   "+ Add payment" shows only on an active stay, while every row keeps its
-   delete. Adding is the useful one, e.g. a payment remembered after they
-   left. Deleting is the risky one: after a settlement it changes the balance
-   behind figures the settlement already stored. Owing leavers can be paid
-   from Payments → "Moved out — still owes", but nothing else can. Decide both
-   directions together.
-5. **Insights reads a waived shortfall as unpaid.** Rent a deposit paid off at
-   settlement already counts as collected (`money.go` → `settlementRent`), but a
-   shortfall let go by an adjustment does not, so a stay settled square still
-   reads as unpaid there. Whatever the waiver design decides has to reach
-   `loadMoneyByMonth`.
+**Decided with the owner, 27 Oct 2026:**
+- A quiet "Let some go…" link inside the tenant page's "Owes ₹X" line. It is
+  rare, so nothing beside "Record payment" and nothing on every ledger.
+- It records that ₹Y of a given month is forgiven, so it stops showing as
+  owed on Payments, the grid and a settlement. It is never a payment: Collected,
+  the dashboard and Insights' collected figures stay cash.
+- Insights: only if it can sit there quietly, a muted line rather than a
+  column. The owner said it may not be needed at all, since this is rare.
 
-The template for the safety side is the owner's "Reset portal password"
-dialog, which already does confirm, reveal and honest framing.
+**How (proposed, not built):** a per-cycle adjustment to *billed* rent applied
+inside `rentSchedule.billed`, not a third payment kind: a `waiver` kind would
+make every `kind = 'rent'` query decide whether it means "owed" or "cash".
+Whatever is built has to reach `loadMoneyByMonth`, because Insights already
+reads a shortfall waived at settlement as unpaid, while rent a deposit paid off
+at settlement counts as collected (`money.go` → `settlementRent`). Unit tests
+with exact figures, like every money change.
 
 ### House rules on the registration form
 Raised 24 Oct 2026, and the owner called it crucial. Someone registering from

@@ -373,7 +373,15 @@ func (h *SettlementHandler) Preview(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, errorResponse("stay not found"))
 	}
 
-	endDate, err := settlementDate(stay, c.QueryParam("end_date"), dateOnly(time.Now()))
+	// A stay that already ended is previewed on its own end date, whatever
+	// the sheet asked: it opens on "today" before it knows the stay ended, and
+	// refusing that broke "Settle the money" on every day but the leaving
+	// day. Create stays strict, and the sheet sends no date for an ended stay.
+	requested := c.QueryParam("end_date")
+	if stay.EndDate != nil {
+		requested = ""
+	}
+	endDate, err := settlementDate(stay, requested, dateOnly(time.Now()))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorResponse(err.Error()))
 	}
@@ -500,6 +508,32 @@ func (h *SettlementHandler) Create(c echo.Context) error {
 		return serverError(c, err, "failed to settle stay")
 	}
 	return c.JSON(http.StatusCreated, settlement)
+}
+
+// Undo removes a stay's settlement so its payments can be corrected and the
+// stay settled again. The stay stays ended on the same day: undoing the
+// paperwork doesn't move anyone back in. Any refund already handed over is
+// the owner's to account for when they settle again.
+// DELETE /api/stays/:id/settlement
+func (h *SettlementHandler) Undo(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	stayID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid stay id"))
+	}
+	result, err := h.db.Exec(
+		`DELETE FROM settlements st
+		 USING stays s, tenants t
+		 WHERE st.stay_id = $1 AND s.id = st.stay_id AND t.id = s.tenant_id AND t.owner_id = $2`,
+		stayID, ownerID,
+	)
+	if err != nil {
+		return serverError(c, err, "failed to undo the settlement")
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		return c.JSON(http.StatusNotFound, errorResponse("this stay has no settlement"))
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 // ListByTenant returns every settlement across a tenant's stays, keyed by stay

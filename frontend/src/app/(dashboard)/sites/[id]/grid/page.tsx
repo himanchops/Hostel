@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import {
-  gridApi, sitesApi, tenantsApi, staysApi, paymentsApi,
+  gridApi, sitesApi, tenantsApi, staysApi,
   GridRoom, GridBed, BedStatus, Site, Stay, Tenant, Payment, PaymentKind,
   formatCurrency, today, latestPaymentDate,
   ApiError,
@@ -34,9 +34,8 @@ import {
   Select,
   Skeleton,
   StatusPill,
-  useConfirm,
   useToast,
-  HOVER_REVEAL,
+  ChevronIcon,
   TOUCH_TARGET,
   TOUCH_LINK,
   SegmentedControl,
@@ -44,6 +43,8 @@ import {
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
+import { PaymentSheet } from "@/components/PaymentSheet";
+import { changedTag } from "@/lib/paymentEdit";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
   PaidTodayFields, PaidToday, emptyPaidToday, suggestedFromTerms, paidTodayDate, VacantBed,
@@ -705,9 +706,9 @@ function OccupiedPanel({
   onRecordNotice: () => void;
   onMoveBed: () => void;
 }) {
-  const confirm = useConfirm();
   const toast = useToast();
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [openPayment, setOpenPayment] = useState<Payment | null>(null);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
 
   // Payment form
@@ -751,16 +752,10 @@ function OccupiedPanel({
     }
   }
 
-  async function handleDeletePayment(id: number) {
-    const ok = await confirm({ title: "Delete this payment?", confirmLabel: "Delete", tone: "danger" });
-    if (!ok) return;
-    try {
-      await paymentsApi.delete(token, id);
-      setPayments((prev) => prev.filter((p) => p.id !== id));
-      toast.success("Payment deleted");
-    } catch {
-      toast.error("Failed to delete the payment");
-    }
+  function handlePaymentChanged(id: number, updated: Payment | null) {
+    setPayments((prev) => (updated ? prev.map((p) => (p.id === id ? updated : p)) : prev.filter((p) => p.id !== id)));
+    // Balance, due line and tile colour all move with the money.
+    onPaymentAdded();
   }
 
   const balance = bed.balance ?? 0;
@@ -905,7 +900,15 @@ function OccupiedPanel({
         ) : (
           <div className="space-y-1.5">
             {payments.map((p) => (
-              <div key={p.id} className="group flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2">
+              // The whole row opens the payment: change it, delete it, or
+              // accept a tenant's after all.
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setOpenPayment(p)}
+                aria-label={`Open payment of ${formatCurrency(p.amount)} on ${p.payment_date.slice(0, 10)}`}
+                className="flex w-full items-center justify-between gap-3 rounded-lg bg-stone-50 px-3 py-2 text-left transition duration-150 ease-out hover:bg-stone-100"
+              >
                 <div>
                   <p className="text-sm font-medium tabular-nums text-stone-800">
                     {formatCurrency(p.amount)}
@@ -915,23 +918,23 @@ function OccupiedPanel({
                   <p className="text-xs tabular-nums text-stone-400">
                     {payMethodLabel(p.payment_type)} · {p.payment_date.slice(0, 10)}
                     {p.notes ? ` · ${p.notes}` : ""}
+                    {changedTag(p) ? ` · ${changedTag(p)}` : ""}
                   </p>
                   <RejectionReason payment={p} />
                 </div>
-                {/* Delete-and-re-add is the only correction a payment has, so
-                    this must be reachable without a mouse — see HOVER_REVEAL. */}
-                <button
-                  onClick={() => handleDeletePayment(p.id)}
-                  aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${p.payment_date.slice(0, 10)}`}
-                  className={`inline-flex h-9 w-9 shrink-0 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
-                >
-                  ✕
-                </button>
-              </div>
+                <ChevronIcon className="h-4 w-4 shrink-0 text-stone-400" />
+              </button>
             ))}
           </div>
         )}
       </div>
+
+      <PaymentSheet
+        payment={openPayment}
+        token={token}
+        onClose={() => setOpenPayment(null)}
+        onChanged={handlePaymentChanged}
+      />
     </div>
   );
 }

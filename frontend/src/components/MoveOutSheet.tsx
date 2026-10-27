@@ -11,7 +11,7 @@ import {
   moveOutSettlement, parseRupees, cycleCountLabel, advanceHeld, depositLine, BOOKING_KEPT_LABEL,
 } from "@/lib/settlement";
 import {
-  Button, Drawer, Field, FormError, Input, SegmentedControl, Skeleton, useToast,
+  Button, Drawer, Field, FormError, Input, SegmentedControl, Skeleton, useConfirm, useToast,
 } from "@/components/ui";
 
 /**
@@ -60,6 +60,7 @@ export function MoveOutSheet({
   onClose: () => void;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const first = tenantName?.trim().split(/\s+/)[0] ?? "They";
   const today = localToday();
 
@@ -170,6 +171,18 @@ export function MoveOutSheet({
 
   async function handleSettle() {
     if (stayId === null || !preview || !sum) return;
+    // Said once more in a sentence before it is saved: the figure is the
+    // one thing on this sheet that money changes hands on.
+    const ok = await confirm({
+      title: booking ? `Cancel ${first}\u2019s booking?` : ended ? `Settle ${first}\u2019s stay?` : `Move ${first} out?`,
+      message: (
+        sum.refund > 0 ? `${first} gets ${formatCurrency(sum.refund)} back${method === "online" ? " by UPI" : " in cash"}.`
+          : sum.refund < 0 ? `${first} still owes ${formatCurrency(-sum.refund)}.`
+          : "No money changes hands."
+      ) + " If a payment turns out wrong later, undo the settlement from their page.",
+      confirmLabel: action,
+    });
+    if (!ok) return;
     setError("");
     setSaving(true);
     try {
