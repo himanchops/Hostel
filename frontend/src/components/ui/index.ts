@@ -33,5 +33,6 @@ export { Collapsible } from "./Collapsible";
 export { InfoTip } from "./InfoTip";
 export { WithHelp } from "./WithHelp";
 export { ShowPassword } from "./ShowPassword";
+export { NotFound } from "./NotFound";
 export { HOVER_REVEAL } from "./reveal";
 export { TOUCH_TARGET, TOUCH_LINK } from "./touch";

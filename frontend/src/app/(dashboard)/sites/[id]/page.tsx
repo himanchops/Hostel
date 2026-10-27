@@ -13,6 +13,7 @@ import {
   FormError,
   Input,
   PageHeader,
+  NotFound,
   PageLoader,
   useConfirm,
   useToast,
@@ -47,6 +48,9 @@ export default function SiteDetailPage() {
   const [site, setSite] = useState<Site | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
+  // Said, not redirected: a missing record used to bounce to the list
+  // without a word (owner, Oct 2026).
+  const [missing, setMissing] = useState<"notfound" | "failed" | null>(null);
 
   // Room form
   const [showRoomForm, setShowRoomForm] = useState(false);
@@ -66,7 +70,7 @@ export default function SiteDetailPage() {
       roomsApi.list(token, siteId),
     ])
       .then(([s, r]) => { setSite(s); setRooms(r); })
-      .catch(() => router.replace("/sites"))
+      .catch((err) => setMissing(err instanceof ApiError && err.status === 404 ? "notfound" : "failed"))
       .finally(() => setLoading(false));
   }, [token, siteId, router]);
 
@@ -201,6 +205,27 @@ export default function SiteDetailPage() {
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Failed to remove the bed");
     }
+  }
+
+  if (missing) {
+    return missing === "notfound" ? (
+      <NotFound
+        className="min-h-[60vh]"
+        title="This site isn't on your account"
+        message="It may have been deleted, or the link is from another account."
+        href="/sites"
+        linkLabel="All sites"
+      />
+    ) : (
+      <NotFound
+        failed
+        className="min-h-[60vh]"
+        title="This site didn't load"
+        message="Check your connection and try again. The server may be waking up."
+        href="/sites"
+        linkLabel="All sites"
+      />
+    );
   }
 
   if (loading) {
