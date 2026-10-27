@@ -289,9 +289,9 @@ test.describe("Phone numbers", () => {
       });
     let res = await reg({ phone: "12345" });
     expect(res.status()).toBe(400);
-    expect((await res.json()).error).toBe("Enter a 10-digit mobile number.");
+    expect((await res.json()).error).toBe("Enter a 10-digit mobile number starting with 6, 7, 8 or 9.");
     res = await reg({ emergency_contact_phone: "call dad" });
-    expect((await res.json()).error).toBe("Enter a 10-digit mobile number for the emergency contact.");
+    expect((await res.json()).error).toBe("Enter the emergency contact's 10-digit mobile number, starting with 6, 7, 8 or 9.");
 
     res = await request.post(`${BASE}/api/tenants`, { headers: oAuth, data: { name: "Bad", phone: "5845012345" } });
     expect(res.status()).toBe(400);
@@ -305,6 +305,6 @@ test.describe("Phone numbers", () => {
     await page.getByLabel(/^Full name/).fill("Typo Phone");
     await page.getByLabel(/^Phone/).fill("98450");
     await page.locator("form button[type=submit]").click();
-    await expect(page.getByText("Enter a 10-digit mobile number.")).toBeVisible();
+    await expect(page.getByText("Enter a 10-digit mobile number starting with 6, 7, 8 or 9.")).toBeVisible();
   });
 });

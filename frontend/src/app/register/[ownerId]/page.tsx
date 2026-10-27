@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { use } from "react";
 import Link from "next/link";
-import { registrationApi, uploadApi, ApiError } from "@/lib/api";
+import { registrationApi, uploadApi } from "@/lib/api";
 import {
   Button, Card, Field, FileInput, FormError, Input, Textarea,
 } from "@/components/ui";
 import { checkPhones } from "@/lib/phone";
+import { publicMessage } from "@/lib/publicError";
 
 /**
  * The frame around the form.
@@ -188,7 +189,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
       });
       setSubmitted(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setError(publicMessage(err));
     } finally {
       setLoading(false);
     }

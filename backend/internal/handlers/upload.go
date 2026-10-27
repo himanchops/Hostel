@@ -44,10 +44,10 @@ func (h *UploadHandler) handle(c echo.Context, prefix string) error {
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, errorResponse("file is required"))
+		return c.JSON(http.StatusBadRequest, errorResponse("Choose a file to upload."))
 	}
 	if file.Size > maxUploadSize {
-		return c.JSON(http.StatusBadRequest, errorResponse("file too large (max 10 MB)"))
+		return c.JSON(http.StatusBadRequest, errorResponse("That file is too large. The limit is 10 MB."))
 	}
 
 	// Validate MIME type
@@ -57,7 +57,7 @@ func (h *UploadHandler) handle(c echo.Context, prefix string) error {
 	ct = strings.TrimSpace(ct)
 	ext, ok := allowedMIME[ct]
 	if !ok {
-		return c.JSON(http.StatusBadRequest, errorResponse("unsupported file type (jpeg, png, webp, pdf allowed)"))
+		return c.JSON(http.StatusBadRequest, errorResponse("That file type isn't accepted. Use a photo (JPEG, PNG or WebP) or a PDF."))
 	}
 
 	src, err := file.Open()

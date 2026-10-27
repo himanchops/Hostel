@@ -45,7 +45,10 @@ func normalizePhone(s string) (string, bool) {
 // well as after.
 const phoneDigitsSQL = `right(regexp_replace(phone, '\D', '', 'g'), 10)`
 
+// The rule, said out loud. "Enter a 10-digit mobile number" was the reply to
+// 1234567899, which has ten digits; what it lacked was a first digit an Indian
+// mobile starts with (owner, Oct 2026). lib/phone.ts says the same.
 const (
-	errPhone          = "Enter a 10-digit mobile number."
-	errEmergencyPhone = "Enter a 10-digit mobile number for the emergency contact."
+	errPhone          = "Enter a 10-digit mobile number starting with 6, 7, 8 or 9."
+	errEmergencyPhone = "Enter the emergency contact's 10-digit mobile number, starting with 6, 7, 8 or 9."
 )
