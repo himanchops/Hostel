@@ -3298,6 +3298,9 @@ two say it the same way, and both now add "in 4 days" or "today".
   no line is cut off, and the panel's sentence for an upcoming and a passed
   date.
 
+**Production, 26 Oct 2026: live.** Merged as `09f776b` after the owner tried
+it on the demo. Frontend only, so nothing to migrate.
+
 ---
 
 ## A leaving date when someone moves in (Oct 2026)
@@ -3340,6 +3343,12 @@ server refuses.
     open stay
   - the API refuses a leaving date on the start day
 - Screenshots of the form at 375, 768 and 1024.
+
+**Production, 26 Oct 2026: live.** Merged as `2c3726d`, after #54. The full
+suite passed on the two together (207 e2e, 74 unit, `go test ./...`). Vercel
+and Render both reported success, and `/health`, the dashboard, Add tenant,
+the grid and Insights all served. No migration: `expected_end_date` and
+`notice_date` already existed.
 
 ---
 

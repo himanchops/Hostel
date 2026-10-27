@@ -213,7 +213,9 @@ Key conventions to carry forward:
 - **Approving a registration only approves** (`POST /api/tenants/:id/approve`,
   Oct 2026). The pending drawer then makes the stay and records the money with
   the same calls as Add tenant, and asks the same `Arrival` question
-  (`StayForm.tsx`). Don't give approve a stay again; that was a second copy of
+  (`StayForm.tsx`). A daily guest is priced per night: with a leaving date,
+  Paid today is nights × rate (`stayNights`, `rentForNights`, `lib/rent.ts`),
+  never one amount for the stay. Don't give approve a stay again; that was a second copy of
   `POST /api/stays`. Public registration requires the ID front and an emergency
   contact; owner-created tenants need only name and phone.
 - **Phone numbers are Indian mobiles** (Oct 2026): `normalizePhone`
@@ -239,6 +241,10 @@ Key conventions to carry forward:
   because tenants overstay and leave early and no query knows which. A passed
   expected date raises `departure_due` (a bed status that outranks arrears) and
   a dashboard prompt; it never frees a bed. Migration 006.
+  A leaving date can also be given at move-in (`POST /api/stays`
+  `expected_end_date`, Oct 2026), which sets `notice_date` to the start date:
+  they told you on arrival. Every screen words the two dates through
+  `departureFacts` or `leavingChip` (`lib/due.ts`), never on its own.
 - **No capability may be tenant-portal-exclusive.** Anything a tenant can do
   from `/my`, an owner must be able to do from the owner side. This is not
   symmetry for its own sake: a tenant the owner creates by hand never gets a
