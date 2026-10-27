@@ -41,3 +41,19 @@ func TestNormalizePhone(t *testing.T) {
 		}
 	}
 }
+
+func TestValidAadhaar(t *testing.T) {
+	for in, want := range map[string]bool{
+		"123456789012":   true,
+		"1234 5678 9012": true,
+		"1234-5678-9012": true,
+		"12345678901":    false, // eleven
+		"1234567890123":  false, // thirteen
+		"1234 5678 901O": false, // a letter O
+		"abcd":           false,
+	} {
+		if got := validAadhaar(in); got != want {
+			t.Errorf("validAadhaar(%q) = %v, want %v", in, got, want)
+		}
+	}
+}

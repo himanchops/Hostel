@@ -32,5 +32,6 @@ export { ChoiceList } from "./ChoiceList";
 export { Collapsible } from "./Collapsible";
 export { InfoTip } from "./InfoTip";
 export { WithHelp } from "./WithHelp";
+export { ShowPassword } from "./ShowPassword";
 export { HOVER_REVEAL } from "./reveal";
 export { TOUCH_TARGET, TOUCH_LINK } from "./touch";

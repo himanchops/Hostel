@@ -12,7 +12,7 @@ import {
   PageHeader,
   useConfirm,
   useToast,
-  TOUCH_TARGET,
+  ShowPassword,
 } from "@/components/ui";
 
 /** The server's error strings are lowercase fragments; show them as sentences. */
@@ -138,15 +138,7 @@ export default function AccountPage() {
               />
             </Field>
 
-            <label className={`${TOUCH_TARGET} flex cursor-pointer items-center gap-2 text-[13px] text-stone-500`}>
-              <input
-                type="checkbox"
-                checked={reveal}
-                onChange={(e) => setReveal(e.target.checked)}
-                className="h-4 w-4 accent-indigo-600"
-              />
-              Show passwords
-            </label>
+            <ShowPassword checked={reveal} onChange={setReveal} label="Show passwords" />
 
             {error && <FormError>{error}</FormError>}
 

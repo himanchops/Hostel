@@ -225,6 +225,26 @@ func hostelName(db *sqlx.DB, ownerID int64) (string, error) {
 	return name, err
 }
 
+// errAadhaar answers an Aadhaar number on the public form that is not twelve
+// digits. The field once took anything a stranger typed.
+const errAadhaar = "An Aadhaar number has 12 digits."
+
+// validAadhaar is twelve digits, with spaces or dashes between them if the
+// person typed them. The number is kept as typed, as before.
+func validAadhaar(s string) bool {
+	n := 0
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9':
+			n++
+		case r == ' ' || r == '-':
+		default:
+			return false
+		}
+	}
+	return n == 12
+}
+
 func (h *TenantHandler) PublicOwner(c echo.Context) error {
 	ownerID, err := strconv.ParseInt(c.Param("ownerId"), 10, 64)
 	if err != nil {
@@ -317,6 +337,10 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse(errEmergencyPhone))
 	}
 	req.EmergencyContactPhone = emergency
+	req.AadhaarNumber = strings.TrimSpace(req.AadhaarNumber)
+	if req.AadhaarNumber != "" && !validAadhaar(req.AadhaarNumber) {
+		return c.JSON(http.StatusBadRequest, errorResponse(errAadhaar))
+	}
 	files := []struct {
 		name string
 		v    string

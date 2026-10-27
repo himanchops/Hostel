@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/contexts/auth";
-import { Button, Card, Field, FormError, Input } from "@/components/ui";
+import { Button, Card, Field, FormError, Input, ShowPassword } from "@/components/ui";
 import { PHONE_ERROR, tenDigits } from "@/lib/phone";
 
 export default function SignupPage() {
@@ -15,6 +15,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -86,7 +87,7 @@ export default function SignupPage() {
         <Field label="Password">
           <Input
             id="password"
-            type="password"
+            type={reveal ? "text" : "password"}
             required
             autoComplete="new-password"
             value={password}
@@ -94,6 +95,7 @@ export default function SignupPage() {
             placeholder="Min. 8 characters"
           />
         </Field>
+        <ShowPassword checked={reveal} onChange={setReveal} />
 
         <Button type="submit" className="w-full" loading={loading}>
           {loading ? "Creating account…" : "Create account"}

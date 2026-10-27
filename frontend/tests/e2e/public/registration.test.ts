@@ -82,7 +82,7 @@ test.describe("Public registration", () => {
     await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(phone);
     await page.getByLabel("Workplace / College").fill("Zoho");
-    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel(/^Password/).fill("testpassword123");
     await page.getByLabel("Emergency contact").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
     await attachIdFront(page);
@@ -131,7 +131,7 @@ test.describe("Public registration", () => {
 
     await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`8${RUN_ID.slice(-9)}`);
-    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel(/^Password/).fill("testpassword123");
     await page.getByLabel("Emergency contact").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
     await attachIdFront(page);
@@ -159,7 +159,7 @@ test.describe("Public registration", () => {
 
     await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`7${RUN_ID.slice(-9)}`);
-    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel(/^Password/).fill("testpassword123");
     await page.getByLabel("Emergency contact").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
 
@@ -223,7 +223,7 @@ test.describe("Public registration", () => {
 
     await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`64${RUN_ID.slice(-8)}`);
-    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel(/^Password/).fill("testpassword123");
     await page.getByLabel("Emergency contact").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
     await page.getByLabel("ID front").setInputFiles({
@@ -262,7 +262,7 @@ test.describe("Public registration", () => {
     await page.goto(`/register/${owner.id}`);
     await page.getByLabel("Full name").fill(applicant);
     await page.getByPlaceholder("10-digit number").fill(`6${RUN_ID.slice(-9)}`);
-    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel(/^Password/).fill("testpassword123");
     await page.getByLabel("Emergency contact").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
     await page.getByRole("button", { name: "Submit registration" }).click();

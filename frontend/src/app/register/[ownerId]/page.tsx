@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { use } from "react";
 import Link from "next/link";
 import { registrationApi, uploadApi, ApiError } from "@/lib/api";
 import {
-  Button, Card, Field, FileInput, FormError, Input, Textarea,
+  Button, Card, Field, FileInput, FormError, Input, ShowPassword, Textarea,
 } from "@/components/ui";
-import { checkPhones } from "@/lib/phone";
+import { checkPhones, tenDigits } from "@/lib/phone";
+
+/**
+ * An Aadhaar number is twelve digits, written with or without spaces. The
+ * field once took anything; it now takes digits and spaces, and the form
+ * checks there are twelve before anything uploads. It is kept as typed.
+ */
+function aadhaarError(value: string): string | null {
+  if (!value.trim()) return null;
+  return value.replace(/\D/g, "").length === 12 ? null : "An Aadhaar number has 12 digits.";
+}
 
 /**
  * The frame around the form.
@@ -24,9 +34,11 @@ import { checkPhones } from "@/lib/phone";
  */
 function PublicFrame({
   ownerName,
+  subtitle = "Fill in your details to get started.",
   children,
 }: {
   ownerName: string | null;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -48,9 +60,7 @@ function PublicFrame({
             "Welcome"
           )}
         </h1>
-        <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">
-          Fill in your details to get started.
-        </p>
+        <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">{subtitle}</p>
       </header>
 
       <main className="mx-auto w-full max-w-lg px-4 pb-16 motion-safe:animate-[rise_.4s_ease-out]">
@@ -123,6 +133,18 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   const [idProofFront, setIdProofFront] = useState<File | null>(null);
   const [idProofBack, setIdProofBack] = useState<File | null>(null);
   const [idFrontError, setIdFrontError] = useState("");
+  // Each check's message sits under its own field, and the field takes the
+  // focus, so the browser scrolls to the reason and not just the highlight.
+  // A message near the button for a field 1,300px up was UX audit M15.
+  const [fieldError, setFieldError] = useState<{ phone?: string; emergency?: string; aadhaar?: string }>({});
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const emergencyRef = useRef<HTMLInputElement>(null);
+  const aadhaarRef = useRef<HTMLInputElement>(null);
+  const [reveal, setReveal] = useState(false);
+  // A wrong link used to show the whole form and fail only on submit, after
+  // three photo uploads. "bad" replaces the form; a network failure leaves
+  // it up, because the link may well be fine.
+  const [link, setLink] = useState<"checking" | "ok" | "bad">("checking");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -137,16 +159,21 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
     registrationApi
       .owner(ownerIdNum)
       // An empty name means no single property to name.
-      .then((o) => { if (!cancelled) setOwnerName(o.name || null); })
-      .catch(() => {});
+      .then((o) => { if (!cancelled) { setOwnerName(o.name || null); setLink("ok"); } })
+      .catch((err) => {
+        if (cancelled) return;
+        setLink(err instanceof ApiError && err.status === 404 ? "bad" : "ok");
+      });
     return () => { cancelled = true; };
   }, [ownerIdNum]);
 
-  if (isNaN(ownerIdNum)) {
+  if (isNaN(ownerIdNum) || link === "bad") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
-        <p className="text-sm text-stone-500">Invalid registration link.</p>
-      </div>
+      <PublicFrame ownerName={null} subtitle="This registration link doesn't work.">
+        <Card padding="none" className="p-6 text-center text-sm text-stone-600">
+          Ask the hostel for their QR code again, or check the link you were sent.
+        </Card>
+      </PublicFrame>
     );
   }
 
@@ -162,7 +189,19 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
       return;
     }
     const phones = checkPhones(phone, emergencyPhone);
-    if ("error" in phones) { setError(phones.error); return; }
+    const aadhaar = aadhaarError(aadhaarNumber);
+    if ("error" in phones || aadhaar) {
+      const phoneWrong = !tenDigits(phone);
+      const next = {
+        phone: phoneWrong && "error" in phones ? phones.error : undefined,
+        emergency: !phoneWrong && "error" in phones ? phones.error : undefined,
+        aadhaar: aadhaar ?? undefined,
+      };
+      setFieldError(next);
+      (next.phone ? phoneRef : next.aadhaar ? aadhaarRef : emergencyRef).current?.focus();
+      return;
+    }
+    setFieldError({});
     setLoading(true);
     try {
       let photoUrl: string | undefined;
@@ -266,8 +305,8 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
             <Field label="Full name" required>
               <Input required value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <Field label="Phone" required hint="You'll sign in with this.">
-              <Input required type="tel" inputMode="tel" placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Field label="Phone" required hint="You'll sign in with this." error={fieldError.phone}>
+              <Input ref={phoneRef} required type="tel" inputMode="tel" placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </Field>
           </div>
         </Card>
@@ -287,14 +326,23 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {/* The one hint kept for trust: this is a stranger typing an
                 Aadhaar number into a page they reached from a sticker. */}
-            <Field label="Aadhaar number" hint="Only the owner sees this." className="sm:col-span-2">
-              <Input value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value)} maxLength={12} inputMode="numeric" placeholder="12 digits" />
+            <Field label="Aadhaar number" hint="Only the owner sees this." className="sm:col-span-2" error={fieldError.aadhaar}>
+              <Input
+                ref={aadhaarRef}
+                value={aadhaarNumber}
+                // Digits and spaces only, so "1234 5678 9012" fits and a
+                // letter never lands.
+                onChange={(e) => setAadhaarNumber(e.target.value.replace(/[^\d ]/g, ""))}
+                maxLength={14}
+                inputMode="numeric"
+                placeholder="12 digits"
+              />
             </Field>
             <Field label="Emergency contact" required>
               <Input required value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
             </Field>
-            <Field label="Their phone" required>
-              <Input required type="tel" inputMode="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
+            <Field label="Their phone" required error={fieldError.emergency}>
+              <Input ref={emergencyRef} required type="tel" inputMode="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
             </Field>
             <UploadField
               label="ID front"
@@ -316,8 +364,9 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
         <Card title="Sign-in">
           <Field label="Password" required hint="At least 6 characters">
-            <Input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input required type={reveal ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
+          <ShowPassword checked={reveal} onChange={setReveal} />
         </Card>
 
         {error && <FormError>{error}</FormError>}
