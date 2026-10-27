@@ -3714,6 +3714,12 @@ with it (`rent_waivers`, `waivers.go`). **Migration 017**
 - On the demo at the pane's phone width: the link, the dialog's live line,
   the ledger line, Payments and Insights moving together, Take back.
 
+**Production, 27 Oct 2026: live.** The owner ran migration 017 on Neon
+first, after trying both versions on the demo; merged as `cb6cd01` (#63).
+Vercel and Render both reported success and `/health` answers. As with
+#62, no public route reads the new table, so the schema rests on the
+owner's migration output and on a tenant page loading on the live app.
+
 ---
 
 ## Architecture Notes
