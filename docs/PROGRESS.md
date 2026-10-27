@@ -3667,6 +3667,53 @@ Render both reported success and `/health` answers. No public route reads
 `payments`, so the schema is confirmed by the owner's migration output and
 by a ledger loading on the live app, not by a probe from here.
 
+## Waiving what is owed (Oct 2026)
+
+The rest of "Corrections and write-offs", designed with the owner on 27 Oct
+2026; he asked for leavers to be covered too. Built as "Let some go…", it
+became "Waive" after he tried it on the demo, and Insights' first, hidden
+note (only at the foot of a month's Rent lines) moved where he could find it.
+Migration 017 had not reached production, so the table and code were renamed
+with it (`rent_waivers`, `waivers.go`). **Migration 017**
+(`rent_waivers`), which production needs before this merges.
+
+- **"Waive some of it…"**, a quiet link under the tenant page's balance. The
+  dialog is filled in with all they owe; the owner lowers it, adds a note if
+  they like, and reads "Varun will owe ₹14,000 instead of ₹18,000" before
+  saving (`POST /api/stays/:id/waivers`, refused above what is owed). With
+  more than one stay owing, it asks which.
+- **Owed, never collected.** Every owed figure counts it like rent paid,
+  oldest month first: the tenant summary (and so the portal), the grid,
+  Payments and the reminder, the dashboard's Still owed, Change rent's
+  preview, and the settlement's dues. `waiverCredit` stops it at what was
+  billed, so paying in full afterwards never turns it into an advance.
+  `total_paid`, Collected and Net in don't read it.
+- **Leavers.** Waived after a settlement comes off `settledOwed`; a leaver
+  who owes nothing more drops off "Moved out — still owes".
+- **In the ledger** (tenant page and bed drawer) a muted "₹4,000 waived"
+  line opens `WaiverSheet` with Take back (`DELETE /api/waivers/:id`). One a
+  settlement was worked out from is held, like a payment, until the
+  settlement is undone.
+- **Insights.** Each entry stores `for_month`: the oldest unpaid month when
+  made, or the month a leaver left. That month's expected rent drops by it
+  (and the dashboard's "expected this month" with it), the paid share
+  counts it as covered, and the month's Billed says "−₹4,000 waived" under it and its lines
+  list it with a grey Waived badge, outside Collected. No column; the All
+  money view stays cash only.
+
+### Verification
+- `go test ./internal/handlers`: `waivers_test.go` with exact figures:
+  `waiverCredit` at its edges, the summary (owed, not paid, oldest month
+  first, never ahead), a leaver's shortfall, settlement dues with and
+  without paying in full, Payments' days overdue, `forMonth`, `rupees`.
+- `tests/e2e/owner/waivers.test.ts` at 768×1024 with touch: ₹4,000 of
+  ₹18,000 waived moves the summary, Payments, the dashboard's Still owed
+  and Insights' expected, leaves `total_paid` and Collected alone, and is
+  taken back; a leaver's whole shortfall waived takes them off Payments; one
+  a settlement used refuses Take back.
+- On the demo at the pane's phone width: the link, the dialog's live line,
+  the ledger line, Payments and Insights moving together, Take back.
+
 ---
 
 ## Architecture Notes

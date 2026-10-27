@@ -50,6 +50,7 @@ type settlementStayRow struct {
 	ExpectedEnd   *time.Time `db:"expected_end_date"`
 	Booking       bool       `db:"booking"`    // never had a bed: see endedCycles
 	TotalPaid     int64      `db:"total_paid"` // rent payments only
+	Waived        int64      `db:"waived"`     // rent waived before settling (waivers.go)
 	// Schedule is the stay's rent over time (migration 011); flat unless the
 	// rent was ever changed from a date.
 	Schedule rentSchedule `db:"-"`
@@ -61,7 +62,10 @@ func (s settlementStayRow) dues(end time.Time) (int64, int) {
 	if s.Booking {
 		return -s.TotalPaid, 0
 	}
-	return duesForSchedule(s.schedule(), s.RentCycle, s.StartDate, end, s.TotalPaid)
+	dues, cycles := duesForSchedule(s.schedule(), s.RentCycle, s.StartDate, end, s.TotalPaid)
+	// Rent waived comes off what they owe, down to zero and never into rent
+	// paid ahead (waiverCredit).
+	return dues - waiverCredit(dues+s.TotalPaid, s.TotalPaid, s.Waived), cycles
 }
 
 // schedule returns the stay's rent schedule, flat when none was loaded.
@@ -263,6 +267,7 @@ func (h *SettlementHandler) loadSettlementStay(stayID, ownerID int64) (settlemen
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
 			), 0) AS total_paid,
+			`+waivedBeforeSQL+` AS waived,
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'deposit'

@@ -635,6 +635,17 @@ type TenantSummary struct {
 	DueDate  *string `json:"due_date,omitempty"`
 	DuePaise *int64  `json:"due_paise,omitempty"`
 	DueState *string `json:"due_state,omitempty"`
+	// Owing is each stay that makes up Balance, so "Let some go…" knows which
+	// stay to take it off. Usually one.
+	Owing []StayOwed `json:"owing"`
+}
+
+// StayOwed is what one stay still owes, and whether that is a settlement's
+// shortfall (they left) or unpaid rent.
+type StayOwed struct {
+	StayID  int64 `json:"stay_id"`
+	Owed    int64 `json:"owed"`
+	Settled bool  `json:"settled"`
 }
 
 // dateOnly strips the time component so day arithmetic isn't skewed by the
@@ -659,6 +670,10 @@ type staySummaryRow struct {
 	// PaidAfterSettlement is money received on the stay since it was settled,
 	// which goes against a shortfall — see settledOwed.
 	PaidAfterSettlement int64 `db:"paid_after_settlement"`
+	// Waiver is rent waived that billing counts (waivedBeforeSQL), and
+	// WaivedAfterSettlement what was waived off a shortfall since (waivers.go).
+	Waived                int64 `db:"waived"`
+	WaivedAfterSettlement int64 `db:"waived_after_settlement"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -708,14 +723,19 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 			sched = flatSchedule(start, s.RentAmount)
 		}
 		expected := sched.billed(start, s.RentCycle, 0, cycles)
+		waived := waiverCredit(expected, s.TotalPaid, s.Waived)
 		summary.TotalPaid += s.TotalPaid
-		summary.TotalExpected += expected
+		summary.TotalExpected += expected - waived // waived is no longer expected
 		if days := int64(until.Sub(start).Hours() / 24); days > 0 {
 			summary.DurationDays += days
 		}
 
 		if s.SettlementRefund != nil {
-			summary.Balance += settledOwed(*s.SettlementRefund, s.PaidAfterSettlement)
+			owed := settledOwed(*s.SettlementRefund, s.PaidAfterSettlement+s.WaivedAfterSettlement)
+			summary.Balance += owed
+			if owed > 0 {
+				summary.Owing = append(summary.Owing, StayOwed{StayID: s.StayID, Owed: owed, Settled: true})
+			}
 			continue
 		}
 		summary.DepositHeld += s.DepositPaid
@@ -725,12 +745,20 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 		if s.EndDate == nil {
 			// One open stay per tenant (idx_stays_active_tenant), so this is set
 			// at most once.
-			if due := dueFor(sched, start, s.RentCycle, s.TotalPaid, today); due.State != "" {
+			// Rent waived covers the oldest rent first, as a payment would.
+			if due := dueFor(sched, start, s.RentCycle, s.TotalPaid+waived, today); due.State != "" {
 				d := due.Date.Format("2006-01-02")
 				summary.DueDate, summary.DuePaise, summary.DueState = &d, &due.Paise, &due.State
 			}
 		}
-		summary.Balance += expected - s.TotalPaid
+		owed := expected - s.TotalPaid - waived
+		summary.Balance += owed
+		if owed > 0 {
+			summary.Owing = append(summary.Owing, StayOwed{StayID: s.StayID, Owed: owed})
+		}
+	}
+	if summary.Owing == nil {
+		summary.Owing = []StayOwed{}
 	}
 
 	return summary
@@ -763,6 +791,16 @@ func (h *TenantHandler) Summary(c echo.Context) error {
 // page and the tenant's own portal both read it, so the two can never tell
 // one person different amounts. Callers check the tenant is theirs first.
 func loadTenantSummary(db *sqlx.DB, tenantID int64) (TenantSummary, error) {
+	stays, err := loadStaySummaryRows(db, "s.tenant_id = $1", tenantID)
+	if err != nil {
+		return TenantSummary{}, err
+	}
+	return computeTenantSummary(stays, dateOnly(time.Now())), nil
+}
+
+// loadStaySummaryRows reads the stays matching where ($1 is arg) with
+// everything computeTenantSummary needs.
+func loadStaySummaryRows(db *sqlx.DB, where string, arg int64) ([]staySummaryRow, error) {
 	// One row per stay. Payment totals come from a correlated subquery rather
 	// than a JOIN: joining stays to payments yields one row per payment, and
 	// summing per-stay values (expected rent, duration) across those rows
@@ -792,14 +830,16 @@ func loadTenantSummary(db *sqlx.DB, tenantID int64) (TenantSummary, error) {
 			COALESCE((
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
-			), 0) AS total_paid
+			), 0) AS total_paid,
+			`+waivedBeforeSQL+` AS waived,
+			`+waivedAfterSQL+` AS waived_after_settlement
 		FROM stays s
 		LEFT JOIN settlements st ON st.stay_id = s.id
-		WHERE s.tenant_id = $1`,
-		tenantID,
+		WHERE `+where,
+		arg,
 	)
 	if err != nil {
-		return TenantSummary{}, err
+		return nil, err
 	}
 	stayIDs := make([]int64, len(stays))
 	for i := range stays {
@@ -807,11 +847,10 @@ func loadTenantSummary(db *sqlx.DB, tenantID int64) (TenantSummary, error) {
 	}
 	schedules, err := rentSchedules(db, stayIDs)
 	if err != nil {
-		return TenantSummary{}, err
+		return nil, err
 	}
 	for i := range stays {
 		stays[i].Schedule = schedules[stays[i].StayID]
 	}
-
-	return computeTenantSummary(stays, dateOnly(time.Now())), nil
+	return stays, nil
 }

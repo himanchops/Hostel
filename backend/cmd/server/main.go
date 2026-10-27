@@ -76,6 +76,7 @@ func main() {
 	insightsHandler := handlers.NewInsightsHandler(db)
 	collectionsHandler := handlers.NewCollectionsHandler(db)
 	settlementHandler := handlers.NewSettlementHandler(db)
+	waiverHandler := handlers.NewWaiverHandler(db)
 	uploadHandler := handlers.NewUploadHandler(storageSvc)
 
 	e := echo.New()
@@ -227,6 +228,11 @@ func main() {
 	api.GET("/stays/:id/settlement-preview", settlementHandler.Preview)
 	api.POST("/stays/:id/settlement", settlementHandler.Create)
 	api.DELETE("/stays/:id/settlement", settlementHandler.Undo)
+
+	// Waivers (migration 017): never a payment, always off what is owed
+	api.GET("/stays/:id/waivers", waiverHandler.List)
+	api.POST("/stays/:id/waivers", waiverHandler.Create)
+	api.DELETE("/waivers/:id", waiverHandler.Delete)
 
 	// Payments (nested under stays)
 	api.GET("/stays/:stayId/payments", paymentHandler.List)

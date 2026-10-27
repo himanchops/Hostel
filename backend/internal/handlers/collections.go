@@ -78,19 +78,21 @@ func settledOwed(refundPaise, paidAfter int64) int64 {
 
 // movedOutRow is one settled stay that ended short, as scanned from the DB.
 type movedOutRow struct {
-	StayID          int64          `db:"stay_id"`
-	TenantID        int64          `db:"tenant_id"`
-	TenantName      string         `db:"tenant_name"`
-	Phone           string         `db:"phone"`
-	SiteName        string         `db:"site_name"`
-	RoomName        string         `db:"room_name"`
-	BedName         sql.NullString `db:"bed_name"`
-	RentAmount      int64          `db:"rent_amount"`
-	RentCycle       string         `db:"rent_cycle"`
-	EndDate         string         `db:"end_date"`
-	RefundPaise     int64          `db:"refund_paise"`
-	SettledAt       time.Time      `db:"settled_at"`
-	PaidAfter       int64          `db:"paid_after"`
+	StayID      int64          `db:"stay_id"`
+	TenantID    int64          `db:"tenant_id"`
+	TenantName  string         `db:"tenant_name"`
+	Phone       string         `db:"phone"`
+	SiteName    string         `db:"site_name"`
+	RoomName    string         `db:"room_name"`
+	BedName     sql.NullString `db:"bed_name"`
+	RentAmount  int64          `db:"rent_amount"`
+	RentCycle   string         `db:"rent_cycle"`
+	EndDate     string         `db:"end_date"`
+	RefundPaise int64          `db:"refund_paise"`
+	SettledAt   time.Time      `db:"settled_at"`
+	PaidAfter   int64          `db:"paid_after"`
+	// WaivedAfter is what the owner waived off the shortfall since (waivers.go).
+	WaivedAfter     int64          `db:"waived_after"`
 	LastPaymentDate sql.NullString `db:"last_payment_date"`
 }
 
@@ -123,6 +125,7 @@ func loadMovedOut(db *sqlx.DB, ownerID int64) ([]movedOutRow, error) {
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.created_at > st.created_at
 			), 0) AS paid_after,
+			`+waivedAfterSQL+` AS waived_after,
 			(
 				SELECT TO_CHAR(MAX(p.payment_date), 'YYYY-MM-DD') FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true
@@ -145,7 +148,7 @@ func loadMovedOut(db *sqlx.DB, ownerID int64) ([]movedOutRow, error) {
 func buildMovedOut(stays []movedOutRow, today time.Time) []CollectionRow {
 	rows := make([]CollectionRow, 0, len(stays))
 	for _, s := range stays {
-		owed := settledOwed(s.RefundPaise, s.PaidAfter)
+		owed := settledOwed(s.RefundPaise, s.PaidAfter+s.WaivedAfter)
 		if owed == 0 {
 			continue
 		}
@@ -192,24 +195,27 @@ func buildMovedOut(stays []movedOutRow, today time.Time) []CollectionRow {
 func movedOutTotal(stays []movedOutRow) int64 {
 	var total int64
 	for _, s := range stays {
-		total += settledOwed(s.RefundPaise, s.PaidAfter)
+		total += settledOwed(s.RefundPaise, s.PaidAfter+s.WaivedAfter)
 	}
 	return total
 }
 
 // collectionStayRow is one active stay's billing inputs, as scanned from the DB.
 type collectionStayRow struct {
-	StayID          int64          `db:"stay_id"`
-	TenantID        int64          `db:"tenant_id"`
-	TenantName      string         `db:"tenant_name"`
-	Phone           string         `db:"phone"`
-	SiteName        string         `db:"site_name"`
-	RoomName        string         `db:"room_name"`
-	BedName         sql.NullString `db:"bed_name"`
-	RentAmount      int64          `db:"rent_amount"`
-	RentCycle       string         `db:"rent_cycle"`
-	StartDate       time.Time      `db:"start_date"`
-	TotalPaid       int64          `db:"total_paid"`
+	StayID     int64          `db:"stay_id"`
+	TenantID   int64          `db:"tenant_id"`
+	TenantName string         `db:"tenant_name"`
+	Phone      string         `db:"phone"`
+	SiteName   string         `db:"site_name"`
+	RoomName   string         `db:"room_name"`
+	BedName    sql.NullString `db:"bed_name"`
+	RentAmount int64          `db:"rent_amount"`
+	RentCycle  string         `db:"rent_cycle"`
+	StartDate  time.Time      `db:"start_date"`
+	TotalPaid  int64          `db:"total_paid"`
+	// Waiver is rent the owner waived (waivers.go): not cash, but it covers
+	// what they owe, oldest month first, as a payment would.
+	Waived          int64          `db:"waived"`
 	LastPaymentDate sql.NullString `db:"last_payment_date"`
 	LastPaymentType sql.NullString `db:"last_payment_type"`
 	// Schedule is the rent over time when it has ever changed (migration
@@ -266,12 +272,14 @@ func cycleStart(startDate time.Time, n int, cycle string) time.Time {
 func payeeRow(s collectionStayRow, today time.Time) CollectionRow {
 	sched := s.schedule()
 	cycles := cyclesElapsed(s.StartDate, today, s.RentCycle)
-	balance := sched.billed(s.StartDate, s.RentCycle, 0, cycles) - s.TotalPaid
+	billed := sched.billed(s.StartDate, s.RentCycle, 0, cycles)
+	covered := s.TotalPaid + waiverCredit(billed, s.TotalPaid, s.Waived)
+	balance := billed - covered
 	if balance < 0 {
 		balance = 0 // in credit: owes nothing, and the page never shows a negative
 	}
 
-	due := dueFor(sched, s.StartDate, s.RentCycle, s.TotalPaid, today)
+	due := dueFor(sched, s.StartDate, s.RentCycle, covered, today)
 	daysSinceDue := 0
 	if balance > 0 {
 		daysSinceDue = int(dateOnly(today).Sub(due.Date).Hours() / 24)
@@ -359,6 +367,7 @@ func loadOpenStays(db *sqlx.DB, ownerID int64) ([]collectionStayRow, error) {
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
 			), 0) AS total_paid,
+			`+waivedBeforeSQL+` AS waived,
 			(
 				SELECT TO_CHAR(MAX(p.payment_date), 'YYYY-MM-DD') FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'

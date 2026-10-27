@@ -136,6 +136,9 @@ type stayRevenueRow struct {
 	EndDate   *time.Time `db:"end_date"`
 	Booking   bool       `db:"booking"`
 	TotalPaid int64      `db:"total_paid"`
+	// Waiver is rent the owner waived (waivers.go): it covers what they owe,
+	// oldest month first, but is never collected.
+	Waived int64 `db:"waived"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -181,8 +184,8 @@ func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time
 		}
 		summary.StaysOpen++
 		totalExpected := sched.billed(row.StartDate, row.RentCycle, 0, upTo)
-		if totalExpected > row.TotalPaid {
-			summary.OverdueAmount += totalExpected - row.TotalPaid
+		if covered := row.TotalPaid + waiverCredit(totalExpected, row.TotalPaid, row.Waived); totalExpected > covered {
+			summary.OverdueAmount += totalExpected - covered
 			summary.StaysOwing++
 		}
 	}
@@ -287,7 +290,8 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			s.start_date,
 			s.end_date,
 			s.bed_id IS NULL AS booking,
-			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true AND p.kind = 'rent'), 0) AS total_paid
+			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true AND p.kind = 'rent'), 0) AS total_paid,
+			`+waivedBeforeSQL+` AS waived
 		FROM stays s
 		JOIN tenants t ON t.id = s.tenant_id
 		LEFT JOIN payments p ON p.stay_id = s.id
@@ -311,6 +315,13 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	}
 
 	revenue := computeRevenue(stayRows, collectedThisMonth, today)
+	// Rent waived off this month is not expected any more: the same figure
+	// as Insights' row for this month.
+	waived, err := loadWaivedByMonth(h.db, ownerID, firstOfMonth, firstOfMonth.AddDate(0, 1, 0))
+	if err != nil {
+		return serverError(c, err, "failed to fetch waivers")
+	}
+	revenue.ExpectedThisMonth -= waived[firstOfMonth.Format("2006-01")]
 	revenue.DepositsInThisMonth = thisMonth.DepositsIn
 	revenue.ReturnedThisMonth = thisMonth.Returned
 	revenue.NetInThisMonth = thisMonth.netIn()
