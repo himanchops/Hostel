@@ -237,6 +237,14 @@ Key conventions to carry forward:
 - **A rejected payment is kept, never deleted** (migration 009). "Pending" is
   `is_approved = false AND rejected_at IS NULL`; any new query for the pending
   queue must say both.
+- **Rent let go is not a payment** (`rent_let_go`, migration 017,
+  `handlers/letgo.go`). Anything that works out what someone owes adds it
+  to rent paid through `letGoCredit` (never past what was billed), using
+  `letGoBeforeSQL` for a stay's billing and `letGoAfterSQL` for a leaver's
+  shortfall since the settlement. Nothing that counts cash reads it:
+  `total_paid`, Collected and Net in stay what arrived. Insights and the
+  dashboard take `loadLetGoByMonth` off a month's expected rent. A new
+  "owed" figure that skips it disagrees with the tenant page.
 - **A payment is corrected from its sheet** (`components/PaymentSheet.tsx`,
   migration 016), opened by tapping its row on the tenant page or in the bed
   drawer; no row carries its own delete. `PUT /api/payments/:id` keeps the

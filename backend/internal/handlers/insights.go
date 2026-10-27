@@ -31,6 +31,9 @@ type RevenuePoint struct {
 	ExpectedPaise  int64  `json:"expected_paise"`
 	CollectedPaise int64  `json:"collected_paise"` // rent collected: moneyMonth.rentCollected
 	NetInPaise     int64  `json:"net_in_paise"`    // all money in, less refunds: moneyMonth.netIn
+	// LetGoPaise is rent the owner let go off this month (letgo.go), already
+	// taken out of ExpectedPaise.
+	LetGoPaise int64 `json:"let_go_paise"`
 	moneyMonth
 }
 
@@ -579,13 +582,44 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	for _, st := range settled {
 		rentPaid[st.StayID] += st.rentDelta()
 	}
+	// Rent let go (letgo.go) is covered rent for the share: money the owner
+	// chose not to take must not read as unpaid. computePaidShare caps
+	// what counts at what was billed.
+	var letGone []struct {
+		StayID int64 `db:"stay_id"`
+		Amount int64 `db:"amount"`
+	}
+	err = h.db.Select(&letGone, `
+		SELECT lg.stay_id, SUM(lg.amount) AS amount
+		FROM rent_let_go lg JOIN stays s ON s.id = lg.stay_id JOIN tenants t ON t.id = s.tenant_id
+		WHERE t.owner_id = $1
+		GROUP BY lg.stay_id
+	`, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to load money let go")
+	}
+	for _, lg := range letGone {
+		rentPaid[lg.StayID] += lg.Amount
+	}
 	rentBilled, rentBilledPaid := computePaidShare(stays, rentPaid, from, today)
+
+	// A month's expected rent is less what was let go off that month, the
+	// same figure as the dashboard's "expected this month".
+	revenue := computeRevenueSeries(stays, money, today, months)
+	letGoByMonth, err := loadLetGoByMonth(h.db, ownerID, from, to)
+	if err != nil {
+		return serverError(c, err, "failed to load money let go")
+	}
+	for i := range revenue {
+		revenue[i].ExpectedPaise -= letGoByMonth[revenue[i].Month]
+		revenue[i].LetGoPaise = letGoByMonth[revenue[i].Month]
+	}
 
 	return c.JSON(http.StatusOK, InsightsResponse{
 		Months:    months,
 		FromDate:  from.Format("2006-01-02"),
 		ToDate:    to.AddDate(0, 0, -1).Format("2006-01-02"),
-		Revenue:   computeRevenueSeries(stays, money, today, months),
+		Revenue:   revenue,
 		Occupancy: computeOccupancySeries(stays, totalBeds, today, months),
 		Rooms:     computeRoomInsights(rooms, stays, collectedByRoom, from, to),
 
@@ -605,6 +639,7 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 //	returned            money handed back at move-out
 //	deposit_to_rent     rent paid off from a held deposit; no money moved
 //	advance_returned    rent paid ahead, handed back; comes off rent collected
+//	let_go              rent the owner let go off this month; no money moved
 type MoneyEntry struct {
 	Date        string  `json:"date"`
 	Kind        string  `json:"kind"`
@@ -733,7 +768,33 @@ func (h *InsightsHandler) GetMonth(c echo.Context) error {
 		return serverError(c, err, "failed to load the month's settlements")
 	}
 
-	entries := make([]MoneyEntry, 0, len(payments)+len(settled))
+	// Rent let go off this month, dated the day it was let go.
+	var letGone []moneyEntryRow
+	err = h.db.Select(&letGone, `
+		SELECT lg.created_at AS date, 'let_go' AS kind, lg.amount,
+		       s.id AS stay_id, t.id AS tenant_id, t.name AS tenant_name,
+		       r.name AS room_name, b.name AS bed_name
+		FROM rent_let_go lg
+		JOIN stays s     ON s.id = lg.stay_id
+		JOIN tenants t   ON t.id = s.tenant_id
+		LEFT JOIN beds b ON b.id = s.bed_id
+		LEFT JOIN rooms r ON r.id = b.room_id
+		WHERE t.owner_id = $1
+		  AND lg.for_month >= $2
+		  AND lg.for_month <  $3
+	`, ownerID, start.Format("2006-01-02"), start.AddDate(0, 1, 0).Format("2006-01-02"))
+	if err != nil {
+		return serverError(c, err, "failed to load the month's money let go")
+	}
+
+	entries := make([]MoneyEntry, 0, len(payments)+len(settled)+len(letGone))
+	for _, lg := range letGone {
+		entries = append(entries, MoneyEntry{
+			Date: lg.Date.Format("2006-01-02"), Kind: lg.Kind, AmountPaise: lg.AmountPaise,
+			StayID: lg.StayID, TenantID: lg.TenantID, TenantName: lg.TenantName,
+			RoomName: lg.RoomName, BedName: lg.BedName,
+		})
+	}
 	for _, p := range payments {
 		entries = append(entries, MoneyEntry{
 			Date: p.Date.Format("2006-01-02"), Kind: p.Kind, AmountPaise: p.AmountPaise,

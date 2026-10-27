@@ -3667,6 +3667,48 @@ Render both reported success and `/health` answers. No public route reads
 `payments`, so the schema is confirmed by the owner's migration output and
 by a ledger loading on the live app, not by a probe from here.
 
+## Letting owed money go (Oct 2026)
+
+The rest of "Corrections and write-offs", designed with the owner on 27 Oct
+2026; he asked for leavers to be covered too. **Migration 017**
+(`rent_let_go`), which production needs before this merges.
+
+- **"Let some go…"**, a quiet link under the tenant page's balance. The
+  dialog is filled in with all they owe; the owner lowers it, adds a note if
+  they like, and reads "Varun will owe ₹14,000 instead of ₹18,000" before
+  saving (`POST /api/stays/:id/let-go`, refused above what is owed). With
+  more than one stay owing, it asks which.
+- **Owed, never collected.** Every owed figure counts it like rent paid,
+  oldest month first: the tenant summary (and so the portal), the grid,
+  Payments and the reminder, the dashboard's Still owed, Change rent's
+  preview, and the settlement's dues. `letGoCredit` stops it at what was
+  billed, so paying in full afterwards never turns it into an advance.
+  `total_paid`, Collected and Net in don't read it.
+- **Leavers.** Let go after a settlement comes off `settledOwed`; a leaver
+  who owes nothing more drops off "Moved out — still owes".
+- **In the ledger** (tenant page and bed drawer) a muted "₹4,000 let go"
+  line opens `LetGoSheet` with Take back (`DELETE /api/let-go/:id`). One a
+  settlement was worked out from is held, like a payment, until the
+  settlement is undone.
+- **Insights.** Each entry stores `for_month`: the oldest unpaid month when
+  made, or the month a leaver left. That month's expected rent drops by it
+  (and the dashboard's "expected this month" with it), the paid share
+  counts it as covered, and the month's lines end with a quiet "Let go, not
+  collected" note. No column.
+
+### Verification
+- `go test ./internal/handlers`: `letgo_test.go` with exact figures:
+  `letGoCredit` at its edges, the summary (owed, not paid, oldest month
+  first, never ahead), a leaver's shortfall, settlement dues with and
+  without paying in full, Payments' days overdue, `forMonth`, `rupees`.
+- `tests/e2e/owner/let-go.test.ts` at 768×1024 with touch: ₹4,000 of
+  ₹18,000 let go moves the summary, Payments, the dashboard's Still owed
+  and Insights' expected, leaves `total_paid` and Collected alone, and is
+  taken back; a leaver's whole shortfall let go takes them off Payments; one
+  a settlement used refuses Take back.
+- On the demo at the pane's phone width: the link, the dialog's live line,
+  the ledger line, Payments and Insights moving together, Take back.
+
 ---
 
 ## Architecture Notes

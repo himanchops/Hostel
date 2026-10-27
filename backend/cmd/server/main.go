@@ -76,6 +76,7 @@ func main() {
 	insightsHandler := handlers.NewInsightsHandler(db)
 	collectionsHandler := handlers.NewCollectionsHandler(db)
 	settlementHandler := handlers.NewSettlementHandler(db)
+	letGoHandler := handlers.NewLetGoHandler(db)
 	uploadHandler := handlers.NewUploadHandler(storageSvc)
 
 	e := echo.New()
@@ -227,6 +228,11 @@ func main() {
 	api.GET("/stays/:id/settlement-preview", settlementHandler.Preview)
 	api.POST("/stays/:id/settlement", settlementHandler.Create)
 	api.DELETE("/stays/:id/settlement", settlementHandler.Undo)
+
+	// Money let go (migration 017): never a payment, always off what is owed
+	api.GET("/stays/:id/let-go", letGoHandler.List)
+	api.POST("/stays/:id/let-go", letGoHandler.Create)
+	api.DELETE("/let-go/:id", letGoHandler.Delete)
 
 	// Payments (nested under stays)
 	api.GET("/stays/:stayId/payments", paymentHandler.List)

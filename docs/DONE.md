@@ -15,6 +15,50 @@ When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
 `### <title> (#NN)`. Items with no write-up just leave the board.
 
+### Letting owed money go (#63)
+Shipped 27 Oct 2026, the second and last part of "Corrections and
+write-offs", as the owner agreed it that day (he chose to cover leavers too):
+- A quiet "Let some go…" under the tenant page's balance opens a dialog
+  filled in with everything owed, which the owner lowers; a live line says
+  "Varun will owe ₹14,000 instead of ₹18,000". An optional note.
+- It is `rent_let_go` (migration 017), never a payment. What someone owes
+  counts it like rent paid, oldest month first, on the tenant page, the
+  grid, Payments, the dashboard, the reminder, Change rent and the
+  settlement. Collected and every cash figure ignore it. It can bring what
+  they owe to zero, never below (`letGoCredit`).
+- For someone who left owing, an amount let go after the settlement comes
+  off what they still owe, and they drop off "Moved out — still owes".
+- A muted "₹4,000 let go · Diwali" line in the ledger and the bed drawer
+  opens a sheet with Take back. One a settlement was worked out from waits
+  for that settlement to be undone.
+- Insights: the month it came off expects that much less, and the month's
+  lines end with a quiet "Let go, not collected: ₹4,000 Varun". No column,
+  as the owner asked.
+
+The write-up as agreed:
+
+What is left of "Corrections and write-offs" after #62 shipped correcting a
+payment. "They owe ₹10,000, we're letting it go", while they are still
+staying; at move-out, "Changed by you" in the move-out sheet already does it,
+and the owner is happy with how that reads (27 Oct 2026).
+
+**Decided with the owner, 27 Oct 2026:**
+- A quiet "Let some go…" link inside the tenant page's "Owes ₹X" line. It is
+  rare, so nothing beside "Record payment" and nothing on every ledger.
+- It records that ₹Y of a given month is forgiven, so it stops showing as
+  owed on Payments, the grid and a settlement. It is never a payment: Collected,
+  the dashboard and Insights' collected figures stay cash.
+- Insights: only if it can sit there quietly, a muted line rather than a
+  column. The owner said it may not be needed at all, since this is rare.
+
+**How (proposed, not built):** a per-cycle adjustment to *billed* rent applied
+inside `rentSchedule.billed`, not a third payment kind: a `waiver` kind would
+make every `kind = 'rent'` query decide whether it means "owed" or "cash".
+Whatever is built has to reach `loadMoneyByMonth`, because Insights already
+reads a shortfall waived at settlement as unpaid, while rent a deposit paid off
+at settlement counts as collected (`money.go` → `settlementRent`). Unit tests
+with exact figures, like every money change.
+
 ### Corrections and write-offs: correcting a payment (#62)
 Shipped in part, 27 Oct 2026. The owner agreed the design that day:
 - **A payment opens from its row** (`PaymentSheet`, tenant page and bed

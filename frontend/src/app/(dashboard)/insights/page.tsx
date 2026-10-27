@@ -41,6 +41,8 @@ const KIND: Record<MoneyEntryKind, { label: string; tone: BadgeTone; out: boolea
   returned: { label: "Returned", tone: "warning", out: true },
   deposit_to_rent: { label: "Paid from deposit", tone: "neutral", out: false },
   advance_returned: { label: "Rent refunded", tone: "warning", out: true },
+  // Never in a view's lines or totals: no money moved. LetGoNote mentions it.
+  let_go: { label: "Let go", tone: "neutral", out: false },
 };
 
 // Spelled out rather than left to toLocaleString, whose en-IN short September
@@ -514,8 +516,14 @@ function MonthLines({
 
   const kinds = VIEW_KINDS[view];
   const lines = detail.entries.filter((e) => kinds.includes(e.kind));
+  const letGo = view === "rent" ? detail.entries.filter((e) => e.kind === "let_go") : [];
   if (lines.length === 0) {
-    return <p className="text-sm text-stone-400">Nothing {view === "rent" ? "collected" : "came in or went out"} in {monthName(row.month)}.</p>;
+    return (
+      <div>
+        <p className="text-sm text-stone-400">Nothing {view === "rent" ? "collected" : "came in or went out"} in {monthName(row.month)}.</p>
+        <LetGoNote entries={letGo} />
+      </div>
+    );
   }
   const value = (e: MoneyEntry) => (KIND[e.kind].out ? -e.amount_paise : e.amount_paise);
   const total = lines.reduce((s, e) => s + value(e), 0);
@@ -558,7 +566,29 @@ function MonthLines({
           {view === "rent" ? "Collected" : "Net in"}: <span className="font-semibold text-stone-800">{signed(total)}</span>
         </span>
       </div>
+      <LetGoNote entries={letGo} />
     </div>
+  );
+}
+
+/**
+ * Rent the owner let go off this month (migration 017), one quiet line under
+ * the month's lines. It is already out of the month's expected rent and was
+ * never collected, so it sits outside the list and its total. The owner
+ * wanted it there only if it could be subtle.
+ */
+function LetGoNote({ entries }: { entries: MoneyEntry[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <p className="mt-2 text-xs text-stone-400">
+      Let go, not collected:{" "}
+      {entries.map((e, i) => (
+        <span key={`${e.stay_id}-${e.date}-${i}`} className="tabular-nums">
+          {i > 0 && " · "}
+          {formatCurrency(e.amount_paise)} {e.tenant_name}
+        </span>
+      ))}
+    </p>
   );
 }
 

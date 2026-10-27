@@ -22,29 +22,6 @@ Most items have no write-up; the line on the board is the whole record.
 
 ## Next up
 
-### Letting owed money go
-What is left of "Corrections and write-offs" after #62 shipped correcting a
-payment. "They owe ₹10,000, we're letting it go", while they are still
-staying; at move-out, "Changed by you" in the move-out sheet already does it,
-and the owner is happy with how that reads (27 Oct 2026).
-
-**Decided with the owner, 27 Oct 2026:**
-- A quiet "Let some go…" link inside the tenant page's "Owes ₹X" line. It is
-  rare, so nothing beside "Record payment" and nothing on every ledger.
-- It records that ₹Y of a given month is forgiven, so it stops showing as
-  owed on Payments, the grid and a settlement. It is never a payment: Collected,
-  the dashboard and Insights' collected figures stay cash.
-- Insights: only if it can sit there quietly, a muted line rather than a
-  column. The owner said it may not be needed at all, since this is rare.
-
-**How (proposed, not built):** a per-cycle adjustment to *billed* rent applied
-inside `rentSchedule.billed`, not a third payment kind: a `waiver` kind would
-make every `kind = 'rent'` query decide whether it means "owed" or "cash".
-Whatever is built has to reach `loadMoneyByMonth`, because Insights already
-reads a shortfall waived at settlement as unpaid, while rent a deposit paid off
-at settlement counts as collected (`money.go` → `settlementRent`). Unit tests
-with exact figures, like every money change.
-
 ### House rules on the registration form
 Raised 24 Oct 2026, and the owner called it crucial. Someone registering from
 the QR link should see the hostel's basic rules before they submit, for example:
