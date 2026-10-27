@@ -3452,39 +3452,6 @@ two ship together.
 
 ---
 
-## The Tenants list, and a reminder that says where to pay (Oct 2026)
-
-Two board items, decided by the owner on 27 Oct 2026. **Migration 015**
-(`owners.upi_id`), which production needs before this merges.
-
-- **The Tenants list says room, moved in and owes.** "Since" was when the
-  record was typed in, the same afternoon for every tenant the notebook
-  import brought in. The columns are now Name (phone under it), Room, Moved
-  in and Owes, taken from the Payments screen's own rows
-  (`GET /api/payments/board`, which now sends each stay's `start_date`) so
-  the two screens cannot disagree. Someone with no open stay reads "Left 12
-  Sep 2026" (`left_on`, the tenant list only), and someone never placed
-  reads "Not staying". On a phone the room and date go under the name.
-- **The WhatsApp reminder gets firmer and says where to pay.** "Please pay
-  at your convenience" went to someone 70 days late. `askToPay` now says
-  "Please pay when you can" up to a week, "Please pay this week" up to a
-  month, and after that "This is over a month overdue. Please pay by the
-  end of this week, or tell me when you can." An owner who sets a UPI ID
-  on Account (`PUT /api/me/upi`, checked as name@bank) gets "You can pay by
-  UPI to …" in every reminder.
-
-### Verification
-- `go test ./internal/handlers`: `TestUpiPattern`.
-- `tests/unit/wa-link.test.ts`: the three tones at their edges, and the
-  UPI line with and without an ID, for a stay and for a leaver.
-- `tests/e2e/owner/tenants-list-and-upi.test.ts` at 768×1024: room, moved
-  in and ₹6,000 owed; "Not staying"; "Left 10 …"; a phone number refused as
-  a UPI ID; the ID saved, read back from `/api/me`, carried by the Nudge
-  link; cleared.
-- Screenshots of the list on the demo at 375 and 768.
-
----
-
 ## What people are told (Oct 2026)
 
 Six board items about wording, from the owner's 27 Oct list:
@@ -3604,6 +3571,39 @@ Four board items from the owner's 27 Oct list:
 **Production, 27 Oct 2026: live.** Merged as `764fd11` (#60), frontend
 only; Vercel reported success and an unknown address now answers 404 with
 the new page.
+---
+
+## The Tenants list, and a reminder that says where to pay (Oct 2026)
+
+Two board items, decided by the owner on 27 Oct 2026. **Migration 015**
+(`owners.upi_id`), which production needs before this merges.
+
+- **The Tenants list says room, moved in and owes.** "Since" was when the
+  record was typed in, the same afternoon for every tenant the notebook
+  import brought in. The columns are now Name (phone under it), Room, Moved
+  in and Owes, taken from the Payments screen's own rows
+  (`GET /api/payments/board`, which now sends each stay's `start_date`) so
+  the two screens cannot disagree. Someone with no open stay reads "Left 12
+  Sep 2026" (`left_on`, the tenant list only), and someone never placed
+  reads "Not staying". On a phone the room and date go under the name.
+- **The WhatsApp reminder gets firmer and says where to pay.** "Please pay
+  at your convenience" went to someone 70 days late. `askToPay` now says
+  "Please pay when you can" up to a week, "Please pay this week" up to a
+  month, and after that "This is over a month overdue. Please pay by the
+  end of this week, or tell me when you can." An owner who sets a UPI ID
+  on Account (`PUT /api/me/upi`, checked as name@bank) gets "You can pay by
+  UPI to …" in every reminder.
+
+### Verification
+- `go test ./internal/handlers`: `TestUpiPattern`.
+- `tests/unit/wa-link.test.ts`: the three tones at their edges, and the
+  UPI line with and without an ID, for a stay and for a leaver.
+- `tests/e2e/owner/tenants-list-and-upi.test.ts` at 768×1024: room, moved
+  in and ₹6,000 owed; "Not staying"; "Left 10 …"; a phone number refused as
+  a UPI ID; the ID saved, read back from `/api/me`, carried by the Nudge
+  link; cleared.
+- Screenshots of the list on the demo at 375 and 768.
+
 ---
 
 ## Architecture Notes
