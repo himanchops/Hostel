@@ -3488,6 +3488,40 @@ Six board items about wording, from the owner's 27 Oct list:
 
 ---
 
+## The registration form (Oct 2026)
+
+Four board items about the QR registration form, from the owner's 27 Oct
+list. ("A duplicate registration goes through silently" was dropped by his
+choice: warning on the public form would tell any stranger that a number is
+on the books, and approving already says "Same number as …".)
+
+- **A wrong link says so.** The page asks for the hostel's name on load;
+  a 404 now replaces the form with "This registration link doesn't work",
+  instead of letting someone fill it in and fail after three photo uploads.
+  A network failure leaves the form up, since the link may be fine.
+- **Aadhaar takes digits.** The field drops anything but digits and spaces
+  as it is typed, fits "1234 5678 9012", and the form checks for twelve
+  digits before anything uploads. Public registration refuses anything else
+  too (`validAadhaar`). The number is still kept as typed.
+- **Each error sits at its field, with the focus** (UX audit M15). A bad
+  phone, emergency phone or Aadhaar number shows under that field, which
+  takes the focus, so the browser scrolls to the reason. `Input` now
+  accepts a ref for this.
+- **"Show password" on every password field**: owner sign-in and sign-up,
+  registration, the tenant sign-in and signing in again after a session
+  ends. `ShowPassword` (`components/ui`) is the checkbox the portal-password
+  dialog and Account already had, now shared.
+
+### Verification
+- `go test ./internal/handlers`: `TestValidAadhaar`.
+- `tests/e2e/public/registration-form.test.ts` at 375 under touch: the wrong
+  link, letters dropped from Aadhaar, the error and focus at Aadhaar then at
+  the phone, the API's 400, and Show password on all four pages.
+- Tests that found the field by "Password" now anchor the label
+  (`/^Password/`), since "Show password" contains it.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

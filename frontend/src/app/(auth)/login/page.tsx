@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/contexts/auth";
-import { Banner, Button, Card, Field, FormError, Input } from "@/components/ui";
+import { Banner, Button, Card, Field, FormError, Input, ShowPassword } from "@/components/ui";
 import { safeNext } from "@/lib/session";
 
 export default function LoginPage() {
@@ -13,6 +13,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   // "Sign out everywhere" lands here, and its confirmation cannot be a toast:
@@ -75,7 +76,7 @@ export default function LoginPage() {
         <Field label="Password">
           <Input
             id="password"
-            type="password"
+            type={reveal ? "text" : "password"}
             required
             autoComplete="current-password"
             value={password}
@@ -83,6 +84,7 @@ export default function LoginPage() {
             placeholder="••••••••"
           />
         </Field>
+        <ShowPassword checked={reveal} onChange={setReveal} />
 
         <Button type="submit" className="w-full" loading={loading}>
           {loading ? "Signing in…" : "Sign in"}

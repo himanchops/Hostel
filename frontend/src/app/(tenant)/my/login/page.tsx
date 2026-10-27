@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTenantAuth } from "@/contexts/tenantAuth";
-import { Button, Card, Field, FormError, Input } from "@/components/ui";
+import { Button, Card, Field, FormError, Input, ShowPassword } from "@/components/ui";
 import { PHONE_ERROR, tenDigits } from "@/lib/phone";
 import { publicMessage } from "@/lib/publicError";
 
@@ -12,6 +12,7 @@ export default function TenantLoginPage() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -71,12 +72,13 @@ export default function TenantLoginPage() {
             >
               <Input
                 required
-                type="password"
+                type={reveal ? "text" : "password"}
                 placeholder="Your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </Field>
+            <ShowPassword checked={reveal} onChange={setReveal} />
 
             <Button type="submit" loading={loading} className="w-full">
               {loading ? "Signing in…" : "Sign in"}

@@ -34,7 +34,7 @@ test.describe("When the session ends", () => {
     await expect(page.getByText(/what you typed is still here/)).toBeVisible();
     await expect(dialog.getByLabel("Email")).toHaveValue(owner.email);
 
-    await dialog.getByLabel("Password").fill("testpassword123");
+    await dialog.getByLabel(/^Password/).fill("testpassword123");
     await dialog.getByRole("button", { name: "Sign in" }).tap();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByText("Signed in again — carry on where you were")).toBeVisible();
@@ -59,7 +59,7 @@ test.describe("When the session ends", () => {
     await page.getByRole("link", { name: "Sites" }).first().tap();
     const dialog = page.getByRole("dialog", { name: "You were signed out" });
     await expect(dialog).toBeVisible();
-    await dialog.getByLabel("Password").fill("not-the-password");
+    await dialog.getByLabel(/^Password/).fill("not-the-password");
     await dialog.getByRole("button", { name: "Sign in" }).tap();
     await expect(dialog.getByText("invalid email or password")).toBeVisible();
     await expect(dialog).toBeVisible();
@@ -73,7 +73,7 @@ test.describe("When the session ends", () => {
     await expect(page.getByText("Sign in to carry on where you were.")).toBeVisible();
 
     await page.getByLabel("Email").fill(owner.email);
-    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel(/^Password/).fill("testpassword123");
     await page.getByRole("button", { name: "Sign in" }).tap();
     await expect(page).toHaveURL(/\/payments\?from=bookmark$/);
   });
@@ -83,7 +83,7 @@ test.describe("When the session ends", () => {
     await page.goto("/login?next=//evil.example/steal");
     await expect(page.getByText("Sign in to carry on where you were.")).toHaveCount(0);
     await page.getByLabel("Email").fill(owner.email);
-    await page.getByLabel("Password").fill("testpassword123");
+    await page.getByLabel(/^Password/).fill("testpassword123");
     await page.getByRole("button", { name: "Sign in" }).tap();
     await expect(page).toHaveURL(/localhost:3000\/dashboard$/);
   });
