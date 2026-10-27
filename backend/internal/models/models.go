@@ -14,6 +14,8 @@ type Owner struct {
 	PasswordHash string `db:"password_hash" json:"-"`
 	Name         string `db:"name" json:"name"`
 	Phone        string `db:"phone" json:"phone,omitempty"`
+	// UpiID is where tenants pay, added to WhatsApp reminders (migration 015).
+	UpiID *string `db:"upi_id" json:"upi_id,omitempty"`
 	// TokenVersion is copied into every token issued; see auth.Claims. Not
 	// secret, but nothing a client does with it is useful, so it stays out.
 	TokenVersion int       `db:"token_version" json:"-"`
@@ -91,10 +93,14 @@ type Tenant struct {
 	// in at /my at all. The hash itself must never leave the process, but
 	// "can they log in?" has to, because an owner-created tenant has no
 	// password and the owner has no other way to find that out.
-	HasPortalLogin bool      `db:"has_portal_login" json:"has_portal_login"`
-	IsApproved     bool      `db:"is_approved" json:"is_approved"`
-	CreatedAt      time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt      time.Time `db:"updated_at" json:"updated_at"`
+	HasPortalLogin bool `db:"has_portal_login" json:"has_portal_login"`
+	// LeftOn is when their last stay ended, for someone with no open stay.
+	// Only the owner's tenant list fills it, so the list can say "Left
+	// 12 Sep 2026" rather than "Not staying" for everyone who moved out.
+	LeftOn     *string   `db:"left_on" json:"left_on,omitempty"`
+	IsApproved bool      `db:"is_approved" json:"is_approved"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
 	// HostelName is set only for the tenant's own portal (sign-in and /me),
 	// so its header can name the place they live. Never stored.
 	HostelName string `db:"-" json:"hostel_name,omitempty"`

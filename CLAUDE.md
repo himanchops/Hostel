@@ -224,6 +224,9 @@ Key conventions to carry forward:
   anything uploads. Store the ten digits. Anything that looks a tenant up by
   phone compares `phoneDigitsSQL`, because older rows keep the shape they were
   typed in.
+- **A WhatsApp reminder is built by `nudgeMessage`** (`lib/wa.ts`): firmer
+  with lateness (`askToPay`), and carrying the owner's UPI ID when one is set
+  (`owners.upi_id`, migration 015). Never a second template.
 - **The tenant portal's money is the owner's money.** `/tenant/summary` is
   `loadTenantSummary`, the same function as the owner's tenant page. Never
   give the portal its own arithmetic.

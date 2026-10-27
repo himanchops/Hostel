@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { normalizePhone, waLink, duePhrase, roomLabel, nudgeMessage, settledPhrase } from "../../src/lib/wa";
+import { normalizePhone, waLink, duePhrase, roomLabel, nudgeMessage, settledPhrase, askToPay } from "../../src/lib/wa";
 
 // wa.me wants a bare country-code-prefixed number: no +, no spaces, no dashes.
 // Phone numbers in this app are typed by hand into a form, so every one of
@@ -83,7 +83,7 @@ test("nudgeMessage renders the full default template", () => {
       days_since_due: 12,
     })
   ).toBe(
-    "Hi Asha, this is a reminder that rent of ₹7,500 for 101 · A is pending (due 12 days ago). Please pay at your convenience. Thank you!"
+    "Hi Asha, this is a reminder that rent of ₹7,500 for 101 · A is pending (due 12 days ago). Please pay this week. Thank you!"
   );
 });
 
@@ -103,7 +103,7 @@ test("nudgeMessage drops the location when there is no bed or room", () => {
     days_since_due: 0,
   });
   expect(message).toBe(
-    "Hi Vikram, this is a reminder that rent of ₹12,000 is pending (due today). Please pay at your convenience. Thank you!"
+    "Hi Vikram, this is a reminder that rent of ₹12,000 is pending (due today). Please pay when you can. Thank you!"
   );
   expect(message).not.toContain("  ");
 });
@@ -120,7 +120,7 @@ test("nudgeMessage for a tenant who moved out talks about what is outstanding, n
     moved_out: true,
   });
   expect(message).toBe(
-    "Hi Asha, this is a reminder that ₹5,500 is still outstanding from when you moved out. Please pay at your convenience. Thank you!"
+    "Hi Asha, this is a reminder that ₹5,500 is still outstanding from when you moved out. Please pay this week. Thank you!"
   );
   expect(message).not.toContain("rent");
   expect(message).not.toContain("101");
@@ -130,4 +130,28 @@ test("settledPhrase counts from the settlement", () => {
   expect(settledPhrase(0)).toBe("settled today");
   expect(settledPhrase(1)).toBe("settled 1 day ago");
   expect(settledPhrase(21)).toBe("settled 21 days ago");
+});
+
+// Firmer with lateness: "at your convenience" once went to someone 70 days
+// late (owner, Oct 2026).
+test("askToPay gets firmer at a week and at a month", () => {
+  expect(askToPay(0)).toBe("Please pay when you can.");
+  expect(askToPay(7)).toBe("Please pay when you can.");
+  expect(askToPay(8)).toBe("Please pay this week.");
+  expect(askToPay(30)).toBe("Please pay this week.");
+  expect(askToPay(70)).toBe("This is over a month overdue. Please pay by the end of this week, or tell me when you can.");
+});
+
+test("nudgeMessage says where to pay when the owner has a UPI ID", () => {
+  const row = { tenant_name: "Asha Rao", room_name: "101", bed_name: "A", balance_paise: 750000, days_since_due: 3 };
+  expect(nudgeMessage(row, "rahul@okaxis")).toBe(
+    "Hi Asha, this is a reminder that rent of ₹7,500 for 101 · A is pending (due 3 days ago). Please pay when you can. You can pay by UPI to rahul@okaxis. Thank you!"
+  );
+  // None set: no line, and no doubled space.
+  expect(nudgeMessage(row)).toBe(
+    "Hi Asha, this is a reminder that rent of ₹7,500 for 101 · A is pending (due 3 days ago). Please pay when you can. Thank you!"
+  );
+  expect(nudgeMessage({ ...row, moved_out: true, days_since_due: 45 }, "rahul@okaxis")).toBe(
+    "Hi Asha, this is a reminder that ₹7,500 is still outstanding from when you moved out. This is over a month overdue. Please pay by the end of this week, or tell me when you can. You can pay by UPI to rahul@okaxis. Thank you!"
+  );
 });

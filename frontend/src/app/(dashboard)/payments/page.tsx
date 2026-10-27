@@ -266,9 +266,10 @@ function PayeeRow({
   onToggle: () => void;
   onRecorded: (amount: number) => void;
 }) {
+  const { owner } = useAuth();
   const owes = row.balance_paise > 0;
   const behind = row.moved_out || row.due_state === "overdue";
-  const [message, setMessage] = useState(() => nudgeMessage(row));
+  const [message, setMessage] = useState(() => nudgeMessage(row, owner?.upi_id));
   const [editingMessage, setEditingMessage] = useState(false);
   // A nudge is a reminder of money owed; nobody is chased for rent due Friday.
   const link = owes ? waLink(row.phone, message) : null;
@@ -335,7 +336,7 @@ function PayeeRow({
                 <Field label="Message">
                   <Textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} className="resize-none" />
                 </Field>
-                <Button variant="ghost" size="sm" onClick={() => { setMessage(nudgeMessage(row)); setEditingMessage(false); }}>
+                <Button variant="ghost" size="sm" onClick={() => { setMessage(nudgeMessage(row, owner?.upi_id)); setEditingMessage(false); }}>
                   Reset message
                 </Button>
               </div>

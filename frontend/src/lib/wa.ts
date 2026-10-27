@@ -62,14 +62,33 @@ export function roomLabel(row: Pick<CollectionRow, "room_name" | "bed_name">): s
 }
 
 /**
+ * How firmly to ask, by how long it has been. Still plain and polite (the
+ * owner is messaging someone in their own building), but "please pay at your
+ * convenience" went to someone 70 days late (owner, Oct 2026).
+ */
+export function askToPay(daysSinceDue: number): string {
+  if (daysSinceDue <= 7) return "Please pay when you can.";
+  if (daysSinceDue <= 30) return "Please pay this week.";
+  return "This is over a month overdue. Please pay by the end of this week, or tell me when you can.";
+}
+
+/** "You can pay by UPI to rahul@okaxis. " or nothing, with the space it needs. */
+function payTo(upiId?: string | null): string {
+  return upiId ? `You can pay by UPI to ${upiId}. ` : "";
+}
+
+/**
  * The default nudge. Deliberately plain and non-threatening: the owner is
  * messaging someone who lives in their building and will read it on a phone.
+ * It gets firmer with lateness (askToPay) and says where to pay when the
+ * owner has set a UPI ID on the Account page.
  */
 export function nudgeMessage(
   row: Pick<
     CollectionRow,
     "tenant_name" | "room_name" | "bed_name" | "balance_paise" | "days_since_due"
-  > & Partial<Pick<CollectionRow, "moved_out">>
+  > & Partial<Pick<CollectionRow, "moved_out">>,
+  upiId?: string | null,
 ): string {
   const firstName = row.tenant_name.trim().split(/\s+/)[0] || row.tenant_name;
   // Someone who has left owes a balance from settling up, not "rent" that is
@@ -79,7 +98,7 @@ export function nudgeMessage(
     return (
       `Hi ${firstName}, this is a reminder that ${formatCurrency(row.balance_paise)} ` +
       `is still outstanding from when you moved out. ` +
-      `Please pay at your convenience. Thank you!`
+      `${askToPay(row.days_since_due)} ${payTo(upiId)}Thank you!`
     );
   }
   const where = roomLabel(row);
@@ -88,6 +107,6 @@ export function nudgeMessage(
     `Hi ${firstName}, this is a reminder that rent of ` +
     `${formatCurrency(row.balance_paise)}${place} is pending ` +
     `(${duePhrase(row.days_since_due)}). ` +
-    `Please pay at your convenience. Thank you!`
+    `${askToPay(row.days_since_due)} ${payTo(upiId)}Thank you!`
   );
 }

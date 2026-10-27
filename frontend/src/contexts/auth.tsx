@@ -34,6 +34,8 @@ interface AuthContextValue {
   reauthenticate: (password: string) => Promise<void>;
   /** True after the owner chose to sign out, so the redirect need not return them. */
   signedOutByChoice: boolean;
+  /** Merge a change the owner just saved, such as their UPI ID, into `owner`. */
+  updateOwner: (change: Partial<Owner>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -134,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionEnded,
       reauthenticate,
       signedOutByChoice,
+      updateOwner: (change: Partial<Owner>) => setOwner((o) => (o ? { ...o, ...change } : o)),
     }}>
       {children}
     </AuthContext.Provider>
