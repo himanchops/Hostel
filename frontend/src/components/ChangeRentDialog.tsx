@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { staysApi, Stay, ApiError, formatCurrency, formatDay, today } from "@/lib/api";
-import { firstDueOnOrAfter, nextDueDate } from "@/lib/rent";
+import { firstDueOnOrAfter, nextDueDate, perCycle } from "@/lib/rent";
 import {
   RentChoiceFields, RentChoiceValue, RentSummary, emptyRentChoice, rentPlanOf, useRentPreview,
 } from "@/components/RentChoice";
@@ -110,7 +110,7 @@ export function ChangeRentDialog({
     <Modal open={open} onClose={onClose} title={title}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-stone-600">
-          {tenantName ? `${tenantName} pays` : "Currently"} {formatCurrency(current?.this_rent ?? stay.rent_amount)}/{stay.rent_cycle}
+          {tenantName ? `${tenantName} pays` : "Currently"} {formatCurrency(current?.this_rent ?? stay.rent_amount)} {perCycle(stay.rent_cycle)}
           {current && current.next_rent !== current.this_rent && `, ${formatCurrency(current.next_rent)} from ${formatDay(current.next_start)}`}.
         </p>
 

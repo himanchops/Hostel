@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { cycleStart, firstDueOnOrAfter, nextDueDate, rentForNights, stayNights } from "../../src/lib/rent";
+import { cycleStart, firstDueOnOrAfter, nextDueDate, perCycle, rentForNights, stayNights } from "../../src/lib/rent";
 
 // Same fixture as backend/internal/handlers/rent_test.go: moved in 6 Jun 2026.
 test("monthly cycles start on the move-in day each month", () => {
@@ -42,4 +42,12 @@ test("the whole stay is priced per night", () => {
   expect(rentForNights("333.33", 3)).toBe("999.99");
   expect(rentForNights("", 5)).toBe("");
   expect(rentForNights("550", 0)).toBe("");
+});
+
+test("a rent says what it is for: a night, a week or a month", () => {
+  expect(perCycle("daily")).toBe("a night");
+  expect(perCycle("weekly")).toBe("a week");
+  expect(perCycle("monthly")).toBe("a month");
+  // Never "undefined" at the owner.
+  expect(perCycle("fortnightly")).toBe("per fortnightly");
 });

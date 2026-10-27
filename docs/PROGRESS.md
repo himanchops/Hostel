@@ -3414,6 +3414,39 @@ second.
 
 ---
 
+## Help on demand, and a rent says what it is for (Oct 2026)
+
+Owner, 27 Oct 2026, two board items. Opened as #57 and folded into #56 so the
+two ship together.
+
+- **Explanations wait behind an ⓘ.** The two notes in Record notice were
+  right the first time and clutter every time after. `WithHelp`
+  (`components/ui/WithHelp.tsx`) puts an ⓘ beside the heading, which shows
+  the text on a tap, since the iPad has no hover. The dialog keeps "X is
+  planning to leave." in view.
+- **Delete tenant keeps one short line and a red button.** The owner tried
+  the ⓘ there on the demo and wanted the warning back, shorter, before the
+  button: "Only for a test entry or a duplicate. For someone who left, use
+  Move out. Can't be undone." The button is red-outlined with a warning icon.
+- **"₹500 a night", not "₹500/mo".** The grid's bed panel printed "/mo" for
+  every stay, and the tenant page and Change rent printed "/monthly".
+  `perCycle` (`lib/rent.ts`) says "a month", "a week" or "a night"
+  everywhere, the portal and Move bed included. The grid now sends
+  `rent_cycle`, and its `rent_amount` is the rent of the cycle billed now,
+  not `stays.rent_amount`, which is the latest scheduled rent.
+
+### Verification
+- `tests/unit/rent.test.ts`: `perCycle`.
+- `tests/e2e/owner/help-on-demand.test.ts` at 768×1024 under touch: the
+  notice explanations shut until the ⓘ is tapped, the delete warning in view
+  with no ⓘ, and the bed panel reads "Rent ₹500 a night" and "Rent ₹8,000 a
+  month".
+- `change-rent.test.ts` updated for "a month". `touch-targets.test.ts`
+  passes with the ⓘ.
+- Screenshots on the demo at 375 and 768.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

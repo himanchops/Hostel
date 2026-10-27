@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { staysApi, Stay, ApiError, today } from "@/lib/api";
-import { Button, Field, FormError, Input, Modal, useToast } from "@/components/ui";
+import { Button, Field, FormError, Input, Modal, useToast, WithHelp } from "@/components/ui";
 
 /**
  * Recording that a tenant is leaving — and, once the day arrives, answering
@@ -93,11 +93,23 @@ export function RecordNoticeDialog({
   return (
     <Modal open={open} onClose={onClose} title={editing ? "Update notice" : "Record notice"}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-sm text-stone-600">
-          {tenantName ? `${tenantName} is` : "This tenant is"} planning to leave.
-          This does not end the stay or free the bed — rent keeps accruing until
-          you confirm they have actually gone.
-        </p>
+        <WithHelp
+          heading={
+            <p className="text-sm text-stone-600">
+              {tenantName ? `${tenantName} is` : "This tenant is"} planning to leave.
+            </p>
+          }
+          label="About notices"
+        >
+          <p>
+            This does not end the stay or free the bed: rent keeps accruing until
+            you confirm they have actually gone.
+          </p>
+          <p className="mt-1">
+            Leave the leaving date blank if they have not said. The bed turns
+            orange as the date approaches, then asks you to confirm once it passes.
+          </p>
+        </WithHelp>
 
         <Field label="When did they tell you?">
           <Input
@@ -116,10 +128,6 @@ export function RecordNoticeDialog({
             min={stay?.start_date?.slice(0, 10)}
             onChange={(e) => setExpectedEnd(e.target.value)}
           />
-          <p className="mt-1 text-xs text-stone-400">
-            Leave blank if they have not said. The bed turns orange as the date
-            approaches, then asks you to confirm once it passes.
-          </p>
         </Field>
 
         {error && <FormError>{error}</FormError>}
