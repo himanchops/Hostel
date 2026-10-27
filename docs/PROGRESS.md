@@ -3614,6 +3614,53 @@ and an owner sign-in with an unknown address answers 401, not 500, so the
 login query that now reads `upi_id` runs against the production schema.
 No UPI ID is set on the live account yet; that is the owner's to type.
 
+## Correcting a payment (Oct 2026)
+
+The first part of "Corrections and write-offs", designed with the owner on
+27 Oct 2026. **Migration 016** (`payment_edits`, `payments.from_tenant`),
+which production needs before this merges.
+
+- **A payment opens from its row.** The ✕ on every ledger row is gone; the
+  row (and a chevron, for a keyboard) opens `PaymentSheet`, the same on the
+  tenant page and in the bed drawer. The owner's own entry offers Change and
+  Delete. Change edits amount, rent or deposit, Cash or UPI, date and note
+  (`PUT /api/payments/:id`), and keeps the old figures in `payment_edits`, so
+  the row says "Changed 27 Oct 2026" and the sheet "was ₹7,500, Cash".
+- **A tenant's payment is kept.** `from_tenant` marks what came from the
+  portal (backfilled from proof, waiting or rejected rows). Its sheet offers
+  "Not accepted after all", with a reason the tenant reads, instead of
+  Delete; `reject` now accepts an approved tenant payment, and a rejected one
+  has "Accept after all".
+- **A settlement holds its payments.** A payment recorded before a
+  settlement can't be changed, deleted, accepted or not accepted
+  (`notSettledSQL`, 409 "Undo the settlement on the tenant's page"). The
+  settlement card has a quiet "Undo settlement…"
+  (`DELETE /api/stays/:id/settlement`); the stay stays ended, and "Settle the
+  money" settles again. Payments recorded after it, such as a leaver paying
+  what they owed, stay correctable.
+- **Found on the way:** "Settle the money" on a stay that ended on an
+  earlier day was refused ("this stay already ended on …") because the
+  sheet previews "today" before it knows the stay ended. The preview now
+  prices an ended stay on its own end date; Create stays strict.
+- **"+ Add payment" on an ended stay**, and **a confirm before settling**
+  ("Settle Kiran's stay? Kiran gets ₹4,000 back in cash.").
+- **Not built, the owner's call:** an Undo on the "Recorded" toast.
+
+### Verification
+- `go test ./...`.
+- `tests/unit/payment-edit.test.ts`: the "Changed … was …" line names only
+  what moved, in order, with a quoted note.
+- `tests/e2e/owner/payment-corrections.test.ts` at 768×1024 with touch: a
+  change shows on the row and in the sheet, the API keeps `last_edit`, and
+  the summary follows the new amount; a settled payment refuses change and
+  delete with the undo message, the sheet offers neither, undo brings Change
+  back, and settling again from an ended stay asks first and locks the
+  payments without a reload; a tenant's payment can't be deleted, is marked
+  not accepted with a reason (₹0 paid), then accepted again (₹6,000 paid).
+- `tests/e2e/owner/hover-reveal.test.ts` now deletes through the sheet on a
+  phone and both iPad orientations.
+- On the demo: edited, undone, re-settled, and the bed drawer's rows.
+
 ---
 
 ## Architecture Notes

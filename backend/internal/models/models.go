@@ -192,7 +192,29 @@ type Payment struct {
 	// money: pending means is_approved = false AND rejected_at IS NULL.
 	RejectedAt      *time.Time `db:"rejected_at" json:"rejected_at,omitempty"`
 	RejectionReason *string    `db:"rejection_reason" json:"rejection_reason,omitempty"`
-	CreatedAt       time.Time  `db:"created_at" json:"created_at"`
+	// FromTenant marks a payment the tenant sent from the portal. It is never
+	// deleted, only marked not accepted, even after it was accepted
+	// (migration 016).
+	FromTenant bool      `db:"from_tenant" json:"from_tenant"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+
+	// Filled by the owner's ledger only, never by a query on the payments
+	// table alone. LastEdit is what the payment said before its latest
+	// change. Settled means a settlement was saved after this payment was
+	// recorded, so it can't change until that settlement is undone.
+	LastEdit *PaymentEdit `db:"-" json:"last_edit,omitempty"`
+	Settled  bool         `db:"-" json:"settled,omitempty"`
+}
+
+// PaymentEdit is a payment as it stood before one change (migration 016).
+type PaymentEdit struct {
+	PaymentID   int64       `db:"payment_id" json:"-"`
+	Amount      int64       `db:"amount" json:"amount"`
+	PaymentType PaymentType `db:"payment_type" json:"payment_type"`
+	Kind        PaymentKind `db:"kind" json:"kind"`
+	PaymentDate time.Time   `db:"payment_date" json:"payment_date"`
+	Notes       *string     `db:"notes" json:"notes,omitempty"`
+	EditedAt    time.Time   `db:"edited_at" json:"edited_at"`
 }
 
 // Adjustment is one manual line on a settlement — something the arithmetic

@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs } from "../helpers/api";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, confirmSettle } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = `booking-${Date.now()}`;
@@ -175,6 +175,7 @@ test("cancelling a booking bills nothing and keeps what they paid", async ({ pag
   await expect(sheet.getByText("₹3,000 of rent paid to book is kept.", { exact: false })).toBeVisible();
   await expect(sheet.getByLabel("Hand back (₹)")).toHaveValue("0");
   await sheet.getByRole("button", { name: "Cancel booking", exact: true }).tap();
+  await confirmSettle(page);
 
   await expect(page.getByText("Never’s booking cancelled")).toBeVisible();
   await expect(page.getByText("Booking cancelled", { exact: true })).toBeVisible();
@@ -204,6 +205,7 @@ test("the owner can hand back what was paid to book", async ({ page, request }) 
   await expect(sheet.getByText("Changed by you from ₹0.", { exact: false })).toBeVisible();
   await sheet.getByRole("button", { name: "UPI" }).tap();
   await sheet.getByRole("button", { name: "Cancel booking · hand back ₹3,000" }).tap();
+  await confirmSettle(page);
 
   await expect(page.getByText("Refunded’s booking cancelled · ₹3,000 handed back")).toBeVisible();
   const [settlement] = await get<{ refund_paise: number; refund_method: string }[]>(request, token, `/api/tenants/${tenantId}/settlements`);

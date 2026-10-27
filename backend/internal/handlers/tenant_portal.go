@@ -151,8 +151,8 @@ func (h *TenantPortalHandler) SubmitPayment(c echo.Context) error {
 		// parameter across both makes Postgres fail to deduce its type
 		// (42P08, "inconsistent types deduced for parameter $3"). This is why
 		// no tenant-submitted payment ever reached the database.
-		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, created_at)
-		 VALUES ($1, $2, $7, $3, $4, $5, false, $6)
+		`INSERT INTO payments (stay_id, amount, payment_type, payment_date, proof_url, notes, is_approved, from_tenant, created_at)
+		 VALUES ($1, $2, $7, $3, $4, $5, false, true, $6)
 		 RETURNING `+paymentColumns,
 		stayID, req.Amount, now, proofURL, req.Notes, now, req.PaymentType,
 	).StructScan(&payment)

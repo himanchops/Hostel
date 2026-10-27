@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs } from "../helpers/api";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, confirmSettle } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = `moveout-${Date.now()}`;
@@ -78,6 +78,7 @@ test.describe("Moving out", () => {
     await expect(sheet.getByLabel("Hand back (₹)")).toHaveValue("10000");
     await expect(sheet.getByRole("button", { name: "Cash" })).toHaveAttribute("aria-pressed", "true");
     await sheet.getByRole("button", { name: "Move out · hand back ₹10,000" }).tap();
+    await confirmSettle(page);
     await expect(page.getByText("Ravi moved out · ₹10,000 handed back")).toBeVisible();
 
     const [s] = await (await request.get(`${BASE}/api/tenants/${tenant.id}/settlements`, { headers: auth })).json();
@@ -103,6 +104,7 @@ test.describe("Moving out", () => {
     await expect(sheet.getByText("Changed by you from ₹0.")).toBeVisible();
     await sheet.getByRole("button", { name: "UPI" }).tap();
     await sheet.getByRole("button", { name: "Move out · hand back ₹4,000" }).tap();
+    await confirmSettle(page);
     await expect(page.getByText("Ravi moved out · ₹4,000 handed back")).toBeVisible();
 
     // On the record as a sum that adds up, saying a person changed it.
@@ -126,6 +128,7 @@ test.describe("Moving out", () => {
     await expect(sheet.getByRole("button", { name: "Give it back" })).toHaveAttribute("aria-pressed", "true");
     await expect(sheet.getByLabel("Hand back (₹)")).toHaveValue("10000");
     await sheet.getByRole("button", { name: "Move out · hand back ₹10,000" }).tap();
+    await confirmSettle(page);
     await expect(page.getByText("Ravi moved out · ₹10,000 handed back")).toBeVisible();
 
     const saved = await (await request.get(`${BASE}/api/stays/${stay.id}`, { headers: auth })).json();
@@ -153,6 +156,7 @@ test.describe("Moving out", () => {
     await expect(sheet.getByText("₹13,000 of rent paid for after they leave is kept. Rent isn't refunded.")).toBeVisible();
     await expect(sheet.getByLabel("Hand back (₹)")).toHaveValue("10000");
     await sheet.getByRole("button", { name: "Move out · hand back ₹10,000" }).tap();
+    await confirmSettle(page);
     await expect(page.getByText("Ravi moved out · ₹10,000 handed back")).toBeVisible();
 
     const [s] = await (await request.get(`${BASE}/api/tenants/${tenant.id}/settlements`, { headers: auth })).json();
@@ -220,6 +224,7 @@ test.describe("Moving out", () => {
     await expect(later.getByText("Left on")).toBeVisible();
     await expect(later.getByRole("button", { name: "They've left · settle the money later" })).toHaveCount(0);
     await later.getByRole("button", { name: "Settle · hand back ₹10,000" }).tap();
+    await confirmSettle(page);
     await expect(page.getByText("Ravi settled · ₹10,000 handed back")).toBeVisible();
     await expect(page.getByText("Settled", { exact: true })).toBeVisible();
   });

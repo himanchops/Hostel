@@ -7,12 +7,13 @@ const RUN_ID = Date.now().toString();
 /**
  * Controls that hide until their row is hovered (UX audit B2).
  *
- * Deleting a payment is the only way to correct one, and it — like deleting a
- * site — was `hidden … group-hover:block`: display:none on every touchscreen
- * and unreachable by keyboard. Phase 16's replacement keyed off screen WIDTH,
- * which left the controls invisible on an iPad, the device this app is mostly
- * used on. tests/unit/hover-reveal.test.ts stops the pattern coming back in
- * source; this checks what a finger and a mouse actually get.
+ * Deleting a payment, like deleting a site, was `hidden … group-hover:block`:
+ * display:none on every touchscreen and unreachable by keyboard. Phase 16's
+ * replacement keyed off screen WIDTH, which left the controls invisible on an
+ * iPad, the device this app is mostly used on. tests/unit/hover-reveal.test.ts
+ * stops the pattern coming back in source; this checks what a finger and a
+ * mouse actually get. A payment is now opened by its row, with a chevron that
+ * is always on show, and deleted from the sheet that opens (Oct 2026).
  */
 
 function monthStart(offset: number): string {
@@ -93,31 +94,35 @@ for (const device of TOUCH) {
       await expectShown(chip.getByRole("button", { name: "Rename bed Bed A" }));
       await expectShown(chip.getByRole("button", { name: /bed Bed A/ }).last());
 
-      // The only correction a payment has is delete-and-re-add.
+      // A payment opens from its row; Delete is inside.
       await page.goto(`/tenants/${s.tenantId}`);
-      const deletePayment = page.getByRole("button", { name: /^Delete payment of ₹7,500/ });
-      await expectShown(deletePayment);
-      await deletePayment.tap();
-      await page.getByRole("dialog").getByRole("button", { name: "Delete" }).tap();
+      const openPayment = page.getByRole("button", { name: /^Open payment of ₹7,500/ });
+      await expectShown(openPayment);
+      await openPayment.tap();
+      await page.getByRole("dialog").getByRole("button", { name: "Delete…" }).tap();
+      await page.getByRole("dialog").filter({ hasText: "Use this when the money never came" })
+        .getByRole("button", { name: "Delete" }).tap();
       await expect(page.getByText("Payment deleted")).toBeVisible();
-      await expect(deletePayment).toHaveCount(0);
+      await expect(openPayment).toHaveCount(0);
     });
 
-    test("the grid drawer's payment delete is on show and answers a tap", async ({ page, request }) => {
+    test("the grid drawer's payments are on show and answer a tap", async ({ page, request }) => {
       const s = await seed(request, `g${device.viewport.width}`);
       await loginAs(page, s.token);
       await page.goto(`/sites/${s.siteId}/grid`);
 
       await page.getByRole("button", { name: new RegExp(s.firstName) }).tap();
       const drawer = page.getByRole("dialog");
-      const deletePayment = drawer.getByRole("button", { name: /^Delete payment of ₹7,500/ });
-      await expectShown(deletePayment);
+      const openPayment = drawer.getByRole("button", { name: /^Open payment of ₹7,500/ });
+      await expectShown(openPayment);
 
-      await deletePayment.tap();
-      await page.getByRole("dialog").filter({ hasText: "Delete this payment?" })
+      await openPayment.tap();
+      await page.getByRole("dialog").filter({ hasText: "Entered by" })
+        .getByRole("button", { name: "Delete…" }).tap();
+      await page.getByRole("dialog").filter({ hasText: "Use this when the money never came" })
         .getByRole("button", { name: "Delete" }).tap();
       await expect(page.getByText("Payment deleted")).toBeVisible();
-      await expect(deletePayment).toHaveCount(0);
+      await expect(openPayment).toHaveCount(0);
     });
   });
 }
@@ -126,21 +131,26 @@ test.describe("with a mouse", () => {
   test("controls stay tucked away until the row is hovered, and the keyboard can reach them", async ({ page, request }) => {
     const s = await seed(request, "mouse");
     await loginAs(page, s.token);
-    await page.goto(`/tenants/${s.tenantId}`);
+    await page.goto("/sites");
     expect(await pointer(page)).toEqual({ fine: true, hover: true });
 
-    const deletePayment = page.getByRole("button", { name: /^Delete payment of ₹7,500/ });
-    await expect(deletePayment).toHaveCSS("opacity", "0");
+    const deleteSite = page.getByRole("button", { name: /^Delete site/ });
+    await expect(deleteSite).toHaveCSS("opacity", "0");
 
-    await page.getByRole("row", { name: /₹7,500/ }).hover();
-    await expectShown(deletePayment);
+    await deleteSite.locator("..").hover(); // the site's card
+    await expectShown(deleteSite);
 
     await page.mouse.move(0, 0);
-    await expect(deletePayment).toHaveCSS("opacity", "0");
+    await expect(deleteSite).toHaveCSS("opacity", "0");
 
     // The old display:none control could not be focused at all.
-    await deletePayment.focus();
-    await expect(deletePayment).toBeFocused();
-    await expectShown(deletePayment);
+    await deleteSite.focus();
+    await expect(deleteSite).toBeFocused();
+    await expectShown(deleteSite);
+
+    // A payment's control is not tucked away at all: correcting money is
+    // opened from the row, and the chevron is there for a keyboard.
+    await page.goto(`/tenants/${s.tenantId}`);
+    await expectShown(page.getByRole("button", { name: /^Open payment of ₹7,500/ }));
   });
 });

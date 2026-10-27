@@ -13,7 +13,71 @@ write-ups that explained *why*, so a closed question is not argued again.
 
 When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
-`### A loader between pages (#60)
+`### <title> (#NN)`. Items with no write-up just leave the board.
+
+### Corrections and write-offs: correcting a payment (#62)
+Shipped in part, 27 Oct 2026. The owner agreed the design that day:
+- **A payment opens from its row** (`PaymentSheet`, tenant page and bed
+  drawer alike) instead of a ✕ on every row. The owner's own entry can be
+  changed (amount, rent or deposit, Cash or UPI, date, note) or deleted. A
+  change keeps what it said before (`payment_edits`, migration 016), and the
+  row says "Changed 27 Oct" with "was ₹8,000" in the sheet.
+- **A tenant's payment is never deleted** (`payments.from_tenant`,
+  migration 016): "Not accepted after all", with a reason, and "Accept after
+  all" back again.
+- **A settlement holds its payments.** Anything recorded before a
+  settlement can't change until "Undo settlement…" on the settlement card
+  takes it off. The stay stays ended, and "Settle the money" settles again.
+- **Payments on an ended stay:** "+ Add payment" shows on every stay.
+- **Settling asks once more**, naming the person and the amount.
+- **Not built, the owner's call:** an Undo on the "Recorded" toast. A
+  misclick is fixed from the sheet, and an undo is itself one tap from a
+  misclick.
+- **The "hard to read" corrections** of September were reworked since; the
+  owner is happy with "Changed by you" as it is.
+
+What is left is writing money off, now "Letting owed money go" in
+`docs/BACKLOG.md`. The original write-up:
+
+Entry is easy on every screen; correction is absent on most. The owner wants
+to talk the design through before any of it is built, and to rethink how
+corrections look rather than bolt on buttons (23 Sep 2026). The session has
+to cover:
+
+1. **Writing money off: a discount or a waiver.** "They owe ₹10,000, we're
+   letting it go." Once waived it must stop showing as owed, on Payments and in
+   a settlement. It is **rare**, so it must **not be prominent**: no button
+   beside "Record payment" on every ledger. It must never count as money
+   collected, so the dashboard, Insights and "Collected" stay cash.
+   (Proposed and not adopted: a third payment kind, `waiver`. It is
+   mechanically simple, but every `kind = 'rent'` query would need a decision
+   about whether it means "owed" or "cash".)
+2. **Corrections should be understandable at a glance.** The owner finds the
+   current way of recording corrections hard to read. This is a redesign
+   question, not a list of missing buttons.
+3. **What's missing today:** edit a payment (delete-and-re-add is the only
+   correction), undo a recorded payment, undo a settlement, a confirm step on
+   settling, un-approve a payment proof. Approving clears a rejection already,
+   so a changed mind about a rejected proof is one API call no screen offers.
+   The session decides which of these the redesign absorbs.
+4. **An ended stay's ledger is lopsided** (owner, 23 Oct 2026). Once someone
+   has moved out, the tenant page lets you delete a payment but not add one:
+   "+ Add payment" shows only on an active stay, while every row keeps its
+   delete. Adding is the useful one, e.g. a payment remembered after they
+   left. Deleting is the risky one: after a settlement it changes the balance
+   behind figures the settlement already stored. Owing leavers can be paid
+   from Payments → "Moved out — still owes", but nothing else can. Decide both
+   directions together.
+5. **Insights reads a waived shortfall as unpaid.** Rent a deposit paid off at
+   settlement already counts as collected (`money.go` → `settlementRent`), but a
+   shortfall let go by an adjustment does not, so a stay settled square still
+   reads as unpaid there. Whatever the waiver design decides has to reach
+   `loadMoneyByMonth`.
+
+The template for the safety side is the owner's "Reset portal password"
+dialog, which already does confirm, reveal and honest framing.
+
+### A loader between pages (#60)
 Owner, 24 Oct 2026, after #51. `PageLoader` covers a slow API response, and
 it is in the HTML each page sends, so it shows even before the app's code
 has run. The one gap left is a client-side tap from one page to another
@@ -34,8 +98,6 @@ network throttled (1.5 s latency, 20 KB/s): the tapped nav icon pulses at
 once (`useLinkStatus`), and `app/(dashboard)/loading.tsx` shows `PageLoader`
 once its own small download lands, about two seconds in. Before, the old
 page sat untouched until the new one arrived.
-
-### <title> (#NN)`. Items with no write-up just leave the board.
 
 ### Empty nights in "By room" (#56)
 Insights → By room shows "Empty nights" per room for the range: 168 for a
@@ -105,6 +167,11 @@ exist is still on the board.
 ## Dropped
 
 Decided against or overtaken. Each says why, so it is not raised again.
+
+### Undo a recorded payment
+**Dropped 27 Oct 2026, the owner's call:** a misclick is fixed by opening
+the payment and changing or deleting it (#62), and an Undo on the toast
+risks being the misclick itself.
 
 ### A list of every payment
 **Dropped 27 Oct 2026, the owner's call:** Insights already lists every

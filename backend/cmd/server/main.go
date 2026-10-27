@@ -226,10 +226,12 @@ func main() {
 	// Settlements (move-out money reckoning)
 	api.GET("/stays/:id/settlement-preview", settlementHandler.Preview)
 	api.POST("/stays/:id/settlement", settlementHandler.Create)
+	api.DELETE("/stays/:id/settlement", settlementHandler.Undo)
 
 	// Payments (nested under stays)
 	api.GET("/stays/:stayId/payments", paymentHandler.List)
 	api.POST("/stays/:stayId/payments", paymentHandler.Create)
+	api.PUT("/payments/:id", paymentHandler.Update)
 	api.DELETE("/payments/:id", paymentHandler.Delete)
 	api.GET("/payments/pending", paymentHandler.ListPending)
 	api.POST("/payments/:id/approve", paymentHandler.Approve)

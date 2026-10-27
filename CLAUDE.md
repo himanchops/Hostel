@@ -237,6 +237,16 @@ Key conventions to carry forward:
 - **A rejected payment is kept, never deleted** (migration 009). "Pending" is
   `is_approved = false AND rejected_at IS NULL`; any new query for the pending
   queue must say both.
+- **A payment is corrected from its sheet** (`components/PaymentSheet.tsx`,
+  migration 016), opened by tapping its row on the tenant page or in the bed
+  drawer; no row carries its own delete. `PUT /api/payments/:id` keeps the
+  old figures in `payment_edits`; the `payments` row is always the current
+  truth, so no money query reads the edits. A tenant's payment
+  (`from_tenant`) is marked not accepted, never deleted. Anything recorded
+  before a settlement is held by it (`notSettledSQL`): change, delete,
+  accept and not-accept all refuse until `DELETE /api/stays/:id/settlement`
+  takes the settlement off. A new action that changes a payment's money
+  carries the same condition.
 - **Three dates end a stay, and they are not the same date.** `notice_date` is
   when they told you, `expected_end_date` is when they say they are going,
   `end_date` is when they actually went. Only the last one ends a stay, and

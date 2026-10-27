@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import {
-  tenantsApi, staysApi, paymentsApi, settlementsApi,
+  tenantsApi, staysApi, settlementsApi,
   Tenant, Stay, Payment, PaymentKind, TenantSummary, TenantUpdateData, Settlement,
   formatCurrency, formatDay, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi, withPlace,
 } from "@/lib/api";
@@ -20,7 +20,6 @@ import {
   Field,
   FileInput,
   FormError,
-  HOVER_REVEAL,
   Input,
   Modal,
   PageHeader,
@@ -33,6 +32,7 @@ import {
   useToast,
   SegmentedControl,
   AlertIcon,
+  ChevronIcon,
 } from "@/components/ui";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
@@ -47,6 +47,8 @@ import { ChangeRentDialog } from "@/components/ChangeRentDialog";
 import { MoveBedDialog } from "@/components/MoveBedDialog";
 import { NewStayDialog } from "@/components/NewStayDialog";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
+import { PaymentSheet } from "@/components/PaymentSheet";
+import { changedTag } from "@/lib/paymentEdit";
 import { checkPhones } from "@/lib/phone";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -337,6 +339,8 @@ export default function TenantDetailPage() {
   const [payNotes, setPayNotes] = useState("");
   const [payError, setPayError] = useState("");
   const [payLoading, setPayLoading] = useState(false);
+  // The payment whose sheet is open: change, delete, accept or not.
+  const [openPayment, setOpenPayment] = useState<Payment | null>(null);
 
   // Moving out (or settling the money for a stay that already ended)
   const [settlingStay, setSettlingStay] = useState<number | null>(null);
@@ -437,17 +441,44 @@ export default function TenantDetailPage() {
     }
   }
 
-  async function handleDeletePayment(stayId: number, paymentId: number) {
+  function handlePaymentChanged(stayId: number, id: number, updated: Payment | null) {
+    setPayments((prev) => ({
+      ...prev,
+      [stayId]: updated
+        ? prev[stayId].map((p) => (p.id === id ? updated : p))
+        : prev[stayId].filter((p) => p.id !== id),
+    }));
+    loadSummary();
+  }
+
+  async function handleUndoSettlement(stay: Stay) {
     if (!token) return;
-    const ok = await confirm({ title: "Delete this payment?", confirmLabel: "Delete", tone: "danger" });
+    const ok = await confirm({
+      title: "Undo this settlement?",
+      message: (
+        <>
+          They still moved out on {formatDay(stay.end_date!)}. You can then fix its payments and settle
+          again with Settle the money. Money you already handed back isn&apos;t taken back: count it when
+          you settle again.
+        </>
+      ),
+      confirmLabel: "Undo settlement",
+    });
     if (!ok) return;
     try {
-      await paymentsApi.delete(token, paymentId);
-      setPayments((prev) => ({ ...prev, [stayId]: prev[stayId].filter((p) => p.id !== paymentId) }));
+      await settlementsApi.undo(token, stay.id);
+      setSettlements((prev) => {
+        const next = { ...prev };
+        delete next[stay.id];
+        return next;
+      });
+      // Payments now read as unsettled; reload them so their sheets agree.
+      const fresh = await staysApi.payments(token, stay.id);
+      setPayments((prev) => ({ ...prev, [stay.id]: fresh }));
       loadSummary();
-      toast.success("Payment deleted");
-    } catch {
-      toast.error("Failed to delete the payment");
+      toast.success("Settlement undone");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't undo the settlement. Try again.");
     }
   }
 
@@ -938,11 +969,21 @@ export default function TenantDetailPage() {
                             {settlement.notes}
                           </p>
                         )}
+                        {/* Rare, so a quiet link: the way to correct a
+                            payment the settlement was worked out from. */}
+                        <button
+                          type="button"
+                          onClick={() => handleUndoSettlement(stay)}
+                          className={`mt-2 text-xs font-medium text-stone-500 underline-offset-2 hover:text-stone-700 hover:underline ${TOUCH_LINK}`}
+                        >
+                          Undo settlement…
+                        </button>
                       </div>
                     )}
 
-                    {/* Add payment */}
-                    {active && (
+                    {/* Add payment, on an ended stay too: money remembered
+                        later, or a leaver paying what they still owe. */}
+                    {(
                       <div className="mb-4">
                         {addingPayment !== stay.id ? (
                           <Button size="sm" onClick={() => setAddingPayment(stay.id)}>
@@ -1028,7 +1069,9 @@ export default function TenantDetailPage() {
                         </thead>
                         <tbody className="divide-y divide-stone-50">
                           {stayPayments.map((p) => (
-                            <tr key={p.id} className="group">
+                            // The whole row opens the payment; the chevron is
+                            // the same thing for a keyboard.
+                            <tr key={p.id} onClick={() => setOpenPayment(p)} className="cursor-pointer hover:bg-stone-50">
                               <td className="whitespace-nowrap py-2 tabular-nums text-stone-600">{formatDay(p.payment_date)}</td>
                               <td className="py-2 font-medium tabular-nums text-stone-800">
                                 {formatCurrency(p.amount)}
@@ -1039,18 +1082,16 @@ export default function TenantDetailPage() {
                               <td className="py-2 text-stone-400">
                                 {p.notes || "—"}
                                 <RejectionReason payment={p} />
+                                {changedTag(p) && <span className="block text-xs text-stone-400">{changedTag(p)}</span>}
                               </td>
                               <td className="py-2 text-right">
-                                {/* Delete-and-re-add is the only way to correct
-                                    a payment, so this must be reachable on a
-                                    phone, an iPad and a keyboard — see
-                                    HOVER_REVEAL for how it once was not. */}
                                 <button
-                                  onClick={() => handleDeletePayment(stay.id, p.id)}
-                                  aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${formatDay(p.payment_date)}`}
-                                  className={`-my-1.5 inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setOpenPayment(p); }}
+                                  aria-label={`Open payment of ${formatCurrency(p.amount)} on ${formatDay(p.payment_date)}`}
+                                  className="-my-1.5 inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600"
                                 >
-                                  ✕
+                                  <ChevronIcon className="h-4 w-4" />
                                 </button>
                               </td>
                             </tr>
@@ -1085,6 +1126,15 @@ export default function TenantDetailPage() {
           Delete tenant…
         </Button>
       </section>
+
+      {token && (
+        <PaymentSheet
+          payment={openPayment}
+          token={token}
+          onClose={() => setOpenPayment(null)}
+          onChanged={(id, updated) => openPayment && handlePaymentChanged(openPayment.stay_id, id, updated)}
+        />
+      )}
 
       {token && (
         <RecordNoticeDialog
@@ -1156,7 +1206,13 @@ export default function TenantDetailPage() {
           token={token}
           tenantName={tenant?.name}
           onDone={({ settlement }) => {
-            if (settlement) setSettlements((prev) => ({ ...prev, [settlement.stay_id]: settlement }));
+            if (settlement) {
+              setSettlements((prev) => ({ ...prev, [settlement.stay_id]: settlement }));
+              // Its payments are now held by the settlement; their sheets must say so.
+              staysApi.payments(token, settlement.stay_id)
+                .then((fresh) => setPayments((prev) => ({ ...prev, [settlement.stay_id]: fresh })))
+                .catch(() => setPaymentsFailed(true));
+            }
             setSettlingStay(null);
             reloadStays();
             loadSummary();

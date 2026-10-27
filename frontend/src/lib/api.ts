@@ -638,12 +638,40 @@ export interface Payment {
    */
   rejected_at?: string;
   rejection_reason?: string;
+  /** Sent by the tenant from the portal: never deleted, only not accepted. */
+  from_tenant: boolean;
   created_at: string;
+  /** What it said before its latest change; owner ledgers only (migration 016). */
+  last_edit?: PaymentEdit;
+  /** A settlement was saved after it, so it can't change until that is undone. */
+  settled?: boolean;
+}
+
+export interface PaymentEdit {
+  amount: number;
+  payment_type: "cash" | "online";
+  kind: PaymentKind;
+  payment_date: string;
+  notes?: string;
+  edited_at: string;
+}
+
+export interface PaymentChange {
+  amount: number;
+  payment_type: "cash" | "online";
+  kind: PaymentKind;
+  payment_date: string;
+  notes: string;
 }
 
 export const paymentsApi = {
+  /** The owner's own entries only; a tenant's is marked not accepted instead. */
   delete: (token: string, id: number) =>
     request<void>(`/api/payments/${id}`, { method: "DELETE" }, token),
+
+  /** Corrects an accepted payment, keeping what it said before. */
+  update: (token: string, id: number, data: PaymentChange) =>
+    request<Payment>(`/api/payments/${id}`, { method: "PUT", body: JSON.stringify(data) }, token),
 };
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -1009,6 +1037,13 @@ export const settlementsApi = {
     /** How the refund went back, when something did. */
     refund_method?: "cash" | "online";
   }) => request<Settlement>(`/api/stays/${stayId}/settlement`, { method: "POST", body: JSON.stringify(data) }, token),
+
+  /**
+   * Takes the settlement off so its payments can be corrected and the stay
+   * settled again. The stay stays ended on the same day.
+   */
+  undo: (token: string, stayId: number) =>
+    request<void>(`/api/stays/${stayId}/settlement`, { method: "DELETE" }, token),
 
   /** Every settlement across a tenant's stays, so the page badges them in one request. */
   listByTenant: (token: string, tenantId: number) =>
