@@ -3661,6 +3661,12 @@ which production needs before this merges.
   phone and both iPad orientations.
 - On the demo: edited, undone, re-settled, and the bed drawer's rows.
 
+**Production, 27 Oct 2026: live.** The owner ran migration 016 on Neon
+first, after trying it on the demo; merged as `6558fd6` (#62). Vercel and
+Render both reported success and `/health` answers. No public route reads
+`payments`, so the schema is confirmed by the owner's migration output and
+by a ledger loading on the live app, not by a probe from here.
+
 ---
 
 ## Architecture Notes
