@@ -3608,6 +3608,12 @@ Two board items, decided by the owner on 27 Oct 2026. **Migration 015**
   link; cleared.
 - Screenshots of the list on the demo at 375 and 768.
 
+**Production, 27 Oct 2026: live.** The owner ran migration 015 on Neon
+first; merged as `03e0775` (#61). Vercel and Render both reported success,
+and an owner sign-in with an unknown address answers 401, not 500, so the
+login query that now reads `upi_id` runs against the production schema.
+No UPI ID is set on the live account yet; that is the owner's to type.
+
 ---
 
 ## Architecture Notes
