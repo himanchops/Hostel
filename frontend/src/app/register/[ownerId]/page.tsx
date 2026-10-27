@@ -8,6 +8,7 @@ import {
   Button, Card, Field, FileInput, FormError, Input, ShowPassword, Textarea,
 } from "@/components/ui";
 import { checkPhones, tenDigits } from "@/lib/phone";
+import { publicMessage } from "@/lib/publicError";
 
 /**
  * An Aadhaar number is twelve digits, written with or without spaces. The
@@ -227,7 +228,7 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
       });
       setSubmitted(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+      setError(publicMessage(err));
     } finally {
       setLoading(false);
     }

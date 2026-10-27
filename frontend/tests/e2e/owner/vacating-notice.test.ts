@@ -71,7 +71,9 @@ test.describe("Recording a vacating notice", () => {
     await page.getByLabel("When are they leaving?").fill(leaving);
     await page.getByRole("button", { name: "Save" }).click();
 
-    await expect(page.getByText(`Leaving ${leaving}`, { exact: true })).toBeVisible();
+    // The badge writes the date as the rest of the app does: "Leaving 3 Nov 2026".
+    const shown = new Date(`${leaving}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+    await expect(page.getByText(`Leaving ${shown}`, { exact: true })).toBeVisible();
 
     // Persisted, and it did NOT end the stay — that is the whole point.
     const after = await request.get(`${BASE}/api/stays/${stay.id}`, {

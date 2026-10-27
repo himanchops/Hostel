@@ -22,8 +22,10 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+    // Letters as a person counts them, like the server: [...] splits by
+    // character, where .length counts UTF-16 units.
+    if ([...password].length < 8) {
+      setError("Use at least 8 characters for the password.");
       return;
     }
     const ownPhone = phone.trim() ? tenDigits(phone) : undefined;

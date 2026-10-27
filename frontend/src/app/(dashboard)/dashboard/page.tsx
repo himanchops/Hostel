@@ -26,6 +26,15 @@ import {
   TOUCH_TARGET,
 } from "@/components/ui";
 
+/**
+ * Signed up within the last day. "Welcome back" greeted an owner who had
+ * never been here before; the sign-up date says so without waiting for the
+ * dashboard to load, so the heading never changes under them.
+ */
+function isNewOwner(createdAt?: string): boolean {
+  return !!createdAt && Date.now() - new Date(createdAt).getTime() < 86_400_000;
+}
+
 export default function DashboardPage() {
   const { owner, token } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -54,7 +63,7 @@ export default function DashboardPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <PageHeader
-        title={`Welcome back, ${owner?.name?.split(" ")[0] ?? ""}`}
+        title={`${isNewOwner(owner?.created_at) ? "Welcome" : "Welcome back"}, ${owner?.name?.split(" ")[0] ?? ""}`}
         subtitle="Here's an overview of your properties"
       />
 
