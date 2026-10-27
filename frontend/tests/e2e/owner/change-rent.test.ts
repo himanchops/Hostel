@@ -46,7 +46,7 @@ test.describe("Changing rent", () => {
     await page.getByRole("button", { name: "Change rent" }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText("pays ₹5,000/monthly");
+    await expect(dialog).toContainText("pays ₹5,000 a month");
     // Asked the owner's way (26 Oct 2026): the rent from next month, and what
     // they pay this month, which starts at the old rent.
     await dialog.getByLabel(/From next month .* rent is/).fill("5500");
@@ -57,7 +57,7 @@ test.describe("Changing rent", () => {
     await dialog.getByRole("button", { name: "Save" }).click();
 
     await expect(page.getByText(/Rent is ₹5,500 from/)).toBeVisible();
-    await expect(page.getByText(/₹5,000\/monthly → ₹5,500 from/)).toBeVisible();
+    await expect(page.getByText(/₹5,000 a month → ₹5,500 from/)).toBeVisible();
     // The point of the whole change: nothing already billed moved.
     expect(await balance()).toBe(0);
   });
@@ -194,7 +194,7 @@ test.describe("Changing rent", () => {
     await page.goto(`/tenants/${tenant.id}`);
     await page.getByRole("button", { name: "Change rent" }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText("pays ₹8,500/monthly, ₹9,000 from");
+    await expect(dialog).toContainText("pays ₹8,500 a month, ₹9,000 from");
     await dialog.getByLabel(/From next month .* rent is/).fill("9500");
     await expect(dialog.getByRole("button", { name: "The old rent, ₹8,500" })).toBeVisible();
     await expect(dialog.getByTestId("rent-summary")).toContainText("is ₹8,500");

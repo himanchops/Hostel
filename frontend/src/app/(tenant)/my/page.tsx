@@ -14,6 +14,7 @@ import {
   today,
 } from "@/lib/api";
 import { dueDay } from "@/lib/due";
+import { perCycle } from "@/lib/rent";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
@@ -165,12 +166,6 @@ function depositLine(s: TenantSummary): string | null {
   return null;
 }
 
-const PER: Record<TenantStay["rent_cycle"], string> = {
-  monthly: "a month",
-  weekly: "a week",
-  daily: "a night",
-};
-
 function longDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -310,7 +305,7 @@ function StayCard({ stay, token, suggested, onUpdate }: {
                 : [stay.site_name, stay.room_name, stay.bed_name].filter(Boolean).join(" · ")}
             </p>
             <p className="mt-0.5 text-sm text-stone-500">
-              {formatCurrency(stay.rent_amount)} {PER[stay.rent_cycle]} · Since {longDate(stay.start_date)}
+              {formatCurrency(stay.rent_amount)} {perCycle(stay.rent_cycle)} · Since {longDate(stay.start_date)}
               {stay.end_date && <> · Left {longDate(stay.end_date)}</>}
             </p>
             {booking && isActive && (

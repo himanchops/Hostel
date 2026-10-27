@@ -10,6 +10,18 @@
 
 type Cycle = "daily" | "weekly" | "monthly";
 
+const PER: Record<Cycle, string> = { monthly: "a month", weekly: "a week", daily: "a night" };
+
+/**
+ * "a month", "a week", "a night": how every screen says what a rent is for,
+ * as in "₹500 a night". The grid's bed panel once printed "/mo" for every
+ * stay, so a guest's nightly ₹500 read as a monthly rent, and the tenant page
+ * printed "/monthly".
+ */
+export function perCycle(cycle: string): string {
+  return PER[cycle as Cycle] ?? `per ${cycle}`;
+}
+
 function utc(iso: string): Date {
   return new Date(`${iso.slice(0, 10)}T00:00:00Z`);
 }

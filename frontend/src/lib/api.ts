@@ -182,7 +182,8 @@ export interface GridBed {
   status: BedStatus;
   stay_id?: number;
   tenant?: GridTenant;
-  rent_amount?: number;   // paise
+  rent_amount?: number;   // paise, the rent of the cycle billed now
+  rent_cycle?: "daily" | "weekly" | "monthly";
   deposit_amount?: number; // paise
   total_paid?: number;    // paise
   total_expected?: number; // paise

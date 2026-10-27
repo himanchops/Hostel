@@ -3352,6 +3352,34 @@ the grid and Insights all served. No migration: `expected_end_date` and
 
 ---
 
+## Help on demand, and a rent says what it is for (Oct 2026)
+
+Owner, 27 Oct 2026, two board items:
+
+- **Explanations wait behind an ⓘ.** The paragraph under Delete tenant and the
+  two notes in Record notice were right the first time and clutter every time
+  after. `WithHelp` (`components/ui/WithHelp.tsx`) puts an ⓘ beside the
+  heading, which shows the text on a tap, since the iPad has no hover. Nothing
+  safety-critical is hidden: the delete confirmation still says "cannot be
+  undone", and the notice dialog keeps "X is planning to leave." in view.
+- **"₹500 a night", not "₹500/mo".** The grid's bed panel printed "/mo" for
+  every stay, and the tenant page and Change rent printed "/monthly".
+  `perCycle` (`lib/rent.ts`) says "a month", "a week" or "a night"
+  everywhere, the portal and Move bed included. The grid now sends
+  `rent_cycle`, and its `rent_amount` is the rent of the cycle billed now,
+  not `stays.rent_amount`, which is the latest scheduled rent.
+
+### Verification
+- `tests/unit/rent.test.ts`: `perCycle`.
+- `tests/e2e/owner/help-on-demand.test.ts` at 768×1024 under touch: both
+  explanations shut until the ⓘ is tapped, and the bed panel reads "Rent
+  ₹500 a night" and "Rent ₹8,000 a month".
+- `change-rent.test.ts` updated for "a month". `touch-targets.test.ts`
+  passes with the ⓘ.
+- Screenshots on the demo at 375 and 768.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
