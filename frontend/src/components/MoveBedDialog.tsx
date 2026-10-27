@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { staysApi, Stay, ApiError, formatCurrency, today } from "@/lib/api";
 import { BedPicker, VacantBed } from "@/components/StayForm";
+import { perCycle } from "@/lib/rent";
 import {
   RentChoiceFields, RentChoiceValue, RentSummary, emptyRentChoice, rentPlanOf, useRentPreview,
 } from "@/components/RentChoice";
@@ -103,7 +104,7 @@ export function MoveBedDialog({
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-stone-600">
           Now in {stay.room_name && stay.bed_name ? `${stay.room_name} · ${stay.bed_name}` : "their bed"}
-          {current && <> at {formatCurrency(current.this_rent)} a {stay.rent_cycle === "monthly" ? "month" : stay.rent_cycle === "weekly" ? "week" : "day"}</>}.
+          {current && <> at {formatCurrency(current.this_rent)} {perCycle(stay.rent_cycle)}</>}.
         </p>
 
         {targetBed ? (

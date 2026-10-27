@@ -182,7 +182,8 @@ export interface GridBed {
   status: BedStatus;
   stay_id?: number;
   tenant?: GridTenant;
-  rent_amount?: number;   // paise
+  rent_amount?: number;   // paise, the rent of the cycle billed now
+  rent_cycle?: "daily" | "weekly" | "monthly";
   deposit_amount?: number; // paise
   total_paid?: number;    // paise
   total_expected?: number; // paise
@@ -658,6 +659,9 @@ export interface RevenueSummary {
   expected_this_month: number;  // paise
   collected_this_month: number; // paise
   overdue_amount: number;       // paise, including moved_out_owed
+  /** Everyone billed now, and how many of them owe anything: "18 of 21 paid up". */
+  stays_open: number;
+  stays_owing: number;
   /** The part of overdue_amount owed by tenants who moved out and settled short. */
   moved_out_owed: number;       // paise
   /** Money beside rent (backend money.go): deposits in, refunds out, and the net. */
@@ -817,13 +821,17 @@ export interface RoomInsight {
   total_beds: number;
   occupied_nights: number;
   available_nights: number;
-  vacant_nights: number;
   percentage: number;
+  /** Beds taken today: an open stay in this room. */
+  occupied_now: number;
   collected_paise: number;
 }
 
 export interface InsightsData {
   months: number;
+  /** Rent billed in the range, and how much of it is paid by today, stay by stay. */
+  rent_billed_paise: number;
+  rent_paid_paise: number;
   from_date: string;
   to_date: string;
   revenue: RevenuePoint[];

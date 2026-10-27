@@ -49,29 +49,6 @@ Tenant login tries every record with that number, newest first, and the
 password decides, so duplicates don't sign in at random. Two records with the
 same password still sign in to the newer.
 
-### Empty nights in "By room"
-Insights → By room shows "Empty nights" per room for the range: 168 for a
-9-bed room over a 1m range is accurate (bed-nights not slept in) and means
-nothing at a glance. Options to put to the owner:
-- **Empty now:** "8 of 9 beds empty" today. Concrete, and what he would act on.
-- **Rent missed (estimate):** empty bed-nights × that room's average nightly
-  rent. In money terms, but an estimate, and it must say so.
-- **Average beds empty:** empty nights ÷ days in range, e.g. "5.6 beds".
-  Closest to the current figure, still abstract.
-- Or drop the column: occupancy % already carries it.
-
-Lean: "Empty now", possibly with occupancy % covering the history. Raised by
-the owner looking at 1m on production (Oct 2026).
-
-### Dashboard "expected" drops someone who left this month
-The tile's "of ₹X expected" sums open stays only, so a tenant who left on the
-12th drops out of it, while their rent for this month was billed and Insights
-still counts it. Once leavers are settled, the tile reads over 100%
-(rehearsal: "₹75,000 of ₹69,500 expected"). Expected should count every stay
-billed this month, ended or not; overdue must keep counting open stays only.
-Found while building the money table; left alone because overdue shares the
-query.
-
 ---
 
 ## Money

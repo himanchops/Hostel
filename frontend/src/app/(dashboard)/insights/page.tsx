@@ -12,7 +12,7 @@ import { payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import {
   Badge, Banner, Button, Card, ChevronIcon, Collapsible, EmptyState,
-  Meter, PageHeader, PageLoader, SegmentedControl, TOUCH_LINK, TOUCH_TARGET,
+  InfoTip, Meter, PageHeader, PageLoader, SegmentedControl, TOUCH_LINK, TOUCH_TARGET,
   type BadgeTone,
 } from "@/components/ui";
 
@@ -47,6 +47,11 @@ const KIND: Record<MoneyEntryKind, { label: string; tone: BadgeTone; out: boolea
 // is "Sept" in one runtime and "Sep" in the next.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+const LONG_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 function monthName(month: string): string {
   const [y, m] = month.split("-").map(Number);
   return `${MONTHS[m - 1]} ${y}`;
@@ -73,7 +78,8 @@ export default function InsightsPage() {
   const [months, setMonthsState] = useState<number>(12);
   const [view, setViewState] = useState<View>("rent");
   const [data, setData] = useState<InsightsData | null>(null);
-  const [owedNow, setOwedNow] = useState<number | null>(null);
+  const [owedNow, setOwedNow] = useState<{ paise: number; open: number; owing: number } | null>(null);
+  const [bedsNow, setBedsNow] = useState<{ occupied: number; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Nothing loads until the saved range has been read. Loading the default
@@ -124,15 +130,20 @@ export default function InsightsPage() {
       setLoading(true);
       setError(null);
       try {
-        // "Still owed" is the dashboard's own figure, fetched rather than
-        // recomputed, so the two screens cannot disagree about it.
+        // "Still owed" and beds full today are the dashboard's own figures,
+        // fetched rather than recomputed, so the two screens cannot disagree.
         const [insights, dashboard] = await Promise.all([
           insightsApi.get(token, m),
           dashboardApi.get(token),
         ]);
         if (mine !== latest.current) return;
         setData(insights);
-        setOwedNow(dashboard.revenue.overdue_amount);
+        setOwedNow({
+          paise: dashboard.revenue.overdue_amount,
+          open: dashboard.revenue.stays_open,
+          owing: dashboard.revenue.stays_owing,
+        });
+        setBedsNow({ occupied: dashboard.occupancy.occupied_beds, total: dashboard.occupancy.total_beds });
       } catch (e) {
         if (mine !== latest.current) return;
         // Never swallow it — an insights page that silently renders zeros is
@@ -157,8 +168,6 @@ export default function InsightsPage() {
   const revenue = firstActive === -1 ? [] : allMonths.slice(firstActive);
   const sum = (f: (r: RevenuePoint) => number) => revenue.reduce((s, r) => s + f(r), 0);
   const totalCollected = sum((r) => r.collected_paise);
-  const totalExpected = sum((r) => r.expected_paise);
-  const collectionRate = totalExpected > 0 ? (totalCollected / totalExpected) * 100 : 0;
   const depositsNet = sum((r) => r.deposits_in_paise - r.deposit_returned_paise);
 
   const rooms = [...(data?.rooms ?? [])].sort((a, b) => b.percentage - a.percentage);
@@ -166,7 +175,14 @@ export default function InsightsPage() {
   // Surfaced in the collapsed summary: a room that earned nothing all window is
   // the finding most worth opening the panel for.
   const neverLet = rooms.filter((r) => r.total_beds > 0 && r.occupied_nights === 0).length;
-  const latestOccupancy = data?.occupancy.at(-1)?.percentage;
+  // This month's occupancy averaged over its nights: a bed taken for half
+  // the month counts half. Today's count leads, because "61%" alone read as a
+  // mistake next to the dashboard's "65% full today". This month whatever the
+  // range, and named, so it never reads as the range's average: a year's
+  // average beside today's count compares two different questions.
+  const thisMonth = data?.occupancy.at(-1);
+  const billed = data?.rent_billed_paise ?? 0;
+  const paidShare = billed > 0 ? ((data?.rent_paid_paise ?? 0) / billed) * 100 : null;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -215,23 +231,33 @@ export default function InsightsPage() {
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
             {view === "rent" ? (
               <>
+                {/* The % is paid against billed stay by stay, not collected
+                    against billed: pooled, one tenant's advance made up for
+                    another's debt, and "99% collected" sat beside ₹6,000
+                    still owed (computePaidShare). */}
                 <Tile
                   label="Rent collected"
                   value={formatCurrency(totalCollected)}
-                  note={totalExpected > 0
-                    ? `${collectionRate.toFixed(0)}% of ${formatCurrency(totalExpected)} billed`
+                  note={paidShare !== null
+                    ? `${formatCurrency(billed)} billed in these months · ${Math.floor(paidShare)}% of it paid`
                     : "nothing billed in this range"}
                 />
                 <Tile
                   label="Still owed now"
-                  value={owedNow === null ? "—" : formatCurrency(owedNow)}
-                  note={owedNow ? "chase it from Payments →" : "nobody is behind"}
-                  href={owedNow ? "/payments" : undefined}
+                  value={owedNow === null ? "—" : formatCurrency(owedNow.paise)}
+                  note={[
+                    owedNow?.owing ? `${owedNow.owing} of ${owedNow.open} tenants owe · chase\u00a0them\u00a0→` : "",
+                    owedNow && !owedNow.paise ? "nobody is behind" : "",
+                  ].filter(Boolean).join(" · ") || undefined}
+                  href={owedNow?.paise ? "/payments" : undefined}
                 />
                 <Tile
-                  label="Occupancy this month"
-                  value={latestOccupancy === undefined ? "—" : `${latestOccupancy.toFixed(0)}%`}
-                  note="average night so far, not today"
+                  label="Occupied today"
+                  value={bedsNow && bedsNow.total > 0 ? `${bedsNow.occupied} of ${bedsNow.total}` : "—"}
+                  note={[
+                    bedsNow && bedsNow.total > 0 ? `${((bedsNow.occupied / bedsNow.total) * 100).toFixed(0)}% today` : "",
+                    thisMonth ? `${thisMonth.percentage.toFixed(0)}% over ${LONG_MONTHS[Number(thisMonth.month.slice(5, 7)) - 1]} so far` : "",
+                  ].filter(Boolean).join(" · ") || undefined}
                 />
               </>
             ) : (
@@ -268,6 +294,11 @@ export default function InsightsPage() {
               token && <MonthTable rows={[...revenue].reverse()} view={view} token={token} />
             )}
           </Card>
+          {view === "rent" && revenue.length > 0 && (
+            <p className="-mt-2 mb-4 px-1 text-xs text-stone-400">
+              Rent counts in the month it was paid, so advances and late rent can take a month over or under 100%.
+            </p>
+          )}
 
           <Collapsible
             title="By room"
@@ -290,13 +321,20 @@ export default function InsightsPage() {
               />
             ) : (
               <div className="-mx-4 overflow-x-auto">
-                <table className="w-full min-w-[560px] text-sm">
+                <table className="w-full min-w-[480px] text-sm">
                   <thead>
                     <tr className="border-b border-stone-100 text-left text-[11px] uppercase tracking-wide text-stone-400">
                       <th className="px-4 py-2 font-medium">Room</th>
-                      <th className="px-4 py-2 font-medium">Beds</th>
-                      <th className="px-4 py-2 font-medium">Occupancy</th>
-                      <th className="px-4 py-2 text-right font-medium">Empty nights</th>
+                      <th className="px-4 py-2 font-medium">Occupied</th>
+                      <th className="px-4 py-2 font-medium">
+                        <span className="inline-flex items-center gap-0.5">
+                          Occupancy
+                          <InfoTip label="About occupancy" title="Occupancy">
+                            <p>How full the room was across these months, counting every night.</p>
+                            <p className="mt-1.5">50% means that on an average night, half its beds were taken.</p>
+                          </InfoTip>
+                        </span>
+                      </th>
                       <th className="px-4 py-2 text-right font-medium">Rent collected</th>
                     </tr>
                   </thead>
@@ -571,7 +609,9 @@ function RoomRow({ room }: { room: RoomInsight }) {
         </Link>
         <p className="truncate text-[11px] text-stone-400">{room.site_name}</p>
       </td>
-      <td className="px-4 py-3 tabular-nums text-stone-600">{room.total_beds}</td>
+      <td className="whitespace-nowrap px-4 py-3 tabular-nums text-stone-700">
+        {room.total_beds > 0 ? `${room.occupied_now} of ${room.total_beds}` : "no beds"}
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="w-10 shrink-0 tabular-nums text-stone-700">
@@ -581,9 +621,6 @@ function RoomRow({ room }: { room: RoomInsight }) {
             <Meter percent={room.percentage} tone={tone} />
           </span>
         </div>
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-stone-500">
-        {room.vacant_nights.toLocaleString("en-IN")}
       </td>
       <td className="px-4 py-3 text-right tabular-nums font-medium text-stone-800">
         {formatCurrency(room.collected_paise)}

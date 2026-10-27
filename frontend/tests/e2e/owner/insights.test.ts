@@ -194,8 +194,13 @@ test.describe("Insights", () => {
 
     await page.goto("/dashboard");
     // The tile is the last row of the Insights table, both views.
-    await expect(page.getByText("Collected This Month").locator("..").locator("..")).toContainText("₹21,000");
-    await expect(page.getByText("All money in: ₹17,000")).toBeVisible();
+    const collected = page.getByText("Collected This Month").locator("..").locator("..");
+    await expect(collected).toContainText("₹21,000");
+    // B and C left on the 2nd, billed this month: expected is Insights' ₹23,000,
+    // not the ₹14,000 of the two still here.
+    await expect(collected).toContainText("of ₹23,000 expected");
+    // Rent only: deposits and refunds are Insights' All money view.
+    await expect(page.getByText(/All money in/)).toHaveCount(0);
 
     await page.goto(`/tenants/${delta}`);
     const tile = page.getByText("Rent paid").locator("..");
@@ -241,6 +246,15 @@ test.describe("Insights", () => {
     await expect(monthRow(page, firstOf(-2))).toContainText("₹8,000");
     await expect(monthRow(page, firstOf(-3))).toHaveCount(0);
 
+    // The tiles. Three months billed (₹24,000), one paid: 33%, counted for
+    // this tenant alone.
+    await expect(page.getByText("Rent collected").locator("..")).toContainText("₹24,000 billed in these months · 33% of it paid");
+    await expect(page.getByText("Still owed now").locator("..")).toContainText("1 of 1 tenants owe · chase\u00a0them\u00a0→");
+    const beds = page.getByText("Occupied today").locator("..");
+    await expect(beds).toContainText("1 of 2");
+    await expect(beds).toContainText("50% today");
+    await expect(beds).toContainText(`over ${firstOf(0).toLocaleString("en-US", { month: "long", timeZone: "UTC" })} so far`);
+
     // "By room" is shut by default, and its summary has to be worth reading
     // shut — it names the room earning nothing without being opened.
     const byRoom = page.getByRole("button", { name: /By room/ });
@@ -251,8 +265,20 @@ test.describe("Insights", () => {
     const occupied = page.getByRole("row", { name: /Room 1\b/ });
     const empty = page.getByRole("row", { name: /Empty Room/ });
     await expect(occupied).toContainText("₹8,000");
+    await expect(occupied).toContainText("1 of 1");
     await expect(empty).toContainText("₹0");
+    await expect(empty).toContainText("0 of 1");
     await expect(empty).toContainText("0%");
+    // Beds today, not bed-nights nobody slept in.
+    await expect(page.getByRole("columnheader", { name: "Empty nights" })).toHaveCount(0);
+
+    // What Occupancy means is one tap away, and a tap elsewhere puts it away.
+    await expect(page.getByRole("note")).toHaveCount(0);
+    await page.getByRole("button", { name: "About occupancy" }).click();
+    await expect(page.getByRole("note")).toContainText("half its beds were taken");
+    await page.getByRole("heading", { name: "Insights", level: 1 }).click();
+    await expect(page.getByRole("note")).toHaveCount(0);
+
   });
 
   test("a busy month leads with its totals, lists newest first, and shows ten lines until asked", async ({ page, request }) => {

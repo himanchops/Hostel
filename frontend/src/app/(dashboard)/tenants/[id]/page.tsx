@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { dueLine } from "@/lib/due";
 import { depositSummary } from "@/lib/settlement";
+import { perCycle } from "@/lib/rent";
 import {
   Badge,
   BedIcon,
@@ -30,6 +31,7 @@ import {
   useConfirm,
   useToast,
   SegmentedControl,
+  AlertIcon,
 } from "@/components/ui";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
@@ -733,14 +735,14 @@ export default function TenantDetailPage() {
                       {" · "}
                       {stay.rent_changes && stay.rent_changes.length > 1
                         ? <>
-                            {formatCurrency(stay.rent_changes[0].rent_amount)}/{stay.rent_cycle}
+                            {formatCurrency(stay.rent_changes[0].rent_amount)} {perCycle(stay.rent_cycle)}
                             {stay.rent_changes.slice(1).map((c) => (
                               <span key={c.effective_date} className="whitespace-nowrap">
                                 {" → "}{formatCurrency(c.rent_amount)} from {formatDay(c.effective_date)}
                               </span>
                             ))}
                           </>
-                        : <>{formatCurrency(stay.rent_amount)}/{stay.rent_cycle}</>}
+                        : <>{formatCurrency(stay.rent_amount)} {perCycle(stay.rent_cycle)}</>}
                     </p>
                     {/* Keyed by position: moving A → B → A on one day repeats
                         both the date and the bed. */}
@@ -1044,11 +1046,17 @@ export default function TenantDetailPage() {
           should not sit beside the everyday actions. */}
       <section className="mt-10 border-t border-stone-200 pt-6">
         <h2 className="text-sm font-semibold text-stone-900">Delete tenant</h2>
-        <p className="mt-1 max-w-prose text-sm text-stone-500">
-          For a test entry or a duplicate. Removes them with every stay and payment,
-          and cannot be undone. To record that someone left, end their stay instead.
+        {/* One short line, always shown: this is the one place where the
+            warning has to be read before the button, not after an ⓘ. */}
+        <p className="mt-0.5 text-xs text-stone-500">
+          Only for a test entry or a duplicate. For someone who left, use Move out. Can&apos;t be undone.
         </p>
-        <Button variant="secondary" className="mt-3 text-red-600 hover:text-red-700" onClick={handleDeleteTenant}>
+        <Button
+          variant="secondary"
+          className="mt-3 text-red-700 ring-red-300 hover:bg-red-50"
+          onClick={handleDeleteTenant}
+        >
+          <AlertIcon className="h-4 w-4" />
           Delete tenant…
         </Button>
       </section>

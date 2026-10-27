@@ -11,6 +11,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
+import { perCycle } from "@/lib/rent";
 import { departureFacts, dueChip, dueLine, leavingChip, localToday } from "@/lib/due";
 import {
   Avatar,
@@ -799,7 +800,7 @@ function OccupiedPanel({
         </p>
         {bed.rent_amount && (
           <p className="mt-0.5 text-xs tabular-nums text-stone-400">
-            Rent: {formatCurrency(bed.rent_amount)}/{bed.stay_id ? "mo" : ""}
+            Rent {formatCurrency(bed.rent_amount)}{bed.rent_cycle ? ` ${perCycle(bed.rent_cycle)}` : ""}
             {deposit ? ` · ${deposit}` : ""}
           </p>
         )}

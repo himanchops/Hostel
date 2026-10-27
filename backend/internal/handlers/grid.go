@@ -42,20 +42,23 @@ type GridTenant struct {
 }
 
 type GridBed struct {
-	ID              int64       `json:"id"`
-	Name            string      `json:"name"`
-	Status          BedStatus   `json:"status"`
-	StayID          *int64      `json:"stay_id,omitempty"`
-	Tenant          *GridTenant `json:"tenant,omitempty"`
-	RentAmount      *int64      `json:"rent_amount,omitempty"`    // paise
-	DepositAmount   *int64      `json:"deposit_amount,omitempty"` // paise
-	TotalPaid       *int64      `json:"total_paid,omitempty"`
-	TotalExpected   *int64      `json:"total_expected,omitempty"`
-	Balance         *int64      `json:"balance,omitempty"` // total_paid - total_expected (negative = owes)
-	StartDate       *time.Time  `json:"start_date,omitempty"`
-	EndDate         *time.Time  `json:"end_date,omitempty"`
-	NoticeDate      *time.Time  `json:"notice_date,omitempty"`
-	ExpectedEndDate *time.Time  `json:"expected_end_date,omitempty"`
+	ID     int64       `json:"id"`
+	Name   string      `json:"name"`
+	Status BedStatus   `json:"status"`
+	StayID *int64      `json:"stay_id,omitempty"`
+	Tenant *GridTenant `json:"tenant,omitempty"`
+	// RentAmount is the rent of the cycle being billed now, not
+	// stays.rent_amount, which is the latest scheduled rent.
+	RentAmount      *int64     `json:"rent_amount,omitempty"` // paise
+	RentCycle       *string    `json:"rent_cycle,omitempty"`
+	DepositAmount   *int64     `json:"deposit_amount,omitempty"` // paise
+	TotalPaid       *int64     `json:"total_paid,omitempty"`
+	TotalExpected   *int64     `json:"total_expected,omitempty"`
+	Balance         *int64     `json:"balance,omitempty"` // total_paid - total_expected (negative = owes)
+	StartDate       *time.Time `json:"start_date,omitempty"`
+	EndDate         *time.Time `json:"end_date,omitempty"`
+	NoticeDate      *time.Time `json:"notice_date,omitempty"`
+	ExpectedEndDate *time.Time `json:"expected_end_date,omitempty"`
 	// When rent is next due, and what state that leaves the tenant in (due.go).
 	// DueDate is a calendar date, "2026-10-31", so no timezone can move it.
 	DueDate  *string `json:"due_date,omitempty"`
@@ -241,7 +244,8 @@ func buildBed(row gridRow, today time.Time) GridBed {
 	balance := row.TotalPaid - totalExpected
 
 	bed.StayID = &stayID
-	bed.RentAmount = &rentAmount
+	bed.RentAmount = &currentRent
+	bed.RentCycle = &row.RentCycle.String
 	bed.DepositAmount = &depositAmount
 	bed.TotalPaid = &row.TotalPaid
 	bed.TotalExpected = &totalExpected

@@ -30,5 +30,7 @@ export { Meter } from "./Meter";
 export { SegmentedControl } from "./SegmentedControl";
 export { ChoiceList } from "./ChoiceList";
 export { Collapsible } from "./Collapsible";
+export { InfoTip } from "./InfoTip";
+export { WithHelp } from "./WithHelp";
 export { HOVER_REVEAL } from "./reveal";
 export { TOUCH_TARGET, TOUCH_LINK } from "./touch";

@@ -132,14 +132,9 @@ export default function DashboardPage() {
                pins them equal. Linking makes that a doorway rather than a
                duplicate. */
             href="/insights"
-            note={[
-              rev && rev.expected_this_month > 0 ? `of ${formatCurrency(rev.expected_this_month)} expected` : "",
-              // The money beside the rent, in one short line: deposits in,
-              // refunds out. The breakdown is behind the link, in Insights.
-              rev && (rev.deposits_in_this_month > 0 || rev.returned_this_month > 0)
-                ? `All money in: ${rev.net_in_this_month < 0 ? "−" : ""}${formatCurrency(Math.abs(rev.net_in_this_month))}`
-                : "",
-            ].filter(Boolean).join("\n") || undefined}
+            // Rent only (owner, 27 Oct 2026): the tile says Collected and
+            // means rent. Deposits and refunds are Insights → All money.
+            note={rev && rev.expected_this_month > 0 ? `of ${formatCurrency(rev.expected_this_month)} expected` : undefined}
             progress={
               rev && rev.expected_this_month > 0
                 ? Math.min(100, (rev.collected_this_month / rev.expected_this_month) * 100)
