@@ -106,6 +106,41 @@ exist is still on the board.
 
 Decided against or overtaken. Each says why, so it is not raised again.
 
+### A list of every payment
+**Dropped 27 Oct 2026, the owner's call:** Insights already lists every
+payment, by month. The original write-up:
+
+The Sep 2026 UX audit: a tester asked "show me all the payments I received this
+month", hit "Only the 10 most recent payments are shown", and could not tell
+whether September had 10 payments or 30. There is still no `GET /api/payments`.
+
+Since then, Insights became a month table where tapping a month lists every
+line in it, and Payments covers who owes. Check with the owner whether that
+already answers the question before building a page. If it does not: an
+owner-scoped, paginated payments endpoint and a page to match.
+
+### Link two records of the same person
+**Dropped 27 Oct 2026, the owner's call**, made while clearing the board.
+New duplicates are already stopped by "Same number as …" on Add tenant and
+on approving a registration. The original write-up:
+
+Before #52, nothing stopped a second record for someone who came back, so
+some people may already have their history split across two tenants. Add
+tenant and approving a registration now both warn "Same number as …", which
+stops new duplicates, but nothing merges two records that already exist.
+
+Tenant login tries every record with that number, newest first, and the
+password decides, so duplicates don't sign in at random. Two records with the
+same password still sign in to the newer.
+
+### Send the registration link to a tenant added by hand
+**Dropped 27 Oct 2026, the owner's call**, made while clearing the board.
+The owner can still set a portal password from the tenant page (Phase 16).
+
+### Import the rest of the notebook
+**Dropped 27 Oct 2026, the owner's call**, made while clearing the board.
+The first batch went in on 21 Oct with `scripts/import-notebook.py`.
+
 ### Discounts: a price agreed in advance, or money let go after
 **Dropped 26 Oct 2026, the owner's call:** "the amount you agreed thing
 works". "An amount you agreed" in Change rent and Move bed (#52) bills a

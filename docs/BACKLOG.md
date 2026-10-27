@@ -22,44 +22,6 @@ Most items have no write-up; the line on the board is the whole record.
 
 ## Next up
 
-### House rules on the registration form
-Raised 24 Oct 2026, and the owner called it crucial. Someone registering from
-the QR link should see the hostel's basic rules before they submit, for example:
-- rent is not refundable
-- the deposit comes back only with a month's notice
-- no smoking, no drinking
-
-and other basic rules and regulations. Design questions before building:
-- Where the rules are written. The owner should be able to edit them, so
-  probably a setting, not text in the code.
-- Whether the tenant ticks "I agree", and whether that is recorded.
-- Whether the same rules show in the portal too.
-
-The deposit rule must match what the move-out sheet does
-(`moveOutSettlement`, `noticeBy`): notice by the start of the last rent
-month. Today the app says nothing to the tenant about it.
-
-Revisit the "You're registered" screen in the same pass (owner, 27 Oct
-2026). Its steps say the owner checks the details, you'll hear from them,
-"then sign in with your phone number and password". What really happens is
-the owner checks the details, gives them a room and bed, and they move in;
-most never sign in. Say that, and mention the portal as something they can
-use if they need it: sending a payment proof, giving notice.
-
-### Link two records of the same person
-Before #52, nothing stopped a second record for someone who came back, so
-some people may already have their history split across two tenants. Add
-tenant and approving a registration now both warn "Same number as …", which
-stops new duplicates, but nothing merges two records that already exist.
-
-Tenant login tries every record with that number, newest first, and the
-password decides, so duplicates don't sign in at random. Two records with the
-same password still sign in to the newer.
-
----
-
-## Money
-
 ### Corrections and write-offs
 Entry is easy on every screen; correction is absent on most. The owner wants
 to talk the design through before any of it is built, and to rethink how
@@ -99,15 +61,33 @@ to cover:
 The template for the safety side is the owner's "Reset portal password"
 dialog, which already does confirm, reveal and honest framing.
 
-### A list of every payment
-The Sep 2026 UX audit: a tester asked "show me all the payments I received this
-month", hit "Only the 10 most recent payments are shown", and could not tell
-whether September had 10 payments or 30. There is still no `GET /api/payments`.
+### House rules on the registration form
+Raised 24 Oct 2026, and the owner called it crucial. Someone registering from
+the QR link should see the hostel's basic rules before they submit, for example:
+- rent is not refundable
+- the deposit comes back only with a month's notice
+- no smoking, no drinking
 
-Since then, Insights became a month table where tapping a month lists every
-line in it, and Payments covers who owes. Check with the owner whether that
-already answers the question before building a page. If it does not: an
-owner-scoped, paginated payments endpoint and a page to match.
+and other basic rules and regulations. Design questions before building:
+- Where the rules are written. The owner should be able to edit them, so
+  probably a setting, not text in the code.
+- Whether the tenant ticks "I agree", and whether that is recorded.
+- Whether the same rules show in the portal too.
+
+The deposit rule must match what the move-out sheet does
+(`moveOutSettlement`, `noticeBy`): notice by the start of the last rent
+month. Today the app says nothing to the tenant about it.
+
+Revisit the "You're registered" screen in the same pass (owner, 27 Oct
+2026). Its steps say the owner checks the details, you'll hear from them,
+"then sign in with your phone number and password". What really happens is
+the owner checks the details, gives them a room and bed, and they move in;
+most never sign in. Say that, and mention the portal as something they can
+use if they need it: sending a payment proof, giving notice.
+
+---
+
+## Money
 
 ---
 
@@ -116,6 +96,34 @@ owner-scoped, paginated payments endpoint and a page to match.
 ---
 
 ## Ops and security
+
+### After a quiet spell the app hangs, then fails
+Owner, 27 Oct 2026: after a quiet spell, opening the site showed a spinner
+until a refresh, then the login page, though he had been signed in. After
+signing in, Insights took a long time and showed "Failed to fetch
+(hostel-backend-k7ar.onrender.com)"; Retry loaded it at once.
+
+The cause is Render's free plan: the backend sleeps after about 15 minutes
+without a request, and the first request after that waits about a minute
+while it wakes. Three things in our code make that minute worse:
+- The root page (`app/page.tsx`) shows a bare spinner while `authApi.me`
+  checks the stored sign-in. It is not `PageLoader`, so it never says the
+  server is waking, and nothing gives up.
+- `contexts/auth.tsx` forgets the token when that check fails for *any*
+  reason, so a dropped connection to a sleeping server signs the owner out.
+  Only a 401 should.
+- `request()` in `lib/api.ts` shows the browser's own "Failed to fetch"
+  (a request that got no answer at all, likely the server mid-wake; not
+  confirmed from Render's logs) and never tries again.
+
+Two fixes, not exclusive:
+- **Keep it awake:** a free outside pinger (cron-job.org or UptimeRobot)
+  calling `/health` every 10 minutes. One always-on service fits Render's
+  free monthly hours. `/health` doesn't touch the database, so Neon still
+  sleeps. Owner's setup, not code.
+- **Client fixes:** keep the sign-in on a network failure, retry once when
+  the connection drops, `PageLoader` on the root page, and a plain sentence
+  instead of "Failed to fetch". A small frontend PR.
 
 ### Back up the database from the laptop
 The only copy of the real data is Neon's own restore history, which on the
