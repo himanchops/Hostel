@@ -31,18 +31,19 @@ const VIEW_KEY = "insights:view";
 
 /** Which lines of a month each view lists, so the lines add up to its row. */
 const VIEW_KINDS: Record<View, MoneyEntryKind[]> = {
-  rent: ["rent", "deposit_to_rent", "advance_returned"],
+  rent: ["rent", "deposit_to_rent", "advance_returned", "waived"],
   money: ["rent", "deposit", "returned"],
 };
 
-const KIND: Record<MoneyEntryKind, { label: string; tone: BadgeTone; out: boolean }> = {
+const KIND: Record<MoneyEntryKind, { label: string; tone: BadgeTone; out: boolean; noMoney?: boolean }> = {
   rent: { label: "Rent", tone: "success", out: false },
   deposit: { label: "Deposit", tone: "info", out: false },
   returned: { label: "Returned", tone: "warning", out: true },
   deposit_to_rent: { label: "Paid from deposit", tone: "neutral", out: false },
   advance_returned: { label: "Rent refunded", tone: "warning", out: true },
-  // Never in a view's lines or totals: no money moved. LetGoNote mentions it.
-  let_go: { label: "Let go", tone: "neutral", out: false },
+  // Listed in the Rent view, never added up: no money moved. It is
+  // already out of the month's Billed figure (migration 017).
+  waived: { label: "Waived", tone: "neutral", out: false, noMoney: true },
 };
 
 // Spelled out rather than left to toLocaleString, whose en-IN short September
@@ -448,7 +449,14 @@ function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; t
                   </td>
                   {view === "rent" ? (
                     <>
-                      <td className={`${td} text-stone-500`}>{r.expected_paise ? formatCurrency(r.expected_paise) : "—"}</td>
+                      <td className={`${td} text-stone-500`}>
+                        {r.expected_paise ? formatCurrency(r.expected_paise) : "—"}
+                        {/* Already out of Billed; said once, small, so the
+                            figure explains itself without a column. */}
+                        {r.waived_paise > 0 && (
+                          <span className="block text-[11px] text-stone-400">{signed(-r.waived_paise)} waived</span>
+                        )}
+                      </td>
                       <td className={td}>
                         <span className="font-medium text-stone-800">{formatCurrency(r.collected_paise)}</span>
                         {pct !== null && <span className="ml-1.5 text-xs text-stone-400">{pct.toFixed(0)}%</span>}
@@ -516,16 +524,11 @@ function MonthLines({
 
   const kinds = VIEW_KINDS[view];
   const lines = detail.entries.filter((e) => kinds.includes(e.kind));
-  const letGo = view === "rent" ? detail.entries.filter((e) => e.kind === "let_go") : [];
   if (lines.length === 0) {
-    return (
-      <div>
-        <p className="text-sm text-stone-400">Nothing {view === "rent" ? "collected" : "came in or went out"} in {monthName(row.month)}.</p>
-        <LetGoNote entries={letGo} />
-      </div>
-    );
+    return <p className="text-sm text-stone-400">Nothing {view === "rent" ? "collected" : "came in or went out"} in {monthName(row.month)}.</p>;
   }
-  const value = (e: MoneyEntry) => (KIND[e.kind].out ? -e.amount_paise : e.amount_paise);
+  // A waiver is listed but adds nothing: no money moved.
+  const value = (e: MoneyEntry) => (KIND[e.kind].noMoney ? 0 : KIND[e.kind].out ? -e.amount_paise : e.amount_paise);
   const total = lines.reduce((s, e) => s + value(e), 0);
 
   // Newest first, whatever the kind: the order a bank statement is read in.
@@ -541,11 +544,13 @@ function MonthLines({
         {kinds.map((k) => {
           const of = lines.filter((e) => e.kind === k);
           if (of.length === 0) return null;
-          const sum = of.reduce((s, e) => s + value(e), 0);
+          const sum = KIND[k].noMoney
+            ? of.reduce((s, e) => s + e.amount_paise, 0)
+            : of.reduce((s, e) => s + value(e), 0);
           return (
             <span key={k} className="tabular-nums">
               {KIND[k].label} <span className="text-stone-400">×{of.length}</span>{" "}
-              <span className="font-medium text-stone-700">{signed(sum)}</span>
+              <span className={KIND[k].noMoney ? "text-stone-400" : "font-medium text-stone-700"}>{signed(sum)}</span>
             </span>
           );
         })}
@@ -566,29 +571,7 @@ function MonthLines({
           {view === "rent" ? "Collected" : "Net in"}: <span className="font-semibold text-stone-800">{signed(total)}</span>
         </span>
       </div>
-      <LetGoNote entries={letGo} />
     </div>
-  );
-}
-
-/**
- * Rent the owner let go off this month (migration 017), one quiet line under
- * the month's lines. It is already out of the month's expected rent and was
- * never collected, so it sits outside the list and its total. The owner
- * wanted it there only if it could be subtle.
- */
-function LetGoNote({ entries }: { entries: MoneyEntry[] }) {
-  if (entries.length === 0) return null;
-  return (
-    <p className="mt-2 text-xs text-stone-400">
-      Let go, not collected:{" "}
-      {entries.map((e, i) => (
-        <span key={`${e.stay_id}-${e.date}-${i}`} className="tabular-nums">
-          {i > 0 && " · "}
-          {formatCurrency(e.amount_paise)} {e.tenant_name}
-        </span>
-      ))}
-    </p>
   );
 }
 
@@ -611,7 +594,7 @@ function MoneyLine({ entry: e }: { entry: MoneyEntry }) {
         </Link>
         {place && <span className="ml-2 hidden text-xs text-stone-400 sm:inline">{place}</span>}
       </span>
-      <span className={`text-right tabular-nums font-medium sm:order-last sm:w-24 ${kind.out ? "text-overdue-700" : "text-stone-800"}`}>
+      <span className={`text-right tabular-nums sm:order-last sm:w-24 ${kind.noMoney ? "text-stone-400" : kind.out ? "font-medium text-overdue-700" : "font-medium text-stone-800"}`}>
         {kind.out ? signed(-e.amount_paise) : formatCurrency(e.amount_paise)}
       </span>
       <span className="col-span-2 col-start-2 flex items-center gap-2 text-xs text-stone-400 sm:contents">

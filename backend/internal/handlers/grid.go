@@ -92,8 +92,8 @@ type gridRow struct {
 	TenantName      sql.NullString `db:"tenant_name"`
 	TenantPhone     sql.NullString `db:"tenant_phone"`
 	TotalPaid       int64          `db:"total_paid"`
-	// LetGo is rent the owner let go (letgo.go): never paid, never owed.
-	LetGo int64 `db:"let_go"`
+	// Waiver is rent the owner waived (waivers.go): never paid, never owed.
+	Waived int64 `db:"waived"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -135,7 +135,7 @@ func (h *GridHandler) GetGrid(c echo.Context) error {
 			t.name      AS tenant_name,
 			t.phone     AS tenant_phone,
 			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true AND p.kind = 'rent'), 0) AS total_paid,
-			`+letGoBeforeSQL+` AS let_go
+			`+waivedBeforeSQL+` AS waived
 		FROM rooms r
 		LEFT JOIN beds b ON b.room_id = r.id
 		LEFT JOIN stays s ON s.bed_id = b.id AND s.end_date IS NULL
@@ -240,11 +240,11 @@ func buildBed(row gridRow, today time.Time) GridBed {
 		sched = flatSchedule(startDate, rentAmount)
 	}
 	cycles := cyclesElapsed(startDate, today, row.RentCycle.String)
-	// Expected net of rent let go, so "Paid X of Y expected" adds up to
+	// Expected net of rent waived, so "Paid X of Y expected" adds up to
 	// what they owe.
 	billed := sched.billed(startDate, row.RentCycle.String, 0, cycles)
-	letGo := letGoCredit(billed, row.TotalPaid, row.LetGo)
-	totalExpected := billed - letGo
+	waived := waiverCredit(billed, row.TotalPaid, row.Waived)
+	totalExpected := billed - waived
 	// "Partial" means less than one cycle behind, measured against the cycle
 	// being billed now, not against whatever the rent was at move-in.
 	currentRent := sched.at(cycleStart(startDate, cycles, row.RentCycle.String))
@@ -270,7 +270,7 @@ func buildBed(row gridRow, today time.Time) GridBed {
 		}
 	}
 
-	due := dueFor(sched, startDate, row.RentCycle.String, row.TotalPaid+letGo, today)
+	due := dueFor(sched, startDate, row.RentCycle.String, row.TotalPaid+waived, today)
 	if due.State != "" {
 		dueDate := due.Date.Format("2006-01-02")
 		bed.DueDate, bed.DuePaise, bed.DueState = &dueDate, &due.Paise, &due.State

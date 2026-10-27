@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, LetGo, StayOwed, formatCurrency, formatDay, letGoApi } from "@/lib/api";
+import { ApiError, Waiver, StayOwed, formatCurrency, formatDay, waiversApi } from "@/lib/api";
 import { parseRupees } from "@/lib/settlement";
 import { Button, ChoiceList, Field, FormError, Input, Modal, useConfirm, useToast } from "@/components/ui";
 
 /**
- * Letting owed money go (owner, Oct 2026): "they owe ₹10,000, we're letting
- * ₹2,000 go". Rare, so it is a quiet link under what they owe, never a button
+ * Waiving some of what is owed (owner, Oct 2026): "they owe ₹10,000, we're
+ * letting ₹2,000 go". Rare, so it is a quiet link under what they owe, never a button
  * beside Record payment. It is never a payment: what they owe goes down
  * everywhere, and Collected stays cash (migration 017).
  */
-export function LetGoDialog({
+export function WaiveDialog({
   open,
   owing,
   token,
@@ -25,7 +25,7 @@ export function LetGoDialog({
   token: string;
   tenantName?: string;
   onClose: () => void;
-  onSaved: (letGo: LetGo) => void;
+  onSaved: (waiver: Waiver) => void;
 }) {
   const toast = useToast();
   const [stayId, setStayId] = useState<number | null>(null);
@@ -38,7 +38,7 @@ export function LetGoDialog({
   const stay = owing.find((o) => o.stay_id === stayId) ?? null;
 
   // Opened afresh each time, on the stay that owes the most, with all of it
-  // filled in: the owner lowers it to what they are letting go.
+  // filled in: the owner lowers it to what they are waiving.
   useEffect(() => {
     if (!open) return;
     const most = [...owing].sort((a, b) => b.owed - a.owed)[0];
@@ -56,18 +56,18 @@ export function LetGoDialog({
     e.preventDefault();
     if (!stay) return;
     if (paise === null || paise <= 0) {
-      setError("Type how much to let go, like 1000.");
+      setError("Type how much to waive, like 1000.");
       return;
     }
     if (tooMuch) {
-      setError(`They owe ${formatCurrency(stay.owed)}, so that's the most you can let go.`);
+      setError(`They owe ${formatCurrency(stay.owed)}, so that's the most you can waive.`);
       return;
     }
     setError("");
     setSaving(true);
     try {
-      const saved = await letGoApi.create(token, stay.stay_id, { amount: paise, notes: notes.trim() || undefined });
-      toast.success(`${formatCurrency(paise)} let go`);
+      const saved = await waiversApi.create(token, stay.stay_id, { amount: paise, notes: notes.trim() || undefined });
+      toast.success(`${formatCurrency(paise)} waived`);
       onSaved(saved);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That didn't save. Try again.");
@@ -77,7 +77,7 @@ export function LetGoDialog({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Let some go">
+    <Modal open={open} onClose={onClose} title="Waive some of it">
       <form onSubmit={save} className="space-y-4">
         <p className="text-sm text-stone-600">
           {first} won&apos;t owe it any more. It isn&apos;t a payment, so it doesn&apos;t count as collected.
@@ -113,21 +113,21 @@ export function LetGoDialog({
         {error && <FormError>{error}</FormError>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={saving} disabled={!stay}>{saving ? "Saving…" : "Let it go"}</Button>
+          <Button type="submit" loading={saving} disabled={!stay}>{saving ? "Saving…" : "Waive"}</Button>
         </div>
       </form>
     </Modal>
   );
 }
 
-/** One amount let go, opened from its ledger line: what it was, and Take back. */
-export function LetGoSheet({
-  letGo,
+/** One amount waived, opened from its ledger line: what it was, and Take back. */
+export function WaiverSheet({
+  waiver,
   token,
   onClose,
   onTakenBack,
 }: {
-  letGo: LetGo | null;
+  waiver: Waiver | null;
   token: string;
   onClose: () => void;
   onTakenBack: (id: number) => void;
@@ -137,13 +137,13 @@ export function LetGoSheet({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => setError(""), [letGo]);
-  if (!letGo) return null;
-  const lg = letGo;
+  useEffect(() => setError(""), [waiver]);
+  if (!waiver) return null;
+  const w = waiver;
 
   async function takeBack() {
     const ok = await confirm({
-      title: `Take back ${formatCurrency(lg.amount)}?`,
+      title: `Take back the ${formatCurrency(w.amount)} waiver?`,
       message: "They'll owe it again.",
       confirmLabel: "Take back",
     });
@@ -151,9 +151,9 @@ export function LetGoSheet({
     setError("");
     setSaving(true);
     try {
-      await letGoApi.takeBack(token, lg.id);
-      toast.success(`${formatCurrency(lg.amount)} owed again`);
-      onTakenBack(lg.id);
+      await waiversApi.takeBack(token, w.id);
+      toast.success(`${formatCurrency(w.amount)} owed again`);
+      onTakenBack(w.id);
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That didn't save. Try again.");
@@ -163,14 +163,14 @@ export function LetGoSheet({
   }
 
   return (
-    <Modal open onClose={onClose} title={<span className="tabular-nums">{formatCurrency(lg.amount)} let go · {formatDay(lg.created_at)}</span>}>
+    <Modal open onClose={onClose} title={<span className="tabular-nums">{formatCurrency(w.amount)} waived · {formatDay(w.created_at)}</span>}>
       <div className="space-y-4">
         <p className="text-sm text-stone-600">
           Not a payment: it came off what they owed, and isn&apos;t counted as collected.
         </p>
-        {lg.notes && <p className="text-sm text-stone-800">“{lg.notes}”</p>}
-        {lg.settled ? (
-          <p className="rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600">
+        {w.notes && <p className="text-sm text-stone-800">“{w.notes}”</p>}
+        {w.settled ? (
+          <p className="rounded-w bg-stone-50 px-3 py-2 text-sm text-stone-600">
             The settlement was worked out from this. To take it back, undo the settlement first.
           </p>
         ) : (
@@ -185,6 +185,6 @@ export function LetGoSheet({
 }
 
 /** The ledger's word for it, muted beside real money. */
-export function letGoLabel(lg: LetGo): string {
-  return `${formatCurrency(lg.amount)} let go`;
+export function waiverLabel(w: Waiver): string {
+  return `${formatCurrency(w.amount)} waived`;
 }

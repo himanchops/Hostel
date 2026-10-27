@@ -279,7 +279,7 @@ export interface TenantSummary {
   due_date?: string;
   due_paise?: number;
   due_state?: DueState;
-  /** Each stay that makes up balance, so "Let some go…" knows which. */
+  /** Each stay that makes up balance, so "Waive some of it…" knows which. */
   owing: StayOwed[];
 }
 
@@ -291,10 +291,10 @@ export interface StayOwed {
 }
 
 /**
- * Rent the owner let go (migration 017). Never a payment: it comes off what
+ * Rent the owner waived (migration 017). Never a payment: it comes off what
  * they owe, oldest month first, and never counts as collected.
  */
-export interface LetGo {
+export interface Waiver {
   id: number;
   stay_id: number;
   amount: number;    // paise
@@ -305,12 +305,12 @@ export interface LetGo {
   settled: boolean;
 }
 
-export const letGoApi = {
-  list: (token: string, stayId: number) => request<LetGo[]>(`/api/stays/${stayId}/let-go`, {}, token),
+export const waiversApi = {
+  list: (token: string, stayId: number) => request<Waiver[]>(`/api/stays/${stayId}/waivers`, {}, token),
   create: (token: string, stayId: number, data: { amount: number; notes?: string }) =>
-    request<LetGo>(`/api/stays/${stayId}/let-go`, { method: "POST", body: JSON.stringify(data) }, token),
+    request<Waiver>(`/api/stays/${stayId}/waivers`, { method: "POST", body: JSON.stringify(data) }, token),
   /** They owe it again. */
-  takeBack: (token: string, id: number) => request<void>(`/api/let-go/${id}`, { method: "DELETE" }, token),
+  takeBack: (token: string, id: number) => request<void>(`/api/waivers/${id}`, { method: "DELETE" }, token),
 };
 
 export const tenantsApi = {
@@ -863,8 +863,8 @@ export interface RevenuePoint {
   month: string;   // "2026-09"
   label: string;   // "Sep 26"
   expected_paise: number;
-  /** Rent let go off this month, already out of expected_paise. */
-  let_go_paise: number;
+  /** Rent waived off this month, already out of expected_paise. */
+  waived_paise: number;
   collected_paise: number;
   net_in_paise: number;
   rent_paid_paise: number;
@@ -918,7 +918,7 @@ export interface InsightsData {
  * it went. `deposit_to_rent` moved no money (the deposit arrived earlier), so
  * it belongs to the rent view only.
  */
-export type MoneyEntryKind = "rent" | "deposit" | "returned" | "deposit_to_rent" | "advance_returned" | "let_go";
+export type MoneyEntryKind = "rent" | "deposit" | "returned" | "deposit_to_rent" | "advance_returned" | "waived";
 
 export interface MoneyEntry {
   date: string;

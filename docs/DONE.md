@@ -15,25 +15,29 @@ When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
 `### <title> (#NN)`. Items with no write-up just leave the board.
 
-### Letting owed money go (#63)
+### Waiving what is owed (#63)
 Shipped 27 Oct 2026, the second and last part of "Corrections and
-write-offs", as the owner agreed it that day (he chose to cover leavers too):
-- A quiet "Let some go…" under the tenant page's balance opens a dialog
+write-offs", as the owner agreed it that day (he chose to cover leavers too).
+On the demo he renamed it: "Let some go…" became **"Waive"**, the everyday
+word, and the first Insights note, at the foot of a month's lines in the
+Rent view only, was too hidden to find, so it moved under the month's
+Billed figure and into its lines:
+- A quiet "Waive some of it…" under the tenant page's balance opens a dialog
   filled in with everything owed, which the owner lowers; a live line says
   "Varun will owe ₹14,000 instead of ₹18,000". An optional note.
-- It is `rent_let_go` (migration 017), never a payment. What someone owes
+- It is `rent_waivers` (migration 017), never a payment. What someone owes
   counts it like rent paid, oldest month first, on the tenant page, the
   grid, Payments, the dashboard, the reminder, Change rent and the
   settlement. Collected and every cash figure ignore it. It can bring what
-  they owe to zero, never below (`letGoCredit`).
-- For someone who left owing, an amount let go after the settlement comes
+  they owe to zero, never below (`waiverCredit`).
+- For someone who left owing, an amount waived after the settlement comes
   off what they still owe, and they drop off "Moved out — still owes".
-- A muted "₹4,000 let go · Diwali" line in the ledger and the bed drawer
+- A muted "₹4,000 waived · Diwali" line in the ledger and the bed drawer
   opens a sheet with Take back. One a settlement was worked out from waits
   for that settlement to be undone.
 - Insights: the month it came off expects that much less, and the month's
-  lines end with a quiet "Let go, not collected: ₹4,000 Varun". No column,
-  as the owner asked.
+  Billed figure says "−₹4,000 waived" under it, and the month's lines list it
+  with a grey Waived badge that Collected doesn't count. No column.
 
 The write-up as agreed:
 

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import {
-  tenantsApi, staysApi, settlementsApi, letGoApi, type LetGo,
+  tenantsApi, staysApi, settlementsApi, waiversApi, type Waiver,
   Tenant, Stay, Payment, PaymentKind, TenantSummary, TenantUpdateData, Settlement,
   formatCurrency, formatDay, today, latestPaymentDate, maskAadhaar, ApiError, uploadApi, withPlace,
 } from "@/lib/api";
@@ -48,7 +48,7 @@ import { MoveBedDialog } from "@/components/MoveBedDialog";
 import { NewStayDialog } from "@/components/NewStayDialog";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
 import { PaymentSheet } from "@/components/PaymentSheet";
-import { LetGoDialog, LetGoSheet } from "@/components/LetGo";
+import { WaiveDialog, WaiverSheet } from "@/components/Waiver";
 import { changedTag } from "@/lib/paymentEdit";
 import { checkPhones } from "@/lib/phone";
 
@@ -337,14 +337,14 @@ function PaymentRow({ payment: p, onOpen }: { payment: Payment; onOpen: (p: Paym
   );
 }
 
-/** Rent let go, among the payments but muted: it is not money. */
-function LetGoRow({ letGo: l, onOpen }: { letGo: LetGo; onOpen: (l: LetGo) => void }) {
+/** Rent waived, among the payments but muted: it is not money. */
+function WaiverRow({ waiver: l, onOpen }: { waiver: Waiver; onOpen: (l: Waiver) => void }) {
   return (
     <tr onClick={() => onOpen(l)} className="cursor-pointer hover:bg-stone-50">
       <td className="whitespace-nowrap py-2 tabular-nums text-stone-400">{formatDay(l.created_at)}</td>
       <td className="py-2 tabular-nums text-stone-500">
         <span className="whitespace-nowrap">{formatCurrency(l.amount)}</span>{" "}
-        <span className="whitespace-nowrap text-xs text-stone-400">let go</span>
+        <span className="whitespace-nowrap text-xs text-stone-400">waived</span>
       </td>
       <td className="py-2 text-stone-400">—</td>
       <td className="py-2 text-stone-400">{l.notes || "—"}</td>
@@ -352,7 +352,7 @@ function LetGoRow({ letGo: l, onOpen }: { letGo: LetGo; onOpen: (l: LetGo) => vo
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onOpen(l); }}
-          aria-label={`Open ${formatCurrency(l.amount)} let go on ${formatDay(l.created_at)}`}
+          aria-label={`Open ${formatCurrency(l.amount)} waived on ${formatDay(l.created_at)}`}
           className="-my-1.5 inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-stone-100 hover:text-stone-600"
         >
           <ChevronIcon className="h-4 w-4" />
@@ -362,13 +362,13 @@ function LetGoRow({ letGo: l, onOpen }: { letGo: LetGo; onOpen: (l: LetGo) => vo
   );
 }
 
-type LedgerRow = { payment: Payment; letGo?: undefined } | { letGo: LetGo; payment?: undefined };
+type LedgerRow = { payment: Payment; waiver?: undefined } | { waiver: Waiver; payment?: undefined };
 
-/** Payments and rent let go together, newest first. */
-function ledgerRows(payments: Payment[], letGos: LetGo[]): LedgerRow[] {
+/** Payments and rent waived together, newest first. */
+function ledgerRows(payments: Payment[], waivers: Waiver[]): LedgerRow[] {
   const rows: (LedgerRow & { date: string })[] = [
     ...payments.map((p) => ({ payment: p, date: p.payment_date.slice(0, 10) })),
-    ...letGos.map((l) => ({ letGo: l, date: l.created_at.slice(0, 10) })),
+    ...waivers.map((l) => ({ waiver: l, date: l.created_at.slice(0, 10) })),
   ];
   return rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
@@ -409,10 +409,10 @@ export default function TenantDetailPage() {
   const [payLoading, setPayLoading] = useState(false);
   // The payment whose sheet is open: change, delete, accept or not.
   const [openPayment, setOpenPayment] = useState<Payment | null>(null);
-  // Rent let go per stay (migration 017), shown in the ledger among payments.
-  const [letGos, setLetGos] = useState<Record<number, LetGo[]>>({});
-  const [lettingGo, setLettingGo] = useState(false);
-  const [openLetGo, setOpenLetGo] = useState<LetGo | null>(null);
+  // Rent waived per stay (migration 017), shown in the ledger among payments.
+  const [waivers, setWaivers] = useState<Record<number, Waiver[]>>({});
+  const [waiving, setWaiving] = useState(false);
+  const [openWaiver, setOpenWaiver] = useState<Waiver | null>(null);
 
   // Moving out (or settling the money for a stay that already ended)
   const [settlingStay, setSettlingStay] = useState<number | null>(null);
@@ -476,8 +476,8 @@ export default function TenantDetailPage() {
         Promise.all(s.map((st) => staysApi.payments(token, st.id).then((p) => [st.id, p] as const)))
           .then((loaded) => setPayments(Object.fromEntries(loaded)))
           .catch(() => setPaymentsFailed(true));
-        Promise.all(s.map((st) => letGoApi.list(token, st.id).then((l) => [st.id, l] as const)))
-          .then((loaded) => setLetGos(Object.fromEntries(loaded)))
+        Promise.all(s.map((st) => waiversApi.list(token, st.id).then((l) => [st.id, l] as const)))
+          .then((loaded) => setWaivers(Object.fromEntries(loaded)))
           .catch(() => setPaymentsFailed(true));
       })
       .catch((err) => setMissing(err instanceof ApiError && err.status === 404 ? "notfound" : "failed"))
@@ -526,10 +526,10 @@ export default function TenantDetailPage() {
     loadSummary();
   }
 
-  function reloadLetGo(stayId: number) {
+  function reloadWaivers(stayId: number) {
     if (!token) return;
-    letGoApi.list(token, stayId)
-      .then((l) => setLetGos((prev) => ({ ...prev, [stayId]: l })))
+    waiversApi.list(token, stayId)
+      .then((l) => setWaivers((prev) => ({ ...prev, [stayId]: l })))
       .catch(() => setPaymentsFailed(true));
   }
 
@@ -557,7 +557,7 @@ export default function TenantDetailPage() {
       // Payments now read as unsettled; reload them so their sheets agree.
       const fresh = await staysApi.payments(token, stay.id);
       setPayments((prev) => ({ ...prev, [stay.id]: fresh }));
-      reloadLetGo(stay.id);
+      reloadWaivers(stay.id);
       loadSummary();
       toast.success("Settlement undone");
     } catch (err) {
@@ -751,10 +751,10 @@ export default function TenantDetailPage() {
             {summary.owing?.length > 0 && (
               <button
                 type="button"
-                onClick={() => setLettingGo(true)}
+                onClick={() => setWaiving(true)}
                 className={`mt-1 text-xs font-medium text-stone-500 underline-offset-2 hover:text-stone-700 hover:underline ${TOUCH_LINK}`}
               >
-                Let some go…
+                Waive some of it…
               </button>
             )}
           </Card>
@@ -1147,7 +1147,7 @@ export default function TenantDetailPage() {
                       ) : (
                         <p className="text-xs text-stone-400">Loading…</p>
                       )
-                    ) : stayPayments.length === 0 && !(letGos[stay.id]?.length) ? (
+                    ) : stayPayments.length === 0 && !(waivers[stay.id]?.length) ? (
                       <p className="text-xs text-stone-400">No payments recorded.</p>
                     ) : (
                       <table className="w-full text-sm">
@@ -1161,8 +1161,8 @@ export default function TenantDetailPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-50">
-                          {ledgerRows(stayPayments, letGos[stay.id] ?? []).map((row) => row.letGo
-                            ? <LetGoRow key={`lg-${row.letGo.id}`} letGo={row.letGo} onOpen={setOpenLetGo} />
+                          {ledgerRows(stayPayments, waivers[stay.id] ?? []).map((row) => row.waiver
+                            ? <WaiverRow key={`w-${row.waiver.id}`} waiver={row.waiver} onOpen={setOpenWaiver} />
                             : <PaymentRow key={row.payment.id} payment={row.payment} onOpen={setOpenPayment} />)}
                         </tbody>
                       </table>
@@ -1196,26 +1196,26 @@ export default function TenantDetailPage() {
       </section>
 
       {token && summary && (
-        <LetGoDialog
-          open={lettingGo}
+        <WaiveDialog
+          open={waiving}
           owing={summary.owing ?? []}
           token={token}
           tenantName={tenant?.name}
-          onClose={() => setLettingGo(false)}
+          onClose={() => setWaiving(false)}
           onSaved={(lg) => {
-            setLettingGo(false);
-            setLetGos((prev) => ({ ...prev, [lg.stay_id]: [lg, ...(prev[lg.stay_id] ?? [])] }));
+            setWaiving(false);
+            setWaivers((prev) => ({ ...prev, [lg.stay_id]: [lg, ...(prev[lg.stay_id] ?? [])] }));
             loadSummary();
           }}
         />
       )}
       {token && (
-        <LetGoSheet
-          letGo={openLetGo}
+        <WaiverSheet
+          waiver={openWaiver}
           token={token}
-          onClose={() => setOpenLetGo(null)}
+          onClose={() => setOpenWaiver(null)}
           onTakenBack={(id) => {
-            setLetGos((prev) => Object.fromEntries(
+            setWaivers((prev) => Object.fromEntries(
               Object.entries(prev).map(([k, v]) => [k, v.filter((l) => l.id !== id)]),
             ));
             loadSummary();
@@ -1307,7 +1307,7 @@ export default function TenantDetailPage() {
               staysApi.payments(token, settlement.stay_id)
                 .then((fresh) => setPayments((prev) => ({ ...prev, [settlement.stay_id]: fresh })))
                 .catch(() => setPaymentsFailed(true));
-              reloadLetGo(settlement.stay_id);
+              reloadWaivers(settlement.stay_id);
             }
             setSettlingStay(null);
             reloadStays();

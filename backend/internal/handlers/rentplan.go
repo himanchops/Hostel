@@ -198,15 +198,15 @@ func loadRentState(tx *sqlx.Tx, stayID, ownerID int64) (models.Stay, rentSchedul
 	); err != nil {
 		return models.Stay{}, nil, 0, 0, "", err
 	}
-	// Rent let go counts as covered here too (letgo.go), so "this month
+	// Rent waived counts as covered here too (waivers.go), so "this month
 	// they pay" agrees with what the tenant page says they owe.
-	var letGo int64
-	if err := tx.Get(&letGo, `SELECT COALESCE(SUM(amount), 0) FROM rent_let_go WHERE stay_id = $1`, stayID); err != nil {
+	var waiver int64
+	if err := tx.Get(&waiver, `SELECT COALESCE(SUM(amount), 0) FROM rent_waivers WHERE stay_id = $1`, stayID); err != nil {
 		return models.Stay{}, nil, 0, 0, "", err
 	}
 	cycle := string(stay.RentCycle)
 	billed := sched.billed(stay.StartDate, cycle, 0, cyclesElapsed(dateOnly(stay.StartDate), dateOnly(time.Now()), cycle))
-	paid += letGoCredit(billed, paid, letGo)
+	paid += waiverCredit(billed, paid, waiver)
 	return stay.Stay, sched, paid, 0, "", nil
 }
 

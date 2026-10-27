@@ -670,10 +670,10 @@ type staySummaryRow struct {
 	// PaidAfterSettlement is money received on the stay since it was settled,
 	// which goes against a shortfall — see settledOwed.
 	PaidAfterSettlement int64 `db:"paid_after_settlement"`
-	// LetGo is rent let go that billing counts (letGoBeforeSQL), and
-	// LetGoAfterSettlement what was let go off a shortfall since (letgo.go).
-	LetGo                int64 `db:"let_go"`
-	LetGoAfterSettlement int64 `db:"let_go_after_settlement"`
+	// Waiver is rent waived that billing counts (waivedBeforeSQL), and
+	// WaivedAfterSettlement what was waived off a shortfall since (waivers.go).
+	Waived                int64 `db:"waived"`
+	WaivedAfterSettlement int64 `db:"waived_after_settlement"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -723,15 +723,15 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 			sched = flatSchedule(start, s.RentAmount)
 		}
 		expected := sched.billed(start, s.RentCycle, 0, cycles)
-		letGo := letGoCredit(expected, s.TotalPaid, s.LetGo)
+		waived := waiverCredit(expected, s.TotalPaid, s.Waived)
 		summary.TotalPaid += s.TotalPaid
-		summary.TotalExpected += expected - letGo // let go is no longer expected
+		summary.TotalExpected += expected - waived // waived is no longer expected
 		if days := int64(until.Sub(start).Hours() / 24); days > 0 {
 			summary.DurationDays += days
 		}
 
 		if s.SettlementRefund != nil {
-			owed := settledOwed(*s.SettlementRefund, s.PaidAfterSettlement+s.LetGoAfterSettlement)
+			owed := settledOwed(*s.SettlementRefund, s.PaidAfterSettlement+s.WaivedAfterSettlement)
 			summary.Balance += owed
 			if owed > 0 {
 				summary.Owing = append(summary.Owing, StayOwed{StayID: s.StayID, Owed: owed, Settled: true})
@@ -745,13 +745,13 @@ func computeTenantSummary(stays []staySummaryRow, today time.Time) TenantSummary
 		if s.EndDate == nil {
 			// One open stay per tenant (idx_stays_active_tenant), so this is set
 			// at most once.
-			// Rent let go covers the oldest rent first, as a payment would.
-			if due := dueFor(sched, start, s.RentCycle, s.TotalPaid+letGo, today); due.State != "" {
+			// Rent waived covers the oldest rent first, as a payment would.
+			if due := dueFor(sched, start, s.RentCycle, s.TotalPaid+waived, today); due.State != "" {
 				d := due.Date.Format("2006-01-02")
 				summary.DueDate, summary.DuePaise, summary.DueState = &d, &due.Paise, &due.State
 			}
 		}
-		owed := expected - s.TotalPaid - letGo
+		owed := expected - s.TotalPaid - waived
 		summary.Balance += owed
 		if owed > 0 {
 			summary.Owing = append(summary.Owing, StayOwed{StayID: s.StayID, Owed: owed})
@@ -831,8 +831,8 @@ func loadStaySummaryRows(db *sqlx.DB, where string, arg int64) ([]staySummaryRow
 				SELECT SUM(p.amount) FROM payments p
 				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'
 			), 0) AS total_paid,
-			`+letGoBeforeSQL+` AS let_go,
-			`+letGoAfterSQL+` AS let_go_after_settlement
+			`+waivedBeforeSQL+` AS waived,
+			`+waivedAfterSQL+` AS waived_after_settlement
 		FROM stays s
 		LEFT JOIN settlements st ON st.stay_id = s.id
 		WHERE `+where,

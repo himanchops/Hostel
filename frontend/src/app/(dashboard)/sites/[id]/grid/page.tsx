@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth";
 import {
-  gridApi, sitesApi, tenantsApi, staysApi, letGoApi, type LetGo,
+  gridApi, sitesApi, tenantsApi, staysApi, waiversApi, type Waiver,
   GridRoom, GridBed, BedStatus, Site, Stay, Tenant, Payment, PaymentKind,
   formatCurrency, today, latestPaymentDate,
   ApiError,
@@ -44,7 +44,7 @@ import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
 import { PaymentSheet } from "@/components/PaymentSheet";
-import { LetGoSheet } from "@/components/LetGo";
+import { WaiverSheet } from "@/components/Waiver";
 import { changedTag } from "@/lib/paymentEdit";
 import {
   StayTermsFields, StayTerms, emptyStayTerms, stayTermsPayload, stayTermsError,
@@ -710,9 +710,9 @@ function OccupiedPanel({
   const toast = useToast();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [openPayment, setOpenPayment] = useState<Payment | null>(null);
-  // Rent let go on this stay (migration 017): listed so the balance adds up.
-  const [letGos, setLetGos] = useState<LetGo[]>([]);
-  const [openLetGo, setOpenLetGo] = useState<LetGo | null>(null);
+  // Rent waived on this stay (migration 017): listed so the balance adds up.
+  const [waivers, setWaivers] = useState<Waiver[]>([]);
+  const [openWaiver, setOpenWaiver] = useState<Waiver | null>(null);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
 
   // Payment form
@@ -730,7 +730,7 @@ function OccupiedPanel({
       .then(setPayments)
       .catch(() => {})
       .finally(() => setPaymentsLoading(false));
-    letGoApi.list(token, bed.stay_id).then(setLetGos).catch(() => {});
+    waiversApi.list(token, bed.stay_id).then(setWaivers).catch(() => {});
   }, [token, bed.stay_id]);
 
   async function handleAddPayment(e: React.FormEvent) {
@@ -900,7 +900,7 @@ function OccupiedPanel({
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
-        ) : payments.length === 0 && letGos.length === 0 ? (
+        ) : payments.length === 0 && waivers.length === 0 ? (
           <p className="text-xs text-stone-400">No payments yet.</p>
         ) : (
           <div className="space-y-1.5">
@@ -931,16 +931,16 @@ function OccupiedPanel({
               </button>
             ))}
             {/* Not money, so after the payments and muted. */}
-            {letGos.map((l) => (
+            {waivers.map((l) => (
               <button
-                key={`lg-${l.id}`}
+                key={`w-${l.id}`}
                 type="button"
-                onClick={() => setOpenLetGo(l)}
-                aria-label={`Open ${formatCurrency(l.amount)} let go on ${l.created_at.slice(0, 10)}`}
+                onClick={() => setOpenWaiver(l)}
+                aria-label={`Open ${formatCurrency(l.amount)} waived on ${l.created_at.slice(0, 10)}`}
                 className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left ring-1 ring-inset ring-stone-200 transition duration-150 ease-out hover:bg-stone-50"
               >
                 <div>
-                  <p className="text-sm tabular-nums text-stone-500">{formatCurrency(l.amount)} let go</p>
+                  <p className="text-sm tabular-nums text-stone-500">{formatCurrency(l.amount)} waived</p>
                   <p className="text-xs tabular-nums text-stone-400">
                     {l.created_at.slice(0, 10)}{l.notes ? ` · ${l.notes}` : ""}
                   </p>
@@ -952,12 +952,12 @@ function OccupiedPanel({
         )}
       </div>
 
-      <LetGoSheet
-        letGo={openLetGo}
+      <WaiverSheet
+        waiver={openWaiver}
         token={token}
-        onClose={() => setOpenLetGo(null)}
+        onClose={() => setOpenWaiver(null)}
         onTakenBack={(id) => {
-          setLetGos((prev) => prev.filter((l) => l.id !== id));
+          setWaivers((prev) => prev.filter((l) => l.id !== id));
           onPaymentAdded();
         }}
       />
