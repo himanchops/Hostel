@@ -225,10 +225,14 @@ func hostelName(db *sqlx.DB, ownerID int64) (string, error) {
 	return name, err
 }
 
+// errBadLink is what a stranger with a wrong or mistyped registration link is
+// told, as a sentence like everything else they read on that page.
+const errBadLink = "This registration link doesn't work. Ask the hostel for their QR code again."
+
 func (h *TenantHandler) PublicOwner(c echo.Context) error {
 	ownerID, err := strconv.ParseInt(c.Param("ownerId"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid owner id"))
+		return c.JSON(http.StatusBadRequest, errorResponse(errBadLink))
 	}
 
 	// The property's name, never the account holder's: "Welcome to Chopra
@@ -250,7 +254,7 @@ func (h *TenantHandler) PublicOwner(c echo.Context) error {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return serverError(c, err, "failed to load registration link")
 		}
-		return c.JSON(http.StatusNotFound, errorResponse("registration link not found"))
+		return c.JSON(http.StatusNotFound, errorResponse(errBadLink))
 	}
 	return c.JSON(http.StatusOK, map[string]string{"name": name})
 }
@@ -258,7 +262,7 @@ func (h *TenantHandler) PublicOwner(c echo.Context) error {
 func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	ownerID, err := strconv.ParseInt(c.Param("ownerId"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid owner id"))
+		return c.JSON(http.StatusBadRequest, errorResponse(errBadLink))
 	}
 
 	var exists bool
@@ -269,17 +273,17 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		return serverError(c, err, "failed to verify registration link")
 	}
 	if !exists {
-		return c.JSON(http.StatusNotFound, errorResponse("registration link not found"))
+		return c.JSON(http.StatusNotFound, errorResponse(errBadLink))
 	}
 
 	var req publicRegisterRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid request body"))
+		return c.JSON(http.StatusBadRequest, errorResponse("Something went wrong sending the form. Please try again."))
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	req.Phone = strings.TrimSpace(req.Phone)
 	if req.Name == "" || req.Phone == "" {
-		return c.JSON(http.StatusBadRequest, errorResponse("name and phone are required"))
+		return c.JSON(http.StatusBadRequest, errorResponse("Enter your name and phone number."))
 	}
 	phone, ok := normalizePhone(req.Phone)
 	if !ok {
@@ -328,7 +332,7 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 	}
 	for _, f := range files {
 		if !validFileRef(f.v) {
-			return c.JSON(http.StatusBadRequest, errorResponse("invalid "+f.name))
+			return c.JSON(http.StatusBadRequest, errorResponse("One of the photos didn't upload properly. Please add it again."))
 		}
 	}
 	idProofURL := optionalString(req.IDProofURL)

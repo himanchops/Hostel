@@ -19,8 +19,10 @@ export function tenDigits(phone: string): string | null {
   return /^[6-9]\d{9}$/.test(d) ? d : null;
 }
 
-export const PHONE_ERROR = "Enter a 10-digit mobile number.";
-export const EMERGENCY_PHONE_ERROR = "Enter a 10-digit mobile number for the emergency contact.";
+// The rule, said out loud: 1234567899 has ten digits and was still refused,
+// with a message that only mentioned ten digits. Same text as handlers/phone.go.
+export const PHONE_ERROR = "Enter a 10-digit mobile number starting with 6, 7, 8 or 9.";
+export const EMERGENCY_PHONE_ERROR = "Enter the emergency contact's 10-digit mobile number, starting with 6, 7, 8 or 9.";
 
 /**
  * Both numbers on a tenant form, checked together. `emergency` may be blank

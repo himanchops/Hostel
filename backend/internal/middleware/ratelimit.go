@@ -65,7 +65,7 @@ func PublicUploadRateLimiter() echo.MiddlewareFunc {
 		// though it does.
 		DenyHandler: func(c echo.Context, _ string, _ error) error {
 			return c.JSON(http.StatusTooManyRequests, map[string]string{
-				"error": "too many uploads from this network — wait a few minutes and try again",
+				"error": "Too many uploads from this network. Wait a few minutes and try again.",
 			})
 		},
 	})
