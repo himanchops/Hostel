@@ -112,7 +112,12 @@ func (h *TenantHandler) List(c echo.Context) error {
 	if c.QueryParam("pending") == "true" {
 		query += " AND is_approved = false ORDER BY created_at DESC"
 	} else {
-		query += " AND is_approved = true ORDER BY name"
+		query = `SELECT ` + tenantCols + `,
+		        CASE WHEN EXISTS (SELECT 1 FROM stays o WHERE o.tenant_id = tenants.id AND o.end_date IS NULL)
+		             THEN NULL
+		             ELSE (SELECT to_char(MAX(s.end_date), 'YYYY-MM-DD') FROM stays s WHERE s.tenant_id = tenants.id)
+		        END AS left_on
+		 FROM tenants WHERE owner_id = $1 AND is_approved = true ORDER BY name`
 	}
 
 	var tenants []models.Tenant

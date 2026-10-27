@@ -46,6 +46,8 @@ type CollectionRow struct {
 	// left.
 	MovedOut bool    `json:"moved_out"`
 	EndDate  *string `json:"end_date,omitempty"`
+	// StartDate is when an active stay began: the Tenants list's "Moved in".
+	StartDate string `json:"start_date,omitempty"`
 	// When rent is due (dueFor) and how they paid last, for the Payments
 	// screen's due-this-week list and its prefilled form. Active rows only.
 	DueDate         *string `json:"due_date,omitempty"`
@@ -286,6 +288,7 @@ func payeeRow(s collectionStayRow, today time.Time) CollectionRow {
 		RentCycle:    s.RentCycle,
 		BalancePaise: balance,
 		DaysSinceDue: daysSinceDue,
+		StartDate:    s.StartDate.Format("2006-01-02"),
 	}
 	if due.State != "" {
 		dueDate := due.Date.Format("2006-01-02")

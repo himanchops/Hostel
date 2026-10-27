@@ -34,6 +34,58 @@ function sentence(message: string): string {
  * does not have one; half-building the flow without it would put a "Forgot
  * password?" link on the login page that goes nowhere.
  */
+/**
+ * Where tenants pay, said once and carried by every WhatsApp reminder. A
+ * reminder that said "please pay" and not where meant a second message
+ * (owner, Oct 2026). Rent comes by the UPI QR at reception or in cash.
+ */
+function UpiCard() {
+  const { owner, token, updateOwner } = useAuth();
+  const toast = useToast();
+  const [upi, setUpi] = useState(owner?.upi_id ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const saved = owner?.upi_id ?? "";
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token) return;
+    setError("");
+    setSaving(true);
+    try {
+      const res = await authApi.setUpi(token, upi.trim());
+      updateOwner({ upi_id: res.upi_id ?? undefined });
+      setUpi(res.upi_id ?? "");
+      toast.success(res.upi_id ? "UPI ID saved. Reminders will include it." : "UPI ID removed from reminders.");
+    } catch (err) {
+      setError(err instanceof ApiError ? sentence(err.message) : "Could not save the UPI ID.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="UPI ID for reminders">
+      <form onSubmit={handleSave} className="space-y-4">
+        <Field label="UPI ID" hint="WhatsApp reminders end with “You can pay by UPI to …”. Leave it empty to leave that out.">
+          <Input
+            value={upi}
+            onChange={(e) => setUpi(e.target.value)}
+            placeholder="name@bank"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </Field>
+        {error && <FormError>{error}</FormError>}
+        <Button type="submit" loading={saving} disabled={upi.trim() === saved}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
 export default function AccountPage() {
   const { owner, token, replaceToken, logoutTo } = useAuth();
   const confirm = useConfirm();
@@ -101,6 +153,8 @@ export default function AccountPage() {
       <PageHeader title="Account" subtitle={owner ? `${owner.name} · ${owner.email}` : undefined} />
 
       <div className="max-w-xl space-y-6">
+        <UpiCard />
+
         <Card title="Change password">
           <form onSubmit={handleChange} className="space-y-4">
             <p className="text-sm text-stone-600">

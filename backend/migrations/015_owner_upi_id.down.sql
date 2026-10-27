@@ -1,0 +1,1 @@
+ALTER TABLE owners DROP COLUMN upi_id;

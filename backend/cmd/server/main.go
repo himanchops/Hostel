@@ -163,6 +163,7 @@ func main() {
 	// Owner
 	api.GET("/me", authHandler.Me)
 	api.PUT("/me/password", authHandler.ChangePassword)
+	api.PUT("/me/upi", authHandler.SetUpi)
 	api.POST("/me/sign-out-everywhere", authHandler.SignOutEverywhere)
 
 	// Sites

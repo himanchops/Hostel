@@ -59,6 +59,8 @@ export interface Owner {
   email: string;
   name: string;
   phone?: string;
+  /** Where tenants pay; WhatsApp reminders add it (migration 015). */
+  upi_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +86,10 @@ export const authApi = {
    */
   changePassword: (token: string, data: { current_password: string; new_password: string }) =>
     request<{ token: string }>("/api/me/password", { method: "PUT", body: JSON.stringify(data) }, token),
+
+  /** Sets the UPI ID reminders carry; "" clears it. */
+  setUpi: (token: string, upi_id: string) =>
+    request<{ upi_id: string | null }>("/api/me/upi", { method: "PUT", body: JSON.stringify({ upi_id }) }, token),
 
   /** Revokes every token this owner holds — the caller's too. */
   signOutEverywhere: (token: string) =>
@@ -213,6 +219,8 @@ export const gridApi = {
 // ─── Tenants ─────────────────────────────────────────────────────────────────
 
 export interface Tenant {
+  /** The tenant list only: when their last stay ended, if none is open. */
+  left_on?: string;
   id: number;
   owner_id: number;
   name: string;
@@ -753,6 +761,8 @@ export interface CollectionRow extends Due {
   moved_out: boolean;
   /** When a moved-out tenant left. Absent on active rows. */
   end_date?: string;
+  /** When an active stay began. Absent on moved-out rows. */
+  start_date?: string;
   /** How their last rent arrived, to prefill the next. Absent if never paid. */
   last_payment_type?: "cash" | "online";
 }

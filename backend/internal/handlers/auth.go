@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -149,7 +150,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	var owner models.Owner
 	err := h.db.QueryRowx(
-		`SELECT id, email, password_hash, name, phone, token_version, created_at, updated_at
+		`SELECT id, email, password_hash, name, phone, upi_id, token_version, created_at, updated_at
 		 FROM owners WHERE email = $1`,
 		req.Email,
 	).StructScan(&owner)
@@ -174,7 +175,7 @@ func (h *AuthHandler) Me(c echo.Context) error {
 
 	var owner models.Owner
 	err := h.db.QueryRowx(
-		`SELECT id, email, name, phone, created_at, updated_at FROM owners WHERE id = $1`,
+		`SELECT id, email, name, phone, upi_id, created_at, updated_at FROM owners WHERE id = $1`,
 		ownerID,
 	).StructScan(&owner)
 	if err != nil {
@@ -261,4 +262,37 @@ func (h *AuthHandler) SignOutEverywhere(c echo.Context) error {
 		return serverError(c, err, "failed to sign out other devices")
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+type upiRequest struct {
+	UpiID string `json:"upi_id"`
+}
+
+// upiPattern is a UPI ID as banks issue them: a handle, "@", and the
+// provider, "rahul.shetty@okaxis" or "9845012345@ybl". Loose on purpose; it
+// catches a phone number or a name typed into the wrong box, not every
+// provider's rules.
+var upiPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$`)
+
+// SetUpi sets or clears the owner's UPI ID, which WhatsApp reminders add.
+//
+// PUT /api/me/upi   {"upi_id": "rahul@okaxis"}, or "" to clear it.
+func (h *AuthHandler) SetUpi(c echo.Context) error {
+	ownerID := appMiddleware.GetOwnerID(c)
+	var req upiRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, errorResponse("invalid request body"))
+	}
+	upi := strings.TrimSpace(req.UpiID)
+	var value *string
+	if upi != "" {
+		if !upiPattern.MatchString(upi) {
+			return c.JSON(http.StatusBadRequest, errorResponse("A UPI ID looks like name@bank, for example rahul@okaxis."))
+		}
+		value = &upi
+	}
+	if _, err := h.db.Exec(`UPDATE owners SET upi_id = $1, updated_at = NOW() WHERE id = $2`, value, ownerID); err != nil {
+		return serverError(c, err, "failed to save the UPI ID")
+	}
+	return c.JSON(http.StatusOK, map[string]*string{"upi_id": value})
 }

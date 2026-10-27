@@ -61,3 +61,20 @@ func TestOverLongPasswordIsRejectedAsValidationNotFailure(t *testing.T) {
 		t.Errorf("the message should tell the user the actual limit, got %q", msg)
 	}
 }
+
+func TestUpiPattern(t *testing.T) {
+	for in, want := range map[string]bool{
+		"rahul@okaxis":     true,
+		"rahul.shetty@ybl": true,
+		"9845012345@paytm": true,
+		"9845012345":       false, // a phone, not a UPI ID
+		"Rahul Shetty":     false,
+		"rahul@":           false,
+		"@okaxis":          false,
+		"rahul@ok axis":    false,
+	} {
+		if got := upiPattern.MatchString(in); got != want {
+			t.Errorf("upiPattern(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
