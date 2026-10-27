@@ -39,6 +39,13 @@ The deposit rule must match what the move-out sheet does
 (`moveOutSettlement`, `noticeBy`): notice by the start of the last rent
 month. Today the app says nothing to the tenant about it.
 
+Revisit the "You're registered" screen in the same pass (owner, 27 Oct
+2026). Its steps say the owner checks the details, you'll hear from them,
+"then sign in with your phone number and password". What really happens is
+the owner checks the details, gives them a room and bed, and they move in;
+most never sign in. Say that, and mention the portal as something they can
+use if they need it: sending a payment proof, giving notice.
+
 ### Link two records of the same person
 Before #52, nothing stopped a second record for someone who came back, so
 some people may already have their history split across two tenants. Add
