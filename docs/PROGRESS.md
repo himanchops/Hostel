@@ -3417,6 +3417,7 @@ second.
 folded in (#57 closed). Vercel and Render both reported success; `/health`,
 the dashboard, Insights and Tenants served, and `/api/insights` refused an
 unsigned request as it should.
+
 ---
 
 ## Help on demand, and a rent says what it is for (Oct 2026)
@@ -3495,6 +3496,7 @@ Six board items about wording, from the owner's 27 Oct list:
 **Production, 27 Oct 2026: live.** Merged as `ee37c83` (#58). Render
 deployed it with #59 at `0a11ea6`; live, an unknown registration link and a
 tenant sign-in with 1234567899 both answered in the new sentences.
+
 ---
 
 ## The registration form (Oct 2026)
@@ -3533,6 +3535,7 @@ on the books, and approving already says "Same number as …".)
 **Production, 27 Oct 2026: live.** Merged as `0a11ea6` (#59), after #58;
 the two overlapped in the register page and the portal sign-in, resolved as
 tried together on the demo. Render and Vercel reported success.
+
 ---
 
 ## Screens that answer (Oct 2026)
@@ -3571,6 +3574,7 @@ Four board items from the owner's 27 Oct list:
 **Production, 27 Oct 2026: live.** Merged as `764fd11` (#60), frontend
 only; Vercel reported success and an unknown address now answers 404 with
 the new page.
+
 ---
 
 ## Architecture Notes
