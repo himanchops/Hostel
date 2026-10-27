@@ -3363,10 +3363,13 @@ second.
   counted the dashboard's way (an open stay in one of the room's beds), so
   the rooms add up to its occupied count. The owner asked for this and not
   rent missed or empty nights. `RoomInsight.occupied_now` replaces
-  `vacant_nights`. The % column stays as "Occupancy", with one line under
-  the table: "Occupancy is averaged over every night in these months."
-  ("Full today" and "Average night" were tried first; he found both
-  non-standard.)
+  `vacant_nights`. The % column stays as "Occupancy", with an ⓘ in its
+  heading that opens a small card: "How full the room was across these
+  months, counting every night. 50% means that on an average night, half its
+  beds were taken." (`InfoTip`, `components/ui`: drawn on the page body so a
+  table that scrolls sideways cannot clip it, closed by a tap elsewhere, a
+  scroll or Escape.) "Full today", "Average night" and a line under the
+  table were tried first.
 - **Rent collected's % is paid against billed, tenant by tenant.** The old
   "% of billed" pooled rent collected across tenants, so one tenant's advance
   made up for another's debt: "99% collected" beside ₹6,000 still owed. The
@@ -3376,10 +3379,10 @@ second.
   is rounded down so it never says 100% while anyone owes. Each month's row
   keeps its collected %, under a line saying advances and late rent can take
   a month over or under 100%.
-- **Still owed now says how many are paid up**: "6 of 22 tenants paid up ·
-  chase the rest →" (`stays_open`, `stays_owing` on the dashboard's revenue,
-  which already counted who owed). The owner asked whether that figure was
-  worth having; it is the one he would say out loud.
+- **Still owed now says how many owe**: "16 of 22 tenants owe · chase them
+  →" (`stays_open`, `stays_owing` on the dashboard's revenue, which already
+  counted who owed). "6 of 22 paid up" was tried first; the owner preferred
+  the number to chase. Not "pending", which the app uses for approvals.
 - **Two occupancy figures, said together.** The tile was "Occupancy this
   month 61%" against the dashboard's "65% full today". It is now "Occupied
   today 21 of 32" with "66% today · 71% over October so far". The count is
@@ -3403,8 +3406,8 @@ second.
   (a leaver, a move between rooms, a booking with no bed),
   `TestComputePaidShare_AnAdvanceCoversOnlyItsOwnTenant` (an advance, a
   debt, a leaver whose deposit paid part of their last month).
-- `tests/e2e/owner/insights.test.ts`: "33% of it paid", "0 of 1 tenants
-  paid up", "Occupied today", "1 of 1" and "0 of 1" by room, no Empty nights
+- `tests/e2e/owner/insights.test.ts`: "33% of it paid", "1 of 1 tenants
+  owe", the Occupancy ⓘ opening and closing, "Occupied today", "1 of 1" and "0 of 1" by room, no Empty nights
   column, the dashboard's "of ₹23,000 expected" with two tenants who left on
   the 2nd, and no "All money in".
 - Screenshots on the demo at 375, 768 and 1024.

@@ -249,7 +249,7 @@ test.describe("Insights", () => {
     // The tiles. Three months billed (₹24,000), one paid: 33%, counted for
     // this tenant alone.
     await expect(page.getByText("Rent collected").locator("..")).toContainText("₹24,000 billed in these months · 33% of it paid");
-    await expect(page.getByText("Still owed now").locator("..")).toContainText("0 of 1 tenants paid up");
+    await expect(page.getByText("Still owed now").locator("..")).toContainText("1 of 1 tenants owe · chase\u00a0them\u00a0→");
     const beds = page.getByText("Occupied today").locator("..");
     await expect(beds).toContainText("1 of 2");
     await expect(beds).toContainText("50% today");
@@ -271,6 +271,13 @@ test.describe("Insights", () => {
     await expect(empty).toContainText("0%");
     // Beds today, not bed-nights nobody slept in.
     await expect(page.getByRole("columnheader", { name: "Empty nights" })).toHaveCount(0);
+
+    // What Occupancy means is one tap away, and a tap elsewhere puts it away.
+    await expect(page.getByRole("note")).toHaveCount(0);
+    await page.getByRole("button", { name: "About occupancy" }).click();
+    await expect(page.getByRole("note")).toContainText("half its beds were taken");
+    await page.getByRole("heading", { name: "Insights", level: 1 }).click();
+    await expect(page.getByRole("note")).toHaveCount(0);
 
   });
 

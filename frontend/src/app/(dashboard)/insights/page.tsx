@@ -12,7 +12,7 @@ import { payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import {
   Badge, Banner, Button, Card, ChevronIcon, Collapsible, EmptyState,
-  Meter, PageHeader, PageLoader, SegmentedControl, TOUCH_LINK, TOUCH_TARGET,
+  InfoTip, Meter, PageHeader, PageLoader, SegmentedControl, TOUCH_LINK, TOUCH_TARGET,
   type BadgeTone,
 } from "@/components/ui";
 
@@ -246,8 +246,8 @@ export default function InsightsPage() {
                   label="Still owed now"
                   value={owedNow === null ? "—" : formatCurrency(owedNow.paise)}
                   note={[
-                    owedNow && owedNow.open > 0 ? `${owedNow.open - owedNow.owing} of ${owedNow.open} tenants paid up` : "",
-                    owedNow?.paise ? "chase the rest →" : owedNow ? "nobody is behind" : "",
+                    owedNow?.owing ? `${owedNow.owing} of ${owedNow.open} tenants owe · chase\u00a0them\u00a0→` : "",
+                    owedNow && !owedNow.paise ? "nobody is behind" : "",
                   ].filter(Boolean).join(" · ") || undefined}
                   href={owedNow?.paise ? "/payments" : undefined}
                 />
@@ -326,7 +326,15 @@ export default function InsightsPage() {
                     <tr className="border-b border-stone-100 text-left text-[11px] uppercase tracking-wide text-stone-400">
                       <th className="px-4 py-2 font-medium">Room</th>
                       <th className="px-4 py-2 font-medium">Occupied</th>
-                      <th className="px-4 py-2 font-medium">Occupancy</th>
+                      <th className="px-4 py-2 font-medium">
+                        <span className="inline-flex items-center gap-0.5">
+                          Occupancy
+                          <InfoTip label="About occupancy" title="Occupancy">
+                            <p>How full the room was across these months, counting every night.</p>
+                            <p className="mt-1.5">50% means that on an average night, half its beds were taken.</p>
+                          </InfoTip>
+                        </span>
+                      </th>
                       <th className="px-4 py-2 text-right font-medium">Rent collected</th>
                     </tr>
                   </thead>
@@ -336,9 +344,6 @@ export default function InsightsPage() {
                     ))}
                   </tbody>
                 </table>
-                <p className="px-4 pt-3 text-xs text-stone-400">
-                  Occupancy is averaged over every night in these months.
-                </p>
               </div>
             )}
           </Collapsible>
