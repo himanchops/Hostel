@@ -194,7 +194,11 @@ test.describe("Insights", () => {
 
     await page.goto("/dashboard");
     // The tile is the last row of the Insights table, both views.
-    await expect(page.getByText("Collected This Month").locator("..").locator("..")).toContainText("₹21,000");
+    const collected = page.getByText("Collected This Month").locator("..").locator("..");
+    await expect(collected).toContainText("₹21,000");
+    // B and C left on the 2nd, billed this month: expected is Insights' ₹23,000,
+    // not the ₹14,000 of the two still here.
+    await expect(collected).toContainText("of ₹23,000 expected");
     await expect(page.getByText("All money in: ₹17,000")).toBeVisible();
 
     await page.goto(`/tenants/${delta}`);
@@ -241,6 +245,14 @@ test.describe("Insights", () => {
     await expect(monthRow(page, firstOf(-2))).toContainText("₹8,000");
     await expect(monthRow(page, firstOf(-3))).toHaveCount(0);
 
+    // The tiles: no pooled "% of billed", and today's beds beside the average night.
+    await expect(page.getByText("Rent collected").locator("..")).toContainText("billed in these months");
+    await expect(page.getByText("Rent collected").locator("..")).not.toContainText("%");
+    const beds = page.getByText("Beds full today").locator("..");
+    await expect(beds).toContainText("1 of 2");
+    await expect(beds).toContainText("50% today");
+    await expect(beds).toContainText("on an average night this month");
+
     // "By room" is shut by default, and its summary has to be worth reading
     // shut — it names the room earning nothing without being opened.
     const byRoom = page.getByRole("button", { name: /By room/ });
@@ -251,8 +263,13 @@ test.describe("Insights", () => {
     const occupied = page.getByRole("row", { name: /Room 1\b/ });
     const empty = page.getByRole("row", { name: /Empty Room/ });
     await expect(occupied).toContainText("₹8,000");
+    await expect(occupied).toContainText("1 of 1");
     await expect(empty).toContainText("₹0");
+    await expect(empty).toContainText("0 of 1");
     await expect(empty).toContainText("0%");
+    // Beds today, not bed-nights nobody slept in.
+    await expect(page.getByRole("columnheader", { name: "Empty nights" })).toHaveCount(0);
+
   });
 
   test("a busy month leads with its totals, lists newest first, and shows ten lines until asked", async ({ page, request }) => {

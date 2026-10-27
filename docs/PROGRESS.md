@@ -3352,6 +3352,50 @@ the grid and Insights all served. No migration: `expected_end_date` and
 
 ---
 
+## Insights says what its numbers mean (Oct 2026)
+
+Owner, 27 Oct 2026, four board items about figures that were right and still
+misread:
+
+- **By room: "Full today", not "Empty nights".** 168 empty bed-nights in a
+  9-bed room was accurate and meant nothing. The column is now "1 of 2",
+  counted the dashboard's way (an open stay in one of the room's beds), so
+  the rooms add up to its "full today". The owner asked for this and not
+  rent missed or empty nights. `RoomInsight.occupied_now` replaces
+  `vacant_nights`. The occupancy % stays as "Average night", with a line
+  under the table saying it is how full the room was on a typical night in
+  the range.
+- **No "% of billed" on the Rent collected tile.** Rent counts in the month
+  it was paid and was pooled across tenants, so one tenant's advance made up
+  for another's debt: "99% collected" beside ₹6,000 still owed. The tile
+  now says "₹X billed in these months", and Still owed now beside it is the
+  per-tenant figure. Each month's row keeps its %, under a line saying
+  advances and late rent can take a month over or under 100%.
+- **Two occupancy figures, said together.** The tile was "Occupancy this
+  month 61%" against the dashboard's "65% full today". It is now "Beds full
+  today 21 of 32" with "66% today · 71% on an average night this month".
+  The count is the dashboard's own, fetched, not recomputed. This month
+  whatever the range, because a year's average beside today's count read
+  as a new contradiction (demo: 33% vs 66%).
+- **The dashboard's "expected" counts this month's leavers.** It summed open
+  stays only, so after two people settled it read "₹75,000 of ₹69,500
+  expected". `computeRevenue` now takes stays that ended this month too and
+  bills them with `billedCycles`, Insights' own rule, so the tile equals
+  Insights' row. Overdue still counts open stays only; a leaver who owes is
+  on Payments.
+
+### Verification
+- `go test ./internal/handlers`: `TestComputeRevenue_LeaverThisMonthStaysInExpected`
+  (left on the 5th, left on their rent day, a daily guest across the month
+  end, one still here), `TestComputeRoomInsights_OccupiedNow` (a leaver, a
+  move between rooms, a booking with no bed).
+- `tests/e2e/owner/insights.test.ts`: the tiles, "1 of 1" and "0 of 1" by
+  room, no Empty nights column, and the dashboard's "of ₹23,000 expected"
+  with two tenants who left on the 2nd.
+- Screenshots on the demo at 375, 768 and 1024.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

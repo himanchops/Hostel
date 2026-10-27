@@ -211,8 +211,8 @@ func TestComputeRoomInsights_EndDateIsInclusive(t *testing.T) {
 	if r.OccupiedNights != 10 {
 		t.Errorf("occupied = %d, want 10 (1st–10th inclusive)", r.OccupiedNights)
 	}
-	if r.VacantNights != 52 {
-		t.Errorf("vacant = %d, want 52", r.VacantNights)
+	if r.OccupiedNow != 0 {
+		t.Errorf("occupied now = %d, want 0 (they left on the 10th)", r.OccupiedNow)
 	}
 	if r.CollectedPaise != 250000 {
 		t.Errorf("collected = %d, want 250000", r.CollectedPaise)
@@ -235,5 +235,32 @@ func TestComputeRoomInsights_BedlessRoomIsReportedAtZero(t *testing.T) {
 	if got[0].AvailableNights != 0 || got[0].Percentage != 0 {
 		t.Errorf("available = %d, percentage = %.2f, want 0 and 0 (no divide by zero)",
 			got[0].AvailableNights, got[0].Percentage)
+	}
+}
+
+// "7 of 9" counts open stays in the room's beds today, the dashboard's rule,
+// so the rooms add up to its "full today". A tenant who moved in from another
+// room counts where they sleep now; one who left counts nowhere.
+func TestComputeRoomInsights_OccupiedNow(t *testing.T) {
+	rooms := []insightRoom{
+		{RoomID: 1, RoomName: "Room 1", SiteID: 1, SiteName: "Site", TotalBeds: 3},
+		{RoomID: 2, RoomName: "Room 2", SiteID: 1, SiteName: "Site", TotalBeds: 2},
+	}
+	stays := []insightStay{
+		{RoomID: 1, RentCycle: "monthly", StartDate: date(2026, time.June, 1)},
+		{RoomID: 1, RentCycle: "daily", StartDate: date(2026, time.July, 20)},
+		{RoomID: 1, RentCycle: "monthly", StartDate: date(2026, time.June, 1), EndDate: ptr(date(2026, time.July, 5))},
+		// Moved from room 1 to room 2 on the 15th.
+		{RoomID: 2, RentCycle: "monthly", StartDate: date(2026, time.June, 1),
+			Moves: []roomMove{{On: date(2026, time.July, 15), FromRoom: 1}}},
+		// A booking with no bed occupies nothing.
+		{RoomID: 0, RentCycle: "monthly", StartDate: date(2026, time.July, 1)},
+	}
+
+	from, to := date(2026, time.July, 1), date(2026, time.August, 1)
+	got := computeRoomInsights(rooms, stays, nil, from, to)
+
+	if got[0].OccupiedNow != 2 || got[1].OccupiedNow != 1 {
+		t.Errorf("occupied now = %d and %d, want 2 and 1", got[0].OccupiedNow, got[1].OccupiedNow)
 	}
 }

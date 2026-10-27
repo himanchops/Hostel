@@ -817,8 +817,9 @@ export interface RoomInsight {
   total_beds: number;
   occupied_nights: number;
   available_nights: number;
-  vacant_nights: number;
   percentage: number;
+  /** Beds taken today: an open stay in this room. */
+  occupied_now: number;
   collected_paise: number;
 }
 

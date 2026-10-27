@@ -127,7 +127,11 @@ type stayRevenueRow struct {
 	RentAmount int64     `db:"rent_amount"`
 	RentCycle  string    `db:"rent_cycle"`
 	StartDate  time.Time `db:"start_date"`
-	TotalPaid  int64     `db:"total_paid"`
+	// EndDate is set for a stay that ended this month: it was billed this
+	// month, so it counts toward expected, but it no longer owes here.
+	EndDate   *time.Time `db:"end_date"`
+	Booking   bool       `db:"booking"`
+	TotalPaid int64      `db:"total_paid"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -141,10 +145,14 @@ type stayRevenueRow struct {
 //
 //   - ExpectedThisMonth counts only cycles that rolled over during the current
 //     calendar month, so a tenant whose anchor day falls later in the month has
-//     not been billed yet and contributes nothing.
-//   - OverdueAmount is what is owed across all time. A tenant paying ahead
-//     contributes zero rather than a negative, so one tenant's credit can never
-//     mask another's arrears.
+//     not been billed yet and contributes nothing. A stay that ended this month
+//     still counts what it was billed before it ended: it is the same figure as
+//     Insights' row for this month (billedCycles). Counting open stays only
+//     once read "₹75,000 of ₹69,500 expected" after two people settled.
+//   - OverdueAmount is what is owed across all time, by open stays only; a
+//     leaver who still owes is on Payments. A tenant paying ahead contributes
+//     zero rather than a negative, so one tenant's credit can never mask
+//     another's arrears.
 func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time.Time) RevenueSummary {
 	firstOfMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
 	endOfLastMonth := firstOfMonth.Add(-24 * time.Hour)
@@ -155,21 +163,22 @@ func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time
 		if len(sched) == 0 {
 			sched = flatSchedule(row.StartDate, row.RentAmount)
 		}
-		cyclesTotal := cyclesElapsed(row.StartDate, today, row.RentCycle)
-		totalExpected := sched.billed(row.StartDate, row.RentCycle, 0, cyclesTotal)
+		// Expected this month: cycles billed by today, less those billed by
+		// the end of last month.
+		stay := insightStay{RentCycle: row.RentCycle, StartDate: row.StartDate, EndDate: row.EndDate, Booking: row.Booking}
+		upTo, before := billedCycles(stay, today), billedCycles(stay, endOfLastMonth)
+		if upTo > before {
+			summary.ExpectedThisMonth += sched.billed(row.StartDate, row.RentCycle, before, upTo)
+		}
 
 		// Overdue: amount owed across all time
+		if row.EndDate != nil {
+			continue
+		}
+		totalExpected := sched.billed(row.StartDate, row.RentCycle, 0, upTo)
 		if totalExpected > row.TotalPaid {
 			summary.OverdueAmount += totalExpected - row.TotalPaid
 		}
-
-		// Expected this month: cycles added during current calendar month
-		cyclesBeforeMonth := cyclesElapsed(row.StartDate, endOfLastMonth, row.RentCycle)
-		cyclesThisMonth := cyclesTotal - cyclesBeforeMonth
-		if cyclesThisMonth < 0 {
-			cyclesThisMonth = 0
-		}
-		summary.ExpectedThisMonth += sched.billed(row.StartDate, row.RentCycle, cyclesTotal-cyclesThisMonth, cyclesTotal)
 	}
 	return summary
 }
@@ -255,7 +264,8 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 	thisMonth := money[firstOfMonth.Format("2006-01")]
 	collectedThisMonth := thisMonth.rentCollected()
 
-	// 3. Active stays for expected/overdue calculation.
+	// 3. Stays for expected/overdue: every open stay, and those that ended
+	// this month, which were billed this month too (computeRevenue).
 	//
 	// Every open stay, with or without a bed. This used to require a bed, so a
 	// tenant approved before being given one — who is billed from day one —
@@ -269,14 +279,16 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			s.rent_amount,
 			s.rent_cycle,
 			s.start_date,
+			s.end_date,
+			s.bed_id IS NULL AS booking,
 			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true AND p.kind = 'rent'), 0) AS total_paid
 		FROM stays s
 		JOIN tenants t ON t.id = s.tenant_id
 		LEFT JOIN payments p ON p.stay_id = s.id
 		WHERE t.owner_id = $1
-		  AND s.end_date IS NULL
-		GROUP BY s.id, s.rent_amount, s.rent_cycle, s.start_date
-	`, ownerID)
+		  AND (s.end_date IS NULL OR s.end_date >= $2)
+		GROUP BY s.id, s.rent_amount, s.rent_cycle, s.start_date, s.end_date, s.bed_id
+	`, ownerID, firstOfMonth.Format("2006-01-02"))
 	if err != nil {
 		return serverError(c, err, "failed to fetch stay data")
 	}

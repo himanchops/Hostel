@@ -53,9 +53,12 @@ type RoomInsight struct {
 	TotalBeds       int     `json:"total_beds"`
 	OccupiedNights  int     `json:"occupied_nights"`
 	AvailableNights int     `json:"available_nights"`
-	VacantNights    int     `json:"vacant_nights"`
 	Percentage      float64 `json:"percentage"`
-	CollectedPaise  int64   `json:"collected_paise"`
+	// OccupiedNow is beds taken today, counted the dashboard's way (an open
+	// stay in a bed of this room), so the rooms add up to its "full today".
+	// The owner reads a room as "7 of 9", not as 168 empty bed-nights.
+	OccupiedNow    int   `json:"occupied_now"`
+	CollectedPaise int64 `json:"collected_paise"`
 }
 
 // ── Internal row shapes ──────────────────────────────────────────────────────
@@ -266,7 +269,8 @@ func computeOccupancySeries(stays []insightStay, totalBeds int, today time.Time,
 }
 
 // computeRoomInsights scores each room over one window: how much of its
-// capacity was slept in, and how much money came in against it.
+// capacity was slept in, and how much money came in against it, beside how
+// many of its beds are taken today.
 //
 // Rooms with no beds are kept rather than dropped. A room someone set up and
 // never put beds in is worth seeing on this list — it is earning nothing, and
@@ -282,9 +286,13 @@ func computeRoomInsights(
 	// A night counts to the room they slept in that night, so a tenant who
 	// moved splits between the two rooms.
 	occupiedByRoom := map[int64]int{}
+	nowByRoom := map[int64]int{}
 	for _, s := range stays {
 		if s.RoomID == 0 {
 			continue
+		}
+		if s.EndDate == nil {
+			nowByRoom[s.RoomID]++
 		}
 		sStart, sEnd := stayWindow(s, to)
 		for _, span := range roomSpans(sStart, sEnd, s.RoomID, s.Moves) {
@@ -305,10 +313,6 @@ func computeRoomInsights(
 		if available > 0 {
 			pct = float64(occupied) / float64(available) * 100
 		}
-		vacant := available - occupied
-		if vacant < 0 {
-			vacant = 0
-		}
 		out = append(out, RoomInsight{
 			RoomID:          r.RoomID,
 			RoomName:        r.RoomName,
@@ -317,8 +321,8 @@ func computeRoomInsights(
 			TotalBeds:       r.TotalBeds,
 			OccupiedNights:  occupied,
 			AvailableNights: available,
-			VacantNights:    vacant,
 			Percentage:      pct,
+			OccupiedNow:     nowByRoom[r.RoomID],
 			CollectedPaise:  collected[r.RoomID],
 		})
 	}

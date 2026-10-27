@@ -212,3 +212,30 @@ func TestComputeRevenue_PaymentMovesOverdueByItsAmount(t *testing.T) {
 		t.Errorf("CollectedThisMonth = %d, want %d", after.CollectedThisMonth, payment)
 	}
 }
+
+// Someone who left on the 5th was billed for August on the 1st. Their rent
+// stays in "expected" (Insights counts it too) while they drop out of
+// overdue, which is open stays only: a leaver who owes is on Payments. Left
+// out of expected, two settled leavers once read "₹75,000 of ₹69,500".
+func TestComputeRevenue_LeaverThisMonthStaysInExpected(t *testing.T) {
+	const rent = 800000 // ₹8,000
+	left := ptr(date(2026, time.August, 5))
+
+	got := computeRevenue([]stayRevenueRow{
+		// Monthly from 1 May, left 5 Aug owing August: billed this month, not overdue here.
+		{RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.May, 1), EndDate: left, TotalPaid: 3 * rent},
+		// Left on their rent day, the 1st: August was never billed.
+		{RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.May, 1), EndDate: ptr(date(2026, time.August, 1)), TotalPaid: 3 * rent},
+		// Daily, ₹500 from 30 Jul, left the morning of 3 Aug: nights of 1st and 2nd are this month's.
+		{RentAmount: 50000, RentCycle: "daily", StartDate: date(2026, time.July, 30), EndDate: ptr(date(2026, time.August, 3)), TotalPaid: 0},
+		// Still here, one month behind.
+		{RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.June, 1), TotalPaid: 2 * rent},
+	}, 0, revenueToday)
+
+	if want := int64(rent + 2*50000 + rent); got.ExpectedThisMonth != want {
+		t.Errorf("ExpectedThisMonth = %d, want %d", got.ExpectedThisMonth, want)
+	}
+	if got.OverdueAmount != rent {
+		t.Errorf("OverdueAmount = %d, want %d (the open stay only)", got.OverdueAmount, rent)
+	}
+}
