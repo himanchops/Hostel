@@ -238,4 +238,7 @@ func TestComputeRevenue_LeaverThisMonthStaysInExpected(t *testing.T) {
 	if got.OverdueAmount != rent {
 		t.Errorf("OverdueAmount = %d, want %d (the open stay only)", got.OverdueAmount, rent)
 	}
+	if got.StaysOpen != 1 || got.StaysOwing != 1 {
+		t.Errorf("stays open/owing = %d/%d, want 1/1", got.StaysOpen, got.StaysOwing)
+	}
 }

@@ -29,9 +29,9 @@ nothing at a glance. Options to put to the owner:
 Lean: "Empty now", possibly with occupancy % covering the history. Raised by
 the owner looking at 1m on production (Oct 2026).
 
-Decided 27 Oct 2026: beds full today, "7 of 9". No rent missed, no empty
-nights. The occupancy column stays, renamed "Average night", with a line
-under the table saying what it means.
+Decided 27 Oct 2026: beds occupied today, "7 of 9", under "Occupied". No
+rent missed, no empty nights. The occupancy % stays, with one line under the
+table: "Occupancy is averaged over every night in these months."
 
 ### Dashboard "expected" drops someone who left this month (#56)
 The tile's "of ₹X expected" sums open stays only, so a tenant who left on the

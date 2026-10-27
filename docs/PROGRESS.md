@@ -3355,43 +3355,58 @@ the grid and Insights all served. No migration: `expected_end_date` and
 ## Insights says what its numbers mean (Oct 2026)
 
 Owner, 27 Oct 2026, four board items about figures that were right and still
-misread:
+misread. He tried a first version on the demo and reworded it; this is the
+second.
 
-- **By room: "Full today", not "Empty nights".** 168 empty bed-nights in a
+- **By room: "Occupied", not "Empty nights".** 168 empty bed-nights in a
   9-bed room was accurate and meant nothing. The column is now "1 of 2",
   counted the dashboard's way (an open stay in one of the room's beds), so
-  the rooms add up to its "full today". The owner asked for this and not
+  the rooms add up to its occupied count. The owner asked for this and not
   rent missed or empty nights. `RoomInsight.occupied_now` replaces
-  `vacant_nights`. The occupancy % stays as "Average night", with a line
-  under the table saying it is how full the room was on a typical night in
-  the range.
-- **No "% of billed" on the Rent collected tile.** Rent counts in the month
-  it was paid and was pooled across tenants, so one tenant's advance made up
-  for another's debt: "99% collected" beside ₹6,000 still owed. The tile
-  now says "₹X billed in these months", and Still owed now beside it is the
-  per-tenant figure. Each month's row keeps its %, under a line saying
-  advances and late rent can take a month over or under 100%.
+  `vacant_nights`. The % column stays as "Occupancy", with one line under
+  the table: "Occupancy is averaged over every night in these months."
+  ("Full today" and "Average night" were tried first; he found both
+  non-standard.)
+- **Rent collected's % is paid against billed, tenant by tenant.** The old
+  "% of billed" pooled rent collected across tenants, so one tenant's advance
+  made up for another's debt: "99% collected" beside ₹6,000 still owed. The
+  tile now reads "₹10,76,900 billed in these months · 88% of it paid".
+  `computePaidShare` lets each stay's rent credit pay its own oldest rent
+  first, so an advance covers only its own tenant's later months, and the %
+  is rounded down so it never says 100% while anyone owes. Each month's row
+  keeps its collected %, under a line saying advances and late rent can take
+  a month over or under 100%.
+- **Still owed now says how many are paid up**: "6 of 22 tenants paid up ·
+  chase the rest →" (`stays_open`, `stays_owing` on the dashboard's revenue,
+  which already counted who owed). The owner asked whether that figure was
+  worth having; it is the one he would say out loud.
 - **Two occupancy figures, said together.** The tile was "Occupancy this
-  month 61%" against the dashboard's "65% full today". It is now "Beds full
-  today 21 of 32" with "66% today · 71% on an average night this month".
-  The count is the dashboard's own, fetched, not recomputed. This month
-  whatever the range, because a year's average beside today's count read
-  as a new contradiction (demo: 33% vs 66%).
+  month 61%" against the dashboard's "65% full today". It is now "Occupied
+  today 21 of 32" with "66% today · 71% over October so far". The count is
+  the dashboard's own, fetched, not recomputed. Always this month, by name,
+  whatever the range, because a year's average beside today's count read as
+  a new contradiction (demo: 33% vs 66%).
 - **The dashboard's "expected" counts this month's leavers.** It summed open
   stays only, so after two people settled it read "₹75,000 of ₹69,500
   expected". `computeRevenue` now takes stays that ended this month too and
   bills them with `billedCycles`, Insights' own rule, so the tile equals
   Insights' row. Overdue still counts open stays only; a leaver who owes is
   on Payments.
+- **The dashboard's Collected tile is rent only.** The "All money in: ₹X"
+  line under it is gone (owner: the tile says Collected, so rent). Deposits
+  and refunds are Insights → All money.
 
 ### Verification
 - `go test ./internal/handlers`: `TestComputeRevenue_LeaverThisMonthStaysInExpected`
   (left on the 5th, left on their rent day, a daily guest across the month
-  end, one still here), `TestComputeRoomInsights_OccupiedNow` (a leaver, a
-  move between rooms, a booking with no bed).
-- `tests/e2e/owner/insights.test.ts`: the tiles, "1 of 1" and "0 of 1" by
-  room, no Empty nights column, and the dashboard's "of ₹23,000 expected"
-  with two tenants who left on the 2nd.
+  end, one still here, and the paid-up counts), `TestComputeRoomInsights_OccupiedNow`
+  (a leaver, a move between rooms, a booking with no bed),
+  `TestComputePaidShare_AnAdvanceCoversOnlyItsOwnTenant` (an advance, a
+  debt, a leaver whose deposit paid part of their last month).
+- `tests/e2e/owner/insights.test.ts`: "33% of it paid", "0 of 1 tenants
+  paid up", "Occupied today", "1 of 1" and "0 of 1" by room, no Empty nights
+  column, the dashboard's "of ₹23,000 expected" with two tenants who left on
+  the 2nd, and no "All money in".
 - Screenshots on the demo at 375, 768 and 1024.
 
 ---

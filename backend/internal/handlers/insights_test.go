@@ -264,3 +264,35 @@ func TestComputeRoomInsights_OccupiedNow(t *testing.T) {
 		t.Errorf("occupied now = %d and %d, want 2 and 1", got[0].OccupiedNow, got[1].OccupiedNow)
 	}
 }
+
+// One tenant paid two months ahead and another owes a month. Pooled, that
+// read as 100% collected beside a month still owed. Stay by stay, the advance
+// covers only its own tenant, so the share is short by exactly the debt.
+func TestComputePaidShare_AnAdvanceCoversOnlyItsOwnTenant(t *testing.T) {
+	const rent = 600000 // ₹6,000
+	today := date(2026, time.October, 15)
+	from := date(2026, time.September, 1) // a two-month window
+	stays := []insightStay{
+		// Since 1 Jul: Jul–Oct billed, paid through December.
+		{StayID: 1, RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.July, 1)},
+		// Since 1 Jul: Jul–Oct billed, paid Jul–Sep.
+		{StayID: 2, RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.July, 1)},
+		// Left 10 Sep after paying August only: September is billed, unpaid,
+		// and the deposit covered ₹4,000 of it at settlement (in the credit).
+		{StayID: 3, RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.August, 1),
+			EndDate: ptr(date(2026, time.September, 10))},
+	}
+	paid := map[int64]int64{1: 6 * rent, 2: 3 * rent, 3: rent + 400000}
+
+	billed, got := computePaidShare(stays, paid, from, today)
+
+	// Sep and Oct for the first two, Sep for the leaver.
+	if billed != 5*rent {
+		t.Errorf("billed = %d, want %d", billed, 5*rent)
+	}
+	// 1: both months. 2: September only; its July–August came first.
+	// 3: ₹4,000 of September.
+	if want := int64(2*rent + rent + 400000); got != want {
+		t.Errorf("paid = %d, want %d", got, want)
+	}
+}

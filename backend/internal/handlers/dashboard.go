@@ -39,6 +39,10 @@ type RevenueSummary struct {
 	ExpectedThisMonth  int64 `json:"expected_this_month"`
 	CollectedThisMonth int64 `json:"collected_this_month"`
 	OverdueAmount      int64 `json:"overdue_amount"`
+	// StaysOpen is everyone billed now (open stays, bookings included), and
+	// StaysOwing those of them who owe anything: "18 of 21 paid up".
+	StaysOpen  int `json:"stays_open"`
+	StaysOwing int `json:"stays_owing"`
 	// MovedOutOwed is the part of OverdueAmount owed by tenants who have left
 	// and settled short. Included in the total so the tile agrees with the
 	// Collections page it links to; reported apart so the tile can say so.
@@ -175,9 +179,11 @@ func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time
 		if row.EndDate != nil {
 			continue
 		}
+		summary.StaysOpen++
 		totalExpected := sched.billed(row.StartDate, row.RentCycle, 0, upTo)
 		if totalExpected > row.TotalPaid {
 			summary.OverdueAmount += totalExpected - row.TotalPaid
+			summary.StaysOwing++
 		}
 	}
 	return summary

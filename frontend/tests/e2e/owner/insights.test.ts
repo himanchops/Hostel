@@ -199,7 +199,8 @@ test.describe("Insights", () => {
     // B and C left on the 2nd, billed this month: expected is Insights' ₹23,000,
     // not the ₹14,000 of the two still here.
     await expect(collected).toContainText("of ₹23,000 expected");
-    await expect(page.getByText("All money in: ₹17,000")).toBeVisible();
+    // Rent only: deposits and refunds are Insights' All money view.
+    await expect(page.getByText(/All money in/)).toHaveCount(0);
 
     await page.goto(`/tenants/${delta}`);
     const tile = page.getByText("Rent paid").locator("..");
@@ -245,13 +246,14 @@ test.describe("Insights", () => {
     await expect(monthRow(page, firstOf(-2))).toContainText("₹8,000");
     await expect(monthRow(page, firstOf(-3))).toHaveCount(0);
 
-    // The tiles: no pooled "% of billed", and today's beds beside the average night.
-    await expect(page.getByText("Rent collected").locator("..")).toContainText("billed in these months");
-    await expect(page.getByText("Rent collected").locator("..")).not.toContainText("%");
-    const beds = page.getByText("Beds full today").locator("..");
+    // The tiles. Three months billed (₹24,000), one paid: 33%, counted for
+    // this tenant alone.
+    await expect(page.getByText("Rent collected").locator("..")).toContainText("₹24,000 billed in these months · 33% of it paid");
+    await expect(page.getByText("Still owed now").locator("..")).toContainText("0 of 1 tenants paid up");
+    const beds = page.getByText("Occupied today").locator("..");
     await expect(beds).toContainText("1 of 2");
     await expect(beds).toContainText("50% today");
-    await expect(beds).toContainText("on an average night this month");
+    await expect(beds).toContainText(`over ${firstOf(0).toLocaleString("en-US", { month: "long", timeZone: "UTC" })} so far`);
 
     // "By room" is shut by default, and its summary has to be worth reading
     // shut — it names the room earning nothing without being opened.

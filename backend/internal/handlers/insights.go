@@ -329,6 +329,44 @@ func computeRoomInsights(
 	return out
 }
 
+// computePaidShare is how much of the rent billed in [from, today] has been
+// paid, stay by stay: each stay's rent credit pays its oldest rent first, and
+// what is left over counts toward the window, up to what the window billed it.
+//
+// Collected against billed, pooled across tenants, let one tenant's advance
+// make up for another's debt: "99% collected" sat beside ₹6,000 still owed
+// (owner, Oct 2026). Here an advance covers only its own tenant's later
+// months, so the share agrees with what is owed.
+//
+// rentPaid is each stay's rent credit to date: approved rent payments, plus
+// rent its deposit paid off at settlement, less rent handed back
+// (settlementFlow.rentDelta), the same rules as rent collected.
+func computePaidShare(stays []insightStay, rentPaid map[int64]int64, from, today time.Time) (billed, paid int64) {
+	before := from.AddDate(0, 0, -1)
+	for _, s := range stays {
+		sched := s.Schedule
+		if len(sched) == 0 {
+			sched = flatSchedule(s.StartDate, s.RentAmount)
+		}
+		done, upTo := billedCycles(s, before), billedCycles(s, today)
+		if upTo <= done {
+			continue
+		}
+		owedBefore := sched.billed(s.StartDate, s.RentCycle, 0, done)
+		inWindow := sched.billed(s.StartDate, s.RentCycle, done, upTo)
+		toward := rentPaid[s.StayID] - owedBefore
+		if toward < 0 {
+			toward = 0
+		}
+		if toward > inWindow {
+			toward = inWindow
+		}
+		billed += inWindow
+		paid += toward
+	}
+	return billed, paid
+}
+
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 // InsightsResponse is all three views in one payload.
@@ -343,6 +381,11 @@ type InsightsResponse struct {
 	Revenue   []RevenuePoint   `json:"revenue"`
 	Occupancy []OccupancyPoint `json:"occupancy"`
 	Rooms     []RoomInsight    `json:"rooms"`
+	// RentBilledPaise is the rent billed in the window, and RentPaidPaise how
+	// much of it has been paid by today, counted stay by stay
+	// (computePaidShare). The page shows the second as a % of the first.
+	RentBilledPaise int64 `json:"rent_billed_paise"`
+	RentPaidPaise   int64 `json:"rent_paid_paise"`
 	// DepositsHeldPaise is deposit money held right now, not over the window:
 	// it is owed back at move-out, so it is the one figure on the page that
 	// is not the owner's to spend.
@@ -498,6 +541,46 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 		collectedByRoom[f.RoomID] += f.rentDelta()
 	}
 
+	// Every stay's rent credit to date, for the paid share.
+	var credits []struct {
+		StayID int64 `db:"stay_id"`
+		Amount int64 `db:"amount"`
+	}
+	err = h.db.Select(&credits, `
+		SELECT s.id AS stay_id,
+		       COALESCE((SELECT SUM(p.amount) FROM payments p
+		                 WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'rent'), 0) AS amount
+		FROM stays s
+		JOIN tenants t ON t.id = s.tenant_id
+		WHERE t.owner_id = $1
+	`, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to load rent paid per stay")
+	}
+	rentPaid := make(map[int64]int64, len(credits))
+	for _, r := range credits {
+		rentPaid[r.StayID] = r.Amount
+	}
+	var settled []struct {
+		StayID int64 `db:"stay_id"`
+		settlementFlow
+	}
+	err = h.db.Select(&settled, `
+		SELECT st.stay_id, '' AS month, 0 AS room_id,
+		       st.deposit_paise, st.dues_paise, st.advance_returned_paise, st.refund_paise
+		FROM settlements st
+		JOIN stays s   ON s.id = st.stay_id
+		JOIN tenants t ON t.id = s.tenant_id
+		WHERE t.owner_id = $1
+	`, ownerID)
+	if err != nil {
+		return serverError(c, err, "failed to load settlements for the paid share")
+	}
+	for _, st := range settled {
+		rentPaid[st.StayID] += st.rentDelta()
+	}
+	rentBilled, rentBilledPaid := computePaidShare(stays, rentPaid, from, today)
+
 	return c.JSON(http.StatusOK, InsightsResponse{
 		Months:    months,
 		FromDate:  from.Format("2006-01-02"),
@@ -506,6 +589,8 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 		Occupancy: computeOccupancySeries(stays, totalBeds, today, months),
 		Rooms:     computeRoomInsights(rooms, stays, collectedByRoom, from, to),
 
+		RentBilledPaise:   rentBilled,
+		RentPaidPaise:     rentBilledPaid,
 		DepositsHeldPaise: depositsHeld,
 	})
 }
