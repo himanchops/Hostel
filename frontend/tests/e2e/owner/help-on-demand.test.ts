@@ -6,8 +6,9 @@ const RUN_ID = `help-${Date.now()}`;
 
 /**
  * Two things the owner read past every day (27 Oct 2026). The explanations
- * under Delete tenant and in Record notice are right the first time and
- * clutter after, so they wait behind an ⓘ. And the grid's bed panel said
+ * in Record notice are right the first time and clutter after, so they wait
+ * behind an ⓘ. Delete tenant keeps one short line instead, by the owner's
+ * choice: that warning belongs before the button. And the grid's bed panel said
  * "/mo" for every rent, so a guest's ₹500 a night read as monthly.
  */
 test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: true });
@@ -17,7 +18,7 @@ function utcDay(offset: number): string {
   return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate() + offset)).toISOString().slice(0, 10);
 }
 
-test("the explanations wait behind an ⓘ", async ({ page, request }) => {
+test("the notice explanations wait behind an ⓘ; delete keeps a short warning", async ({ page, request }) => {
   const { token } = await createOwner(request, `${RUN_ID}-a`);
   const { bedId } = await createSiteRoomBed(request, token, `${RUN_ID}-a`);
   const tenant = await createTenantViaApi(request, token, { name: "Help Wanted", phone: "9812600001" });
@@ -29,15 +30,11 @@ test("the explanations wait behind an ⓘ", async ({ page, request }) => {
   await loginAs(page, token);
   await page.goto(`/tenants/${tenant.id}`);
 
-  const deleteHelp = "For a test entry or a duplicate.";
+  // Delete keeps one short warning in view, because it has to be read before
+  // the button rather than after an ⓘ.
   await expect(page.getByRole("heading", { name: "Delete tenant" })).toBeVisible();
-  await expect(page.getByText(deleteHelp)).toHaveCount(0);
-  const about = page.getByRole("button", { name: "About deleting a tenant" });
-  await about.tap();
-  await expect(about).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText(deleteHelp)).toBeVisible();
-  await about.tap();
-  await expect(page.getByText(deleteHelp)).toHaveCount(0);
+  await expect(page.getByText("Only for a test entry or a duplicate.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "About deleting a tenant" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Record notice" }).tap();
   const dialog = page.getByRole("dialog");

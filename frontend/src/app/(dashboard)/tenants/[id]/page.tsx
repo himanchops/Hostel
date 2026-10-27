@@ -31,7 +31,7 @@ import {
   useConfirm,
   useToast,
   SegmentedControl,
-  WithHelp,
+  AlertIcon,
 } from "@/components/ui";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
@@ -1045,14 +1045,18 @@ export default function TenantDetailPage() {
           test entries and duplicates, not for someone who moved out, and it
           should not sit beside the everyday actions. */}
       <section className="mt-10 border-t border-stone-200 pt-6">
-        <WithHelp
-          heading={<h2 className="text-sm font-semibold text-stone-900">Delete tenant</h2>}
-          label="About deleting a tenant"
+        <h2 className="text-sm font-semibold text-stone-900">Delete tenant</h2>
+        {/* One short line, always shown: this is the one place where the
+            warning has to be read before the button, not after an ⓘ. */}
+        <p className="mt-0.5 text-xs text-stone-500">
+          Only for a test entry or a duplicate. For someone who left, use Move out. Can&apos;t be undone.
+        </p>
+        <Button
+          variant="secondary"
+          className="mt-3 text-red-700 ring-red-300 hover:bg-red-50"
+          onClick={handleDeleteTenant}
         >
-          For a test entry or a duplicate. Removes them with every stay and payment,
-          and cannot be undone. To record that someone left, end their stay instead.
-        </WithHelp>
-        <Button variant="secondary" className="mt-2 text-red-600 hover:text-red-700" onClick={handleDeleteTenant}>
+          <AlertIcon className="h-4 w-4" />
           Delete tenant…
         </Button>
       </section>

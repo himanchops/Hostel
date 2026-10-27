@@ -3356,12 +3356,15 @@ the grid and Insights all served. No migration: `expected_end_date` and
 
 Owner, 27 Oct 2026, two board items:
 
-- **Explanations wait behind an ⓘ.** The paragraph under Delete tenant and the
-  two notes in Record notice were right the first time and clutter every time
-  after. `WithHelp` (`components/ui/WithHelp.tsx`) puts an ⓘ beside the
-  heading, which shows the text on a tap, since the iPad has no hover. Nothing
-  safety-critical is hidden: the delete confirmation still says "cannot be
-  undone", and the notice dialog keeps "X is planning to leave." in view.
+- **Explanations wait behind an ⓘ.** The two notes in Record notice were
+  right the first time and clutter every time after. `WithHelp`
+  (`components/ui/WithHelp.tsx`) puts an ⓘ beside the heading, which shows
+  the text on a tap, since the iPad has no hover. The dialog keeps "X is
+  planning to leave." in view.
+- **Delete tenant keeps one short line and a red button.** The owner tried
+  the ⓘ there on the demo and wanted the warning back, shorter, before the
+  button: "Only for a test entry or a duplicate. For someone who left, use
+  Move out. Can't be undone." The button is red-outlined with a warning icon.
 - **"₹500 a night", not "₹500/mo".** The grid's bed panel printed "/mo" for
   every stay, and the tenant page and Change rent printed "/monthly".
   `perCycle` (`lib/rent.ts`) says "a month", "a week" or "a night"
@@ -3371,9 +3374,10 @@ Owner, 27 Oct 2026, two board items:
 
 ### Verification
 - `tests/unit/rent.test.ts`: `perCycle`.
-- `tests/e2e/owner/help-on-demand.test.ts` at 768×1024 under touch: both
-  explanations shut until the ⓘ is tapped, and the bed panel reads "Rent
-  ₹500 a night" and "Rent ₹8,000 a month".
+- `tests/e2e/owner/help-on-demand.test.ts` at 768×1024 under touch: the
+  notice explanations shut until the ⓘ is tapped, the delete warning in view
+  with no ⓘ, and the bed panel reads "Rent ₹500 a night" and "Rent ₹8,000 a
+  month".
 - `change-rent.test.ts` updated for "a month". `touch-targets.test.ts`
   passes with the ⓘ.
 - Screenshots on the demo at 375 and 768.
