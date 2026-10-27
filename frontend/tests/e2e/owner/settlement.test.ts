@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs } from "../helpers/api";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, confirmSettle } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -245,12 +245,20 @@ test.describe("Settlement", () => {
     expect(preview.dues_paise).toBe(0);
     expect(preview.refund_paise).toBe(DEPOSIT);
 
-    // Asking to bill to a different date is refused rather than silently
-    // ignored — the settlement and the ledger must describe one move-out.
-    const conflicting = await request.get(
+    // The sheet opens asking about today before it knows the stay ended, so
+    // the preview answers on the stay's own end date (Oct 2026). Saving a
+    // settlement for a different date is still refused: the settlement and
+    // the ledger must describe one move-out.
+    const asked = await request.get(
       `${BASE}/api/stays/${stay.id}/settlement-preview?end_date=${isoDate(utcToday())}`,
       { headers: auth }
     );
+    expect(asked.status()).toBe(200);
+    expect((await asked.json()).end_date).toBe(isoDate(endedOn));
+    const conflicting = await request.post(`${BASE}/api/stays/${stay.id}/settlement`, {
+      headers: auth,
+      data: { adjustments: [], refund_paise: DEPOSIT, end_date: isoDate(utcToday()) },
+    });
     expect(conflicting.status()).toBe(400);
     expect((await conflicting.json()).error).toContain("already ended");
 
@@ -392,6 +400,7 @@ test.describe("Settlement", () => {
     await expect(handBack).toHaveValue("7300");
     await sheet.getByRole("button", { name: "UPI" }).click();
     await sheet.getByRole("button", { name: "Move out · hand back ₹7,300" }).click();
+    await confirmSettle(page);
 
     // Toast says what happened, in money.
     await expect(page.getByText("Settle moved out · ₹7,300 handed back")).toBeVisible({ timeout: 5000 });

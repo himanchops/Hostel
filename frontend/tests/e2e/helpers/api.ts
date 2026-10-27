@@ -127,3 +127,12 @@ export async function loginAs(page: Page, token: string) {
     localStorage.setItem("hostel_token", t);
   }, token);
 }
+
+/**
+ * The move-out sheet asks once more before it saves a settlement (Oct 2026):
+ * "Move Ravi out? Ravi gets ₹10,000 back in cash." Answers yes.
+ */
+export async function confirmSettle(page: Page) {
+  const ask = page.getByRole("dialog").filter({ hasText: "undo the settlement from their page" });
+  await ask.getByRole("button", { name: /^(Move out|Settle|Cancel booking)$/ }).click();
+}

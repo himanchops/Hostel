@@ -81,7 +81,9 @@ test.describe("Rejecting a payment proof", () => {
     await expect(page.getByText("Confirmed")).toHaveCount(0);
   });
 
-  test("an approved payment cannot be rejected after the fact", async ({ request }) => {
+  // The owner's own entry is deleted, not rejected. A tenant's approved
+  // payment can be "not accepted after all" (payment-corrections.test.ts).
+  test("the owner's own payment cannot be rejected, only deleted", async ({ request }) => {
     const { token } = await createOwner(request, `reject-b-${RUN_ID}`);
     const oAuth = { Authorization: `Bearer ${token}` };
     const { bedId } = await createSiteRoomBed(request, token, `reject-b-${RUN_ID}`);
@@ -98,6 +100,6 @@ test.describe("Rejecting a payment proof", () => {
 
     const res = await request.post(`${BASE}/api/payments/${paid.id}/reject`, { headers: oAuth, data: { reason: "oops" } });
     expect(res.status()).toBe(409);
-    expect((await res.json()).error).toContain("already been approved");
+    expect((await res.json()).error).toContain("Delete it instead");
   });
 });
