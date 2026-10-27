@@ -21,13 +21,13 @@ test("a tenant waiting for approval is told so, not that their password is wrong
   expect(reg.ok(), await reg.text()).toBeTruthy();
 
   await page.goto("/my/login");
-  await page.getByLabel(/phone/i).fill(phone);
-  await page.getByLabel(/password/i).fill("tenant1234");
+  await page.getByLabel(/^Phone/).fill(phone);
+  await page.getByLabel(/^Password/).fill("tenant1234");
   await page.getByRole("button", { name: /sign in|log in/i }).click();
   await expect(page.getByText("The hostel hasn't approved your registration yet. You can sign in once they do.")).toBeVisible();
 
   // A wrong password learns nothing about the registration.
-  await page.getByLabel(/password/i).fill("wrong-password");
+  await page.getByLabel(/^Password/).fill("wrong-password");
   await page.getByRole("button", { name: /sign in|log in/i }).click();
   await expect(page.getByText("That phone number and password don't match.")).toBeVisible();
 });
