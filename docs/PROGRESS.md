@@ -3412,6 +3412,11 @@ second.
   the 2nd, and no "All money in".
 - Screenshots on the demo at 375, 768 and 1024.
 
+
+**Production, 27 Oct 2026: live.** Merged as `7aced0e` with "Help on demand"
+folded in (#57 closed). Vercel and Render both reported success; `/health`,
+the dashboard, Insights and Tenants served, and `/api/insights` refused an
+unsigned request as it should.
 ---
 
 ## Help on demand, and a rent says what it is for (Oct 2026)
@@ -3478,6 +3483,127 @@ Two board items, decided by the owner on 27 Oct 2026. **Migration 015**
   link; cleared.
 - Screenshots of the list on the demo at 375 and 768.
 
+---
+
+## What people are told (Oct 2026)
+
+Six board items about wording, from the owner's 27 Oct list:
+
+- **The phone rule, said out loud.** "Enter a 10-digit mobile number" was
+  the reply to 1234567899, which has ten digits. It is now "Enter a 10-digit
+  mobile number starting with 6, 7, 8 or 9", in `lib/phone.ts` and
+  `handlers/phone.go` alike, and on the tenant sign-in.
+- **A tenant waiting for approval is told so.** Sign-in now tries records
+  still waiting for approval too, after approved ones. If the password is
+  right it answers 403 "The hostel hasn't approved your registration yet.
+  You can sign in once they do." Only a right password learns that. A wrong
+  one hears "That phone number and password don't match."
+- **Public pages speak in sentences.** The registration link, the public
+  register and upload endpoints, and the upload rate limit now reply in
+  sentences, not "registration link not found". The register page and
+  tenant sign-in go through `publicMessage` (`lib/publicError.ts`), which
+  replaces a 500's note for the logs with "Something went wrong on our
+  side" and a failed fetch with "Couldn't reach the hostel's server".
+- **"72 characters or fewer" counted bytes.** bcrypt's limit is 72 bytes,
+  so 25 Hindi letters were refused as too many characters. The message now
+  says "up to 72 English letters, digits and symbols, or about 24 letters in
+  Hindi or another script". The minimum counts letters, as a person does,
+  on the server and the signup form.
+- **Dates as dates on the tenant page.** "Notice 2026-08-01" is "Gave
+  notice 1 Aug 2026"; the leaving badges, the stay's dates, the settlement
+  and the ledger use `formatDay` too.
+- **A new owner is welcomed, not welcomed back**: "Welcome" for a day after
+  signing up, from the sign-up date, so the heading never changes on load.
+
+### Verification
+- `go test ./...`: `TestValidatePassword` with the new messages and a
+  three-letter Hindi password under the minimum.
+- `tests/e2e/public/messages.test.ts`: the approval message for a right
+  password and the mismatch for a wrong one, sentences from the public API,
+  the Hindi passphrase, 1234567899 on Add tenant, "Welcome," for a new
+  owner, and no ISO date on a tenant page.
+- Existing tests updated for the new phone and password wording.
+
+
+**Production, 27 Oct 2026: live.** Merged as `ee37c83` (#58). Render
+deployed it with #59 at `0a11ea6`; live, an unknown registration link and a
+tenant sign-in with 1234567899 both answered in the new sentences.
+---
+
+## The registration form (Oct 2026)
+
+Four board items about the QR registration form, from the owner's 27 Oct
+list. ("A duplicate registration goes through silently" was dropped by his
+choice: warning on the public form would tell any stranger that a number is
+on the books, and approving already says "Same number as …".)
+
+- **A wrong link says so.** The page asks for the hostel's name on load;
+  a 404 now replaces the form with "This registration link doesn't work",
+  instead of letting someone fill it in and fail after three photo uploads.
+  A network failure leaves the form up, since the link may be fine.
+- **Aadhaar takes digits.** The field drops anything but digits and spaces
+  as it is typed, fits "1234 5678 9012", and the form checks for twelve
+  digits before anything uploads. Public registration refuses anything else
+  too (`validAadhaar`). The number is still kept as typed.
+- **Each error sits at its field, with the focus** (UX audit M15). A bad
+  phone, emergency phone or Aadhaar number shows under that field, which
+  takes the focus, so the browser scrolls to the reason. `Input` now
+  accepts a ref for this.
+- **"Show password" on every password field**: owner sign-in and sign-up,
+  registration, the tenant sign-in and signing in again after a session
+  ends. `ShowPassword` (`components/ui`) is the checkbox the portal-password
+  dialog and Account already had, now shared.
+
+### Verification
+- `go test ./internal/handlers`: `TestValidAadhaar`.
+- `tests/e2e/public/registration-form.test.ts` at 375 under touch: the wrong
+  link, letters dropped from Aadhaar, the error and focus at Aadhaar then at
+  the phone, the API's 400, and Show password on all four pages.
+- Tests that found the field by "Password" now anchor the label
+  (`/^Password/`), since "Show password" contains it.
+
+
+**Production, 27 Oct 2026: live.** Merged as `0a11ea6` (#59), after #58;
+the two overlapped in the register page and the portal sign-in, resolved as
+tried together on the demo. Render and Vercel reported success.
+---
+
+## Screens that answer (Oct 2026)
+
+Four board items from the owner's 27 Oct list:
+
+- **A loader between pages.** On weak mobile data a tap on a page not yet
+  prefetched left the old page up with no sign. Now the tapped nav icon
+  pulses from the tap (`NavIcon`, `useLinkStatus`), and
+  `app/(dashboard)/loading.tsx` shows `PageLoader` while the page's code
+  downloads. Measured on a throttled production build: the icon at 0.4 s,
+  the loader at 2 s, the page at 4 s; before, nothing until the page. The
+  dev server does not prefetch loading states, so the e2e suite cannot show
+  this; it was checked by hand against `next build`.
+- **The Pending badge counts proofs and keeps up.** It counted registrations
+  only, so a tenant's payment proof could sit unseen, and it refreshed only
+  on navigation. It now adds waiting proofs, and the Pending page announces
+  every approve and reject (`pendingChanged`, `lib/pending.ts`) so the
+  badge follows without a reload.
+- **Approving a payment proof asks first**, as rejecting did: "Approve
+  ₹5,000 from Priya? It counts as paid on their ledger straight away."
+  No screen takes an approval back.
+- **A friendly 404, and missing records said.** `app/not-found.tsx` replaces
+  the framework's bare 404. A tenant or site that is not there (deleted, or
+  another account's link) shows "This tenant isn't on your books" on its
+  own URL instead of bouncing to the list; a load that failed offers "Try
+  again". `NotFound` in `components/ui`.
+
+### Verification
+- `tests/e2e/owner/screens-feedback.test.ts` at 1024×768 under touch: the
+  unknown page, tenant and site; the badge at 2 with a registration and a
+  proof, the approval's confirm, and the badge at 1 on the same page.
+- The loader: the throttled production measurement above.
+
+
+**Production, 27 Oct 2026: live.** Merged as `764fd11` (#60), frontend
+only; Vercel reported success and an unknown address now answers 404 with
+the new page.
 ---
 
 ## Architecture Notes

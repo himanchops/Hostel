@@ -32,18 +32,23 @@ type tenantAuthResponse struct {
 	Tenant models.Tenant `json:"tenant"`
 }
 
+// errAwaitingApproval is what a registered tenant hears at sign-in before the
+// owner has approved them: their password was right, and "invalid phone or
+// password" sent them off to reset something that was not wrong.
+const errAwaitingApproval = "The hostel hasn't approved your registration yet. You can sign in once they do."
+
 func (h *TenantAuthHandler) Login(c echo.Context) error {
 	var req tenantLoginRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, errorResponse("invalid request body"))
+		return c.JSON(http.StatusBadRequest, errorResponse("Something went wrong. Please try again."))
 	}
 	req.Phone = strings.TrimSpace(req.Phone)
 	if req.Phone == "" || req.Password == "" {
-		return c.JSON(http.StatusBadRequest, errorResponse("phone and password are required"))
+		return c.JSON(http.StatusBadRequest, errorResponse("Enter your phone number and password."))
 	}
 	phone, ok := normalizePhone(req.Phone)
 	if !ok {
-		return c.JSON(http.StatusBadRequest, errorResponse("Enter your 10-digit mobile number."))
+		return c.JSON(http.StatusBadRequest, errorResponse(errPhone))
 	}
 
 	// Matched on the last ten digits, not as typed: a tenant saved as
@@ -57,13 +62,18 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 	// this excludes both, and it is the same predicate has_portal_login is
 	// computed from. Two spellings of "can this person sign in?" is one more
 	// than the codebase can keep honest.
+	//
+	// Records still waiting for approval are tried too, after the approved
+	// ones, so that someone who registered and typed the right password is
+	// told why they cannot sign in yet instead of "wrong password". Only a
+	// correct password learns that, so it tells a stranger nothing.
 	var candidates []models.Tenant
 	if err := h.db.Select(&candidates,
 		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, password_hash,
 		        (password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
 		        is_approved, created_at, updated_at
-		 FROM tenants WHERE `+phoneDigitsSQL+` = $1 AND is_approved = true AND password_hash <> ''
-		 ORDER BY created_at DESC`,
+		 FROM tenants WHERE `+phoneDigitsSQL+` = $1 AND password_hash <> ''
+		 ORDER BY is_approved DESC, created_at DESC`,
 		phone,
 	); err != nil {
 		return serverError(c, err, "failed to sign in")
@@ -77,7 +87,10 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 		}
 	}
 	if !found {
-		return c.JSON(http.StatusUnauthorized, errorResponse("invalid phone or password"))
+		return c.JSON(http.StatusUnauthorized, errorResponse("That phone number and password don't match."))
+	}
+	if !tenant.IsApproved {
+		return c.JSON(http.StatusForbidden, errorResponse(errAwaitingApproval))
 	}
 
 	token, err := h.authService.GenerateTenantToken(tenant.ID)

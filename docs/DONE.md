@@ -13,7 +13,29 @@ write-ups that explained *why*, so a closed question is not argued again.
 
 When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
-`### <title> (#NN)`. Items with no write-up just leave the board.
+`### A loader between pages (#60)
+Owner, 24 Oct 2026, after #51. `PageLoader` covers a slow API response, and
+it is in the HTML each page sends, so it shows even before the app's code
+has run. The one gap left is a client-side tap from one page to another
+while the next page's code is still downloading: the old page stays on
+screen with no feedback. In production Next.js prefetches links in view, so
+this is usually instant, but on weak mobile data it may be the "tapped the
+site and nothing happened" the owner felt.
+
+The fix is a `loading.tsx` in the `(dashboard)` segment that renders
+`PageLoader`, with the same 800ms hold so a quick tap still shows nothing.
+Read `node_modules/next/dist/docs/` on `loading.tsx` first (this Next.js
+differs from older versions). The local dev server makes the gap look far
+worse ("Rendering…" while it compiles each page), so judge it on a production
+build. The owner deferred it.
+
+Shipped 27 Oct 2026 in two parts, measured on a production build with the
+network throttled (1.5 s latency, 20 KB/s): the tapped nav icon pulses at
+once (`useLinkStatus`), and `app/(dashboard)/loading.tsx` shows `PageLoader`
+once its own small download lands, about two seconds in. Before, the old
+page sat untouched until the new one arrived.
+
+### <title> (#NN)`. Items with no write-up just leave the board.
 
 ### Empty nights in "By room" (#56)
 Insights → By room shows "Empty nights" per room for the range: 168 for a

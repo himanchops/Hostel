@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -61,12 +62,18 @@ const ownerMinPassword = 8
 // len() is deliberate: bcrypt counts bytes, so a passphrase of accented or
 // Devanagari characters hits the ceiling at far fewer than 72 visible
 // characters. Measuring runes here would let exactly the 500 this fixes back in.
+//
+// The message says so, though. "72 characters or fewer" refused a 25-letter
+// Hindi passphrase, which a person counts as 25. The minimum counts letters,
+// as a person does: three Devanagari letters are nine bytes and not a
+// password of nine.
 func validatePassword(password string, minLength int) string {
-	if len(password) < minLength {
-		return fmt.Sprintf("password must be at least %d characters", minLength)
+	if utf8.RuneCountInString(password) < minLength {
+		return fmt.Sprintf("Use at least %d characters for the password.", minLength)
 	}
 	if len(password) > auth.MaxPasswordBytes {
-		return fmt.Sprintf("password must be %d characters or fewer", auth.MaxPasswordBytes)
+		return fmt.Sprintf("That password is too long. Use up to %d English letters, digits and symbols, or about %d letters in Hindi or another script.",
+			auth.MaxPasswordBytes, auth.MaxPasswordBytes/3)
 	}
 	return ""
 }

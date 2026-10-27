@@ -92,7 +92,7 @@ test.describe("Portal access for an owner-created tenant", () => {
     await page.getByRole("button", { name: "Create login" }).last().click();
 
     // Not a generic "failed to save" — the backend's wording reaches the owner.
-    await expect(page.getByText("password must be at least 6 characters")).toBeVisible();
+    await expect(page.getByText("Use at least 6 characters for the password.")).toBeVisible();
   });
 
   test("another owner cannot set it", async ({ request }) => {

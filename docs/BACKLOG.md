@@ -39,6 +39,13 @@ The deposit rule must match what the move-out sheet does
 (`moveOutSettlement`, `noticeBy`): notice by the start of the last rent
 month. Today the app says nothing to the tenant about it.
 
+Revisit the "You're registered" screen in the same pass (owner, 27 Oct
+2026). Its steps say the owner checks the details, you'll hear from them,
+"then sign in with your phone number and password". What really happens is
+the owner checks the details, gives them a room and bed, and they move in;
+most never sign in. Say that, and mention the portal as something they can
+use if they need it: sending a payment proof, giving notice.
+
 ### Link two records of the same person
 Before #52, nothing stopped a second record for someone who came back, so
 some people may already have their history split across two tenants. Add
@@ -105,22 +112,6 @@ owner-scoped, paginated payments endpoint and a page to match.
 ---
 
 ## Screens
-
-### A loader between pages
-Owner, 24 Oct 2026, after #51. `PageLoader` covers a slow API response, and
-it is in the HTML each page sends, so it shows even before the app's code
-has run. The one gap left is a client-side tap from one page to another
-while the next page's code is still downloading: the old page stays on
-screen with no feedback. In production Next.js prefetches links in view, so
-this is usually instant, but on weak mobile data it may be the "tapped the
-site and nothing happened" the owner felt.
-
-The fix is a `loading.tsx` in the `(dashboard)` segment that renders
-`PageLoader`, with the same 800ms hold so a quick tap still shows nothing.
-Read `node_modules/next/dist/docs/` on `loading.tsx` first (this Next.js
-differs from older versions). The local dev server makes the gap look far
-worse ("Rendering…" while it compiles each page), so judge it on a production
-build. The owner deferred it.
 
 ---
 

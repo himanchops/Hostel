@@ -24,6 +24,7 @@ import {
   Input,
   Modal,
   PageHeader,
+  NotFound,
   PageLoader,
   Select,
   Textarea,
@@ -317,6 +318,9 @@ export default function TenantDetailPage() {
   // Keyed by stay so an ended stay can be badged without a request each.
   const [settlements, setSettlements] = useState<Record<number, Settlement>>({});
   const [loading, setLoading] = useState(true);
+  // Said, not redirected: a missing record used to bounce to the list
+  // without a word (owner, Oct 2026).
+  const [missing, setMissing] = useState<"notfound" | "failed" | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
 
   // Every stay's payments, loaded with the page, and which ledger is open.
@@ -397,7 +401,7 @@ export default function TenantDetailPage() {
           .then((loaded) => setPayments(Object.fromEntries(loaded)))
           .catch(() => setPaymentsFailed(true));
       })
-      .catch(() => router.replace("/tenants"))
+      .catch((err) => setMissing(err instanceof ApiError && err.status === 404 ? "notfound" : "failed"))
       .finally(() => setLoading(false));
     loadSummary();
   }, [token, tenantId, router, loadSummary]);
@@ -484,6 +488,27 @@ export default function TenantDetailPage() {
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to delete the tenant");
     }
+  }
+
+  if (missing) {
+    return missing === "notfound" ? (
+      <NotFound
+        className="min-h-[60vh]"
+        title="This tenant isn't on your books"
+        message="They may have been deleted, or the link is from another account."
+        href="/tenants"
+        linkLabel="All tenants"
+      />
+    ) : (
+      <NotFound
+        failed
+        className="min-h-[60vh]"
+        title="This tenant didn't load"
+        message="Check your connection and try again. The server may be waking up."
+        href="/tenants"
+        linkLabel="All tenants"
+      />
+    );
   }
 
   if (loading) {
@@ -696,13 +721,13 @@ export default function TenantDetailPage() {
                           }
                         >
                           {stay.expected_end_date.slice(0, 10) < today()
-                            ? `Was due to leave ${stay.expected_end_date.slice(0, 10)}`
-                            : `Leaving ${stay.expected_end_date.slice(0, 10)}`}
+                            ? `Was due to leave ${formatDay(stay.expected_end_date)}`
+                            : `Leaving ${formatDay(stay.expected_end_date)}`}
                         </Badge>
                       )}
                       {active && !booked && stay.notice_date && !stay.expected_end_date && (
                         <Badge tone="warning">
-                          Notice {stay.notice_date.slice(0, 10)}
+                          Gave notice {formatDay(stay.notice_date)}
                         </Badge>
                       )}
                       {booked ? (
@@ -730,8 +755,8 @@ export default function TenantDetailPage() {
                       )}
                     </div>
                     <p className="mt-1 text-xs tabular-nums text-stone-400">
-                      {stay.start_date.slice(0, 10)}
-                      {stay.end_date ? ` → ${stay.end_date.slice(0, 10)}` : " → present"}
+                      {formatDay(stay.start_date)}
+                      {stay.end_date ? ` → ${formatDay(stay.end_date)}` : " → present"}
                       {" · "}
                       {stay.rent_changes && stay.rent_changes.length > 1
                         ? <>
@@ -853,7 +878,7 @@ export default function TenantDetailPage() {
                     {settlement && (
                       <div className="mb-4 rounded-xl bg-stone-50 p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
-                          Settlement · {settlement.created_at.slice(0, 10)}
+                          Settlement · {formatDay(settlement.created_at)}
                         </p>
                         <dl className="mt-2 space-y-1 text-sm">
                           <div className="flex justify-between gap-4">
@@ -1004,7 +1029,7 @@ export default function TenantDetailPage() {
                         <tbody className="divide-y divide-stone-50">
                           {stayPayments.map((p) => (
                             <tr key={p.id} className="group">
-                              <td className="py-2 tabular-nums text-stone-600">{p.payment_date.slice(0, 10)}</td>
+                              <td className="whitespace-nowrap py-2 tabular-nums text-stone-600">{formatDay(p.payment_date)}</td>
                               <td className="py-2 font-medium tabular-nums text-stone-800">
                                 {formatCurrency(p.amount)}
                                 {p.kind === "deposit" && <Badge tone="info" className="ml-2">Deposit</Badge>}
@@ -1022,7 +1047,7 @@ export default function TenantDetailPage() {
                                     HOVER_REVEAL for how it once was not. */}
                                 <button
                                   onClick={() => handleDeletePayment(stay.id, p.id)}
-                                  aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${p.payment_date.slice(0, 10)}`}
+                                  aria-label={`Delete payment of ${formatCurrency(p.amount)} on ${formatDay(p.payment_date)}`}
                                   className={`-my-1.5 inline-flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-lg text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
                                 >
                                   ✕

@@ -28,6 +28,7 @@ import {
   FormError,
   Input,
   PageHeader,
+  NotFound,
   PageLoader,
   STATUS_STYLES,
   Select,
@@ -63,6 +64,9 @@ export default function GridPage() {
   const [site, setSite] = useState<Site | null>(null);
   const [grid, setGrid] = useState<GridRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  // Said, not redirected: a missing record used to bounce to the list
+  // without a word (owner, Oct 2026).
+  const [missing, setMissing] = useState<"notfound" | "failed" | null>(null);
 
   // Panel state
   const [selectedBed, setSelectedBed] = useState<GridBed | null>(null);
@@ -100,7 +104,10 @@ export default function GridPage() {
         if (g.length === 0) { router.replace(`/sites/${siteId}`); return; }
         setSite(s); setGrid(g); setLoading(false);
       })
-      .catch(() => router.replace("/sites"));
+      .catch((err) => {
+        setMissing(err instanceof ApiError && err.status === 404 ? "notfound" : "failed");
+        setLoading(false);
+      });
   }, [token, siteId, router]);
 
   function handleBedClick(bed: GridBed) {
@@ -167,6 +174,27 @@ export default function GridPage() {
   const visibleRooms = grid
     .map((room) => ({ room, beds: room.beds.filter(matches) }))
     .filter(({ beds }) => beds.length > 0 || filter === "all");
+
+  if (missing) {
+    return missing === "notfound" ? (
+      <NotFound
+        className="min-h-[60vh]"
+        title="This site isn't on your account"
+        message="It may have been deleted, or the link is from another account."
+        href="/sites"
+        linkLabel="All sites"
+      />
+    ) : (
+      <NotFound
+        failed
+        className="min-h-[60vh]"
+        title="This site didn't load"
+        message="Check your connection and try again. The server may be waking up."
+        href="/sites"
+        linkLabel="All sites"
+      />
+    );
+  }
 
   if (loading) {
     return <PageLoader className="min-h-[60vh]" />;

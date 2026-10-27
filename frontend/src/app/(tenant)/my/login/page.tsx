@@ -3,15 +3,16 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTenantAuth } from "@/contexts/tenantAuth";
-import { ApiError } from "@/lib/api";
-import { Button, Card, Field, FormError, Input } from "@/components/ui";
-import { tenDigits } from "@/lib/phone";
+import { Button, Card, Field, FormError, Input, ShowPassword } from "@/components/ui";
+import { PHONE_ERROR, tenDigits } from "@/lib/phone";
+import { publicMessage } from "@/lib/publicError";
 
 export default function TenantLoginPage() {
   const { login, isAuthenticated, isLoading } = useTenantAuth();
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +25,7 @@ export default function TenantLoginPage() {
     setError("");
     const digits = tenDigits(phone);
     if (!digits) {
-      setError("Enter your 10-digit mobile number.");
+      setError(PHONE_ERROR);
       return;
     }
     setLoading(true);
@@ -32,7 +33,7 @@ export default function TenantLoginPage() {
       await login(digits, password);
       router.replace("/my");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Login failed");
+      setError(publicMessage(err));
     } finally {
       setLoading(false);
     }
@@ -71,12 +72,13 @@ export default function TenantLoginPage() {
             >
               <Input
                 required
-                type="password"
+                type={reveal ? "text" : "password"}
                 placeholder="Your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </Field>
+            <ShowPassword checked={reveal} onChange={setReveal} />
 
             <Button type="submit" loading={loading} className="w-full">
               {loading ? "Signing in…" : "Sign in"}
