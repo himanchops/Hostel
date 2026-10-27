@@ -21,10 +21,13 @@ function control(className: string): string {
   return `${base} ${className}`.trim();
 }
 
+// ComponentProps rather than InputHTMLAttributes so a ref reaches the
+// <input> (React 19 passes it as a prop): a form that finds a problem moves
+// focus to the field it is about.
 export function Input({
   className = "",
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+}: React.ComponentProps<"input">) {
   return <input {...props} className={control(className)} />;
 }
 

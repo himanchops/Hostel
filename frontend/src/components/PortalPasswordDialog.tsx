@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { tenantsApi, Tenant, ApiError } from "@/lib/api";
-import { Button, Field, FormError, Input, Modal, useToast, TOUCH_TARGET } from "@/components/ui";
+import { Button, Field, FormError, Input, Modal, ShowPassword, useToast } from "@/components/ui";
 
 /**
  * Giving a tenant a way into the portal — or a new one, when they forget.
@@ -106,15 +106,7 @@ export function PortalPasswordDialog({
 
         {/* The owner is typing a password they must then read aloud, so seeing
             it is the point rather than a convenience. */}
-        <label className={`${TOUCH_TARGET} flex cursor-pointer items-center gap-2 text-[13px] text-stone-500`}>
-          <input
-            type="checkbox"
-            checked={reveal}
-            onChange={(e) => setReveal(e.target.checked)}
-            className="h-4 w-4 accent-indigo-600"
-          />
-          Show password
-        </label>
+        <ShowPassword checked={reveal} onChange={setReveal} />
 
         {error && <FormError>{error}</FormError>}
 

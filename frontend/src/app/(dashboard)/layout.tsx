@@ -25,6 +25,7 @@ import {
   FormError,
   useToast,
   PageLoader,
+  ShowPassword,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 
@@ -293,6 +294,7 @@ function SessionEndedDialog() {
   const { sessionEnded, owner, reauthenticate, logoutTo } = useAuth();
   const toast = useToast();
   const [password, setPassword] = useState("");
+  const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -340,12 +342,13 @@ function SessionEndedDialog() {
           <Input
             required
             autoFocus
-            type="password"
+            type={reveal ? "text" : "password"}
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </Field>
+        <ShowPassword checked={reveal} onChange={setReveal} />
         {error && <FormError>{error}</FormError>}
       </form>
     </Modal>
