@@ -24,6 +24,7 @@ import {
   Input,
   Modal,
   PageHeader,
+  NotFound,
   PageLoader,
   Select,
   Textarea,
@@ -317,6 +318,9 @@ export default function TenantDetailPage() {
   // Keyed by stay so an ended stay can be badged without a request each.
   const [settlements, setSettlements] = useState<Record<number, Settlement>>({});
   const [loading, setLoading] = useState(true);
+  // Said, not redirected: a missing record used to bounce to the list
+  // without a word (owner, Oct 2026).
+  const [missing, setMissing] = useState<"notfound" | "failed" | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
 
   // Every stay's payments, loaded with the page, and which ledger is open.
@@ -397,7 +401,7 @@ export default function TenantDetailPage() {
           .then((loaded) => setPayments(Object.fromEntries(loaded)))
           .catch(() => setPaymentsFailed(true));
       })
-      .catch(() => router.replace("/tenants"))
+      .catch((err) => setMissing(err instanceof ApiError && err.status === 404 ? "notfound" : "failed"))
       .finally(() => setLoading(false));
     loadSummary();
   }, [token, tenantId, router, loadSummary]);
@@ -484,6 +488,27 @@ export default function TenantDetailPage() {
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to delete the tenant");
     }
+  }
+
+  if (missing) {
+    return missing === "notfound" ? (
+      <NotFound
+        className="min-h-[60vh]"
+        title="This tenant isn't on your books"
+        message="They may have been deleted, or the link is from another account."
+        href="/tenants"
+        linkLabel="All tenants"
+      />
+    ) : (
+      <NotFound
+        failed
+        className="min-h-[60vh]"
+        title="This tenant didn't load"
+        message="Check your connection and try again. The server may be waking up."
+        href="/tenants"
+        linkLabel="All tenants"
+      />
+    );
   }
 
   if (loading) {

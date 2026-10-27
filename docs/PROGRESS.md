@@ -3447,6 +3447,40 @@ two ship together.
 
 ---
 
+## Screens that answer (Oct 2026)
+
+Four board items from the owner's 27 Oct list:
+
+- **A loader between pages.** On weak mobile data a tap on a page not yet
+  prefetched left the old page up with no sign. Now the tapped nav icon
+  pulses from the tap (`NavIcon`, `useLinkStatus`), and
+  `app/(dashboard)/loading.tsx` shows `PageLoader` while the page's code
+  downloads. Measured on a throttled production build: the icon at 0.4 s,
+  the loader at 2 s, the page at 4 s; before, nothing until the page. The
+  dev server does not prefetch loading states, so the e2e suite cannot show
+  this; it was checked by hand against `next build`.
+- **The Pending badge counts proofs and keeps up.** It counted registrations
+  only, so a tenant's payment proof could sit unseen, and it refreshed only
+  on navigation. It now adds waiting proofs, and the Pending page announces
+  every approve and reject (`pendingChanged`, `lib/pending.ts`) so the
+  badge follows without a reload.
+- **Approving a payment proof asks first**, as rejecting did: "Approve
+  ₹5,000 from Priya? It counts as paid on their ledger straight away."
+  No screen takes an approval back.
+- **A friendly 404, and missing records said.** `app/not-found.tsx` replaces
+  the framework's bare 404. A tenant or site that is not there (deleted, or
+  another account's link) shows "This tenant isn't on your books" on its
+  own URL instead of bouncing to the list; a load that failed offers "Try
+  again". `NotFound` in `components/ui`.
+
+### Verification
+- `tests/e2e/owner/screens-feedback.test.ts` at 1024×768 under touch: the
+  unknown page, tenant and site; the badge at 2 with a registration and a
+  proof, the approval's confirm, and the badge at 1 on the same page.
+- The loader: the throttled production measurement above.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

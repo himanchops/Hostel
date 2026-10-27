@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
-import { ApiError, paymentsBoardApi, sitesApi, tenantsApi } from "@/lib/api";
+import { ApiError, paymentsBoardApi, pendingPaymentsApi, sitesApi, tenantsApi } from "@/lib/api";
+import { PENDING_CHANGED } from "@/lib/pending";
 import {
   BuildingIcon,
   Button,
@@ -65,7 +66,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // recorded or a registration is approved.
   useEffect(() => {
     if (!token) return;
-    tenantsApi.list(token, true).then((t) => setPendingCount(t.length)).catch(() => {});
     // The red count is who is behind — overdue, or moved out owing — not who
     // is merely due today, which the page lists under "Due this week".
     paymentsBoardApi.get(token)
@@ -77,6 +77,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     sitesApi.list(token)
       .then((s) => setOnlySiteId(s.length === 1 ? s[0].id : null))
       .catch(() => {});
+  }, [token, pathname]);
+
+  // Registrations and payment proofs both wait on the owner, so both count.
+  // The badge counted registrations only, and a proof could sit unseen.
+  useEffect(() => {
+    if (!token) return;
+    const load = () => {
+      Promise.all([tenantsApi.list(token, true), pendingPaymentsApi.list(token)])
+        .then(([t, p]) => setPendingCount(t.length + p.length))
+        .catch(() => {});
+    };
+    load();
+    window.addEventListener(PENDING_CHANGED, load);
+    return () => window.removeEventListener(PENDING_CHANGED, load);
   }, [token, pathname]);
 
   useEffect(() => {
@@ -143,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
               }`}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <NavIcon icon={Icon} className="h-4 w-4 shrink-0" />
               {label}
               {count !== undefined && count > 0 && (
                 <span className="ml-auto">
@@ -238,7 +252,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               }`}
             >
               <span className="relative">
-                <Icon className="h-5 w-5" />
+                <NavIcon icon={Icon} className="h-5 w-5" />
                 {count !== undefined && count > 0 && (
                   <span className="absolute -right-2.5 -top-1.5">
                     <CountBadge tone={tone} size="sm">{count}</CountBadge>
@@ -255,6 +269,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </ToastProvider>
     </ConfirmProvider>
   );
+}
+
+/**
+ * A nav icon that pulses from the tap until the next page arrives. On weak
+ * mobile data a page not yet prefetched took seconds to show anything, and
+ * even the route's loader (loading.tsx) has to download first: measured on a
+ * throttled production build, the old page sat untouched for two seconds
+ * (owner, Oct 2026). useLinkStatus answers on the tap itself. It is the icon,
+ * at its own size, so nothing moves.
+ */
+function NavIcon({ icon: Icon, className }: { icon: (p: { className?: string }) => React.ReactNode; className: string }) {
+  const { pending } = useLinkStatus();
+  return <Icon className={`${className} ${pending ? "animate-pulse text-indigo-600" : ""}`} />;
 }
 
 /**

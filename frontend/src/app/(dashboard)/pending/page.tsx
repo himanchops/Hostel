@@ -45,6 +45,7 @@ import {
 } from "@/components/StayForm";
 import { payMethodLabel } from "@/lib/payMethod";
 import { phoneKey } from "@/lib/phone";
+import { pendingChanged } from "@/lib/pending";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -399,6 +400,7 @@ function PendingQueue() {
       await tenantsApi.reject(token, id);
       setPending((prev) => prev.filter((t) => t.id !== id));
       if (drawerTenant?.id === id) setDrawerTenant(null);
+      pendingChanged();
       toast.success("Registration removed");
     } catch {
       toast.error("Failed to remove the registration");
@@ -409,16 +411,27 @@ function PendingQueue() {
     setPending((prev) => prev.filter((t) => t.id !== approved.id));
     setDrawerTenant(null);
     setOnBooks((prev) => [...prev, approved]);
+    pendingChanged();
     if (failed) toast.error(message);
     else toast.success(message);
   }
 
-  async function handleApprovePayment(id: number) {
+  // Approving asks first, as rejecting already did: once approved, the money
+  // counts on their ledger, and no screen takes an approval back.
+  async function handleApprovePayment(proof: PendingPayment) {
     if (!token) return;
+    const ok = await confirm({
+      title: `Approve ${formatCurrency(proof.amount)} from ${proof.tenant_name}?`,
+      message: "It counts as paid on their ledger straight away.",
+      confirmLabel: "Approve",
+    });
+    if (!ok) return;
+    const id = proof.id;
     setActioningPayId(id);
     try {
       await pendingPaymentsApi.approve(token, id);
       setPendingPayments((prev) => prev.filter((p) => p.id !== id));
+      pendingChanged();
       toast.success("Payment approved");
     } catch {
       toast.error("Failed to approve the payment");
@@ -431,6 +444,7 @@ function PendingQueue() {
   function handleRejected(id: number) {
     setPendingPayments((prev) => prev.filter((p) => p.id !== id));
     setRejectingProof(null);
+    pendingChanged();
     toast.success("Marked not accepted — the tenant will see it on their ledger");
   }
 
@@ -597,7 +611,7 @@ function PendingQueue() {
                       <Button
                         size="sm"
                         disabled={actioningPayId === p.id}
-                        onClick={() => handleApprovePayment(p.id)}
+                        onClick={() => handleApprovePayment(p)}
                       >
                         Approve
                       </Button>
