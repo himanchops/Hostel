@@ -830,6 +830,12 @@ export interface CollectionRow extends Due {
   start_date?: string;
   /** How their last rent arrived, to prefill the next. Absent if never paid. */
   last_payment_type?: "cash" | "online";
+  /**
+   * What is left of the agreed deposit, with the agreed figure beside it.
+   * Absent when it is paid, for a booking with no bed, and on moved-out rows.
+   */
+  deposit_owed_paise?: number;
+  deposit_amount?: number;
 }
 
 /** Everything the Payments screen shows, in one request. */

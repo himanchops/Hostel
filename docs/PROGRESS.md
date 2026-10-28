@@ -3776,6 +3776,47 @@ before this merges.
 - Screenshots of the sheet at 375×812 (English and Hindi), 768×1024 and
   1024×768 with touch: no horizontal overflow at any of them.
 
+**Production, 28 Oct 2026: live.** The owner ran migration 018 on Neon
+first; merged as `495d902` (#64). Vercel and Render both reported success
+and `/health` answers. No route reachable without signing in reads the new
+columns, so the schema rests on the owner's migration output, and the first
+real registration through the QR link will show it.
+
+## Deposits still owed on Payments (Oct 2026)
+Held back when Payments shipped, at the owner's call; built on 28 Oct 2026 as
+he agreed it that day. No migration.
+
+- **"Deposit still owed"**, its own section on Payments below Due this week:
+  everyone in a bed who has paid less of their deposit than they agreed.
+  Each row says "₹4,000 of ₹10,000 paid · moved in 12 Oct", or "₹10,000
+  agreed, none paid", with what is left beside it. Five rows, then "Show
+  all". No section at all when nobody owes one.
+- **Recorded in place** with the same form as rent: the amount left filled
+  in, Cash / UPI, Today / Yesterday / Another day, "Save ₹6,000 deposit". It
+  saves with `kind: deposit`, never rent. No WhatsApp nudge: a deposit is
+  asked for at the desk.
+- **Never rent.** It stays out of Overdue, the headline counts, the nav
+  badge and the dashboard's Still owed. A booking with no bed is left off
+  (they pay on arrival), and so is everyone who has moved out (a settlement
+  already dealt with their deposit).
+- **Backend:** `GET /api/payments/board` rows carry `deposit_owed_paise` and
+  `deposit_amount` (`depositOwed`, `collections.go`), from the agreed
+  `stays.deposit_amount` less approved deposit payments, the same sum the
+  tenant summary uses.
+
+### Verification
+- `TestPayeeRow_DepositOwed`: nothing paid, half paid, paid in full, paid
+  more than agreed, none agreed, and a booking, with exact figures, and the
+  rent balance unchanged by any of them.
+- `tests/e2e/owner/deposits-owed.test.ts` at 768×1024 with touch: four
+  tenants paid up on rent, two of them owing deposit; the board's figures;
+  only those two listed, with nothing overdue; recording the ₹6,000 left by
+  UPI saves a deposit payment, takes them off the list and leaves rent at
+  zero; no section when every deposit is paid.
+- `payments.test.ts`, `touch-targets.test.ts` and `waivers.test.ts` still
+  pass. On the demo at 375, 768 and 1024 wide: two rows (Priya, nothing
+  paid; Meera, ₹1,400 of ₹14,000), the form open, nothing scrolls sideways.
+
 ---
 
 ## Architecture Notes

@@ -330,3 +330,38 @@ func TestBuildPayees_SoonestDueFirst(t *testing.T) {
 	}
 
 }
+
+// Payments' "Deposit still owed" (Oct 2026): what is left of the agreed
+// deposit, on the board row, and nothing where nothing should be chased.
+func TestPayeeRow_DepositOwed(t *testing.T) {
+	cases := []struct {
+		name          string
+		agreed, paid  int64
+		booking       bool
+		owed, showsAs int64 // owed is deposit_owed_paise; showsAs is deposit_amount
+	}{
+		{"nothing paid", 1400000, 0, false, 1400000, 1400000},
+		{"half paid", 1400000, 650000, false, 750000, 1400000},
+		{"paid in full", 1400000, 1400000, false, 0, 0},
+		{"paid more than agreed", 1000000, 1200000, false, 0, 0},
+		{"no deposit agreed", 0, 0, false, 0, 0},
+		{"a booking pays on arrival", 1400000, 0, true, 0, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := stay(700000, "monthly", date(2026, time.July, 5), 700000)
+			s.DepositAmount, s.DepositPaid = c.agreed, c.paid
+			if c.booking {
+				s.BedName = sql.NullString{}
+			}
+			row := payeeRow(s, collectionsToday)
+			if row.DepositOwedPaise != c.owed || row.DepositAmount != c.showsAs {
+				t.Fatalf("owed %d of %d, want %d of %d", row.DepositOwedPaise, row.DepositAmount, c.owed, c.showsAs)
+			}
+			// A deposit is never rent: the rent balance is the same either way.
+			if row.BalancePaise != 700000 {
+				t.Fatalf("rent balance %d, want 700000", row.BalancePaise)
+			}
+		})
+	}
+}
