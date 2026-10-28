@@ -3745,8 +3745,10 @@ before this merges.
   page…"), checked after every other field so a missing ID still says so.
 - **Where it shows.** The owner's tenant page: "House rules · Agreed 28 Oct
   2026", which opens that version read-only. Nothing for a tenant added by
-  hand. The portal: a folded "House rules" section, the version they agreed
-  to ("You agreed on …"), or today's for anyone else, with the same switch.
+  hand. The portal: a folded "House rules" section under their stays, the
+  version they agreed to ("You agreed on …"), or today's for anyone else,
+  with the same switch. Only with a stay: someone approved without a bed
+  sees "You're approved" and nothing else, as before.
 - **"You're registered"** says the owner checks your details, then gives you
   a room and a bed. Signing in is offered for a payment screenshot or notice,
   if ever.
