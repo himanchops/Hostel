@@ -84,6 +84,11 @@ func main() {
 
 	e.Use(middleware.Logger())
 
+	// How long each request took, as a Sentry transaction, and a warning for
+	// any over three seconds (Oct 2026): a slow request is not an error, so
+	// before this nothing recorded one anywhere.
+	e.Use(appMiddleware.Timing(3 * time.Second))
+
 	// Panics do not pass through handlers.serverError — Recover turns them into
 	// a 500 before any handler code runs — so without this hook the one class of
 	// failure that most needs a stack trace would be the one class that never
@@ -112,7 +117,7 @@ func main() {
 	// Access-Control-Allow-Origin header, which the browser reports only as a
 	// silently dropped request — hence the permissive dev default.
 	corsConfig := middleware.CORSConfig{
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization},
+		AllowHeaders: appMiddleware.AllowHeaders,
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 	}
 	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {

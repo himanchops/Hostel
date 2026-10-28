@@ -12,6 +12,21 @@
  */
 import * as Sentry from "@sentry/browser";
 import { scrubPII, scrubDeep } from "@/lib/scrubPII";
+import { routeName } from "@/lib/routeName";
+
+/** Where the backend lives: the only place a trace is passed on to. */
+const apiOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080").origin;
+  } catch {
+    return undefined;
+  }
+})();
+
+/** A span's text with its query string gone and anything personal scrubbed. */
+function clean(text: string): string {
+  return scrubPII(text.replace(/\?[^\s]*/, ""));
+}
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -27,9 +42,21 @@ if (dsn) {
       // after Tuesday's deploy?" is unanswerable.
       release: process.env.NEXT_PUBLIC_COMMIT_SHA || undefined,
 
-      // Errors only. Tracing samples every navigation and is a much larger quota
-      // conversation than this change is making.
-      tracesSampleRate: 0,
+      // How long every page takes (Oct 2026): page loads, clicks between
+      // pages, and each request they make, joined to the backend's own timing
+      // of that request. Every page, not a sample: the free plan includes 5M
+      // spans and two people use this app.
+      tracesSampleRate: 1,
+      integrations: [
+        Sentry.browserTracingIntegration({
+          // "/tenants/:id", not one name per tenant, so a page's timings
+          // land together.
+          beforeStartSpan: (options) => ({ ...options, name: routeName(options.name) }),
+        }),
+      ],
+      // The trace goes to our backend and nowhere else. The backend allows
+      // the two headers this adds (middleware.AllowHeaders).
+      tracePropagationTargets: apiOrigin ? [apiOrigin] : [],
 
       // No IP address, no cookies, no user identity. The owner id the backend
       // attaches to its own events is enough to correlate.
@@ -42,6 +69,22 @@ if (dsn) {
         if (breadcrumb.message) breadcrumb.message = scrubPII(breadcrumb.message);
         if (breadcrumb.data) breadcrumb.data = scrubDeep(breadcrumb.data);
         return breadcrumb;
+      },
+
+      // A transaction lists every request a page made, by URL. Ids are fine;
+      // query strings and anything that looks personal are not.
+      beforeSendTransaction(event) {
+        if (event.transaction) event.transaction = routeName(event.transaction);
+        if (event.request?.url) event.request.url = clean(event.request.url);
+        delete event.request?.cookies;
+        delete event.request?.headers;
+        for (const span of event.spans ?? []) {
+          if (span.description) span.description = clean(span.description);
+          if (span.data) {
+            for (const key of ["url", "http.url", "http.query", "http.fragment"]) delete span.data[key];
+          }
+        }
+        return event;
       },
 
       beforeSend(event) {

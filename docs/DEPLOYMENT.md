@@ -321,15 +321,38 @@ rather than after.
 | Source | Where it lands | Retention | Anyone told? |
 |---|---|---|---|
 | Backend request lines | Render's log tab (stdout) | short, and rolls off | no |
-| Backend 500s | Render's log tab **and Sentry** | 90 days in Sentry | **yes — email on a new issue** |
-| Backend panics | Render's log tab **and Sentry**, with a stack trace | 90 days | **yes** |
-| Backend boot failures (no DB, no storage) | stdout **and Sentry**, flushed before exit | 90 days | **yes** |
-| Frontend crashes in the browser | **Sentry**, with breadcrumbs and the route | 90 days | **yes** |
+| Backend 500s | Render's log tab **and Sentry** | 30 days in Sentry | **yes — email on a new issue** |
+| Backend panics | Render's log tab **and Sentry**, with a stack trace | 30 days | **yes** |
+| Backend boot failures (no DB, no storage) | stdout **and Sentry**, flushed before exit | 30 days | **yes** |
+| Frontend crashes in the browser | **Sentry**, with breadcrumbs and the route | 30 days | **yes** |
+| How long every page and request took | **Sentry tracing**: page loads, clicks between pages, each API call, joined to the backend's own timing | 30 days | no — look when it feels slow |
+| A request over 3s on the server | Render's log tab (`SLOW …`) **and Sentry** (warning "Slow request: GET /api/…") | 30 days | **yes — one issue per route** |
+| A request over 5s in the browser, or one with no answer | **Sentry** (warning "Slow request" / "No answer") | 30 days | **yes — one issue per route** |
+| The backend down | **Sentry uptime check** on `/health` every 10 minutes | 30 days | **yes — after 3 failed checks** |
 | Postgres | Neon's own console | per Neon's plan | no |
 
 Render still captures stdout, and that is still the fastest way to watch a
 deploy in real time. What it never was is a record: no grouping, no history, and
 nothing raises a hand. Sentry is the record; Render is the tail. Keep both.
+
+### When it feels slow: where to look (Oct 2026)
+
+- **Sentry → Insights → Frontend** (or Performance, depending on Sentry's
+  menu that month): every page by name (`/tenants/:id`, `/payments`), with
+  typical and worst load times. Open a slow one to see its trace: the page,
+  each request it made, and inside each request the backend's own time. The
+  gap between the browser's time for a request and the backend's is the
+  network, or Render waking.
+- **Sentry → Issues**, filtered by level *warning*: "Slow request: …" and
+  "No answer: …", one issue per route, each event with its duration.
+- **Sentry → Uptime**: whether `/health` answered every 10 minutes.
+
+Tracing records every page and request rather than a sample. The free plan
+includes 5M spans a month and is nowhere near it with two people using the
+app; check Settings → Subscription → Usage if that ever changes. Tracing
+needs the backend's CORS rule to allow `sentry-trace` and `baggage`
+(`middleware.AllowHeaders`); without them every request fails in production
+while local development, which has no DSN, looks fine.
 
 ### Choosing a tracker (Sep 2026)
 
