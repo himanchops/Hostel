@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { normalizePhone, waLink, duePhrase, roomLabel, nudgeMessage, settledPhrase, askToPay } from "../../src/lib/wa";
+import { normalizePhone, waLink, duePhrase, roomLabel, nudgeMessage, settledPhrase, askToPay, depositNudgeMessage } from "../../src/lib/wa";
 
 // wa.me wants a bare country-code-prefixed number: no +, no spaces, no dashes.
 // Phone numbers in this app are typed by hand into a form, so every one of
@@ -153,5 +153,16 @@ test("nudgeMessage says where to pay when the owner has a UPI ID", () => {
   );
   expect(nudgeMessage({ ...row, moved_out: true, days_since_due: 45 }, "rahul@okaxis")).toBe(
     "Hi Asha, this is a reminder that ₹7,500 is still outstanding from when you moved out. This is over a month overdue. Please pay by the end of this week, or tell me when you can. You can pay by UPI to rahul@okaxis. Thank you!"
+  );
+});
+
+// Payments' "Deposit still owed" (Oct 2026): how much is left and where to pay,
+// and nothing about lateness, since a deposit has no due date to be late on.
+test("depositNudgeMessage says what is left of the deposit", () => {
+  expect(depositNudgeMessage({ tenant_name: "Priya Deshpande", deposit_owed_paise: 400000 })).toBe(
+    "Hi Priya, this is a reminder that ₹4,000 of your deposit is still to pay. Thank you!",
+  );
+  expect(depositNudgeMessage({ tenant_name: "Meera", deposit_owed_paise: 1260000 }, "chopraboys@upi")).toBe(
+    "Hi Meera, this is a reminder that ₹12,600 of your deposit is still to pay. You can pay by UPI to chopraboys@upi. Thank you!",
   );
 });

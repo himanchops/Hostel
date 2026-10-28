@@ -3793,8 +3793,13 @@ he agreed it that day. No migration.
   all". No section at all when nobody owes one.
 - **Recorded in place** with the same form as rent: the amount left filled
   in, Cash / UPI, Today / Yesterday / Another day, "Save ₹6,000 deposit". It
-  saves with `kind: deposit`, never rent. No WhatsApp nudge: a deposit is
-  asked for at the desk.
+  saves with `kind: deposit`, never rent.
+- **A WhatsApp nudge**, added after he tried it ("No WhatsApp nudge for
+  deposit owed huh?"): I had assumed deposits are asked for at the desk, but
+  they arrive by UPI at odd hours like rent. `depositNudgeMessage`
+  (`lib/wa.ts`): "Hi Priya, this is a reminder that ₹4,000 of your deposit
+  is still to pay." plus the UPI line when one is set, nothing about
+  lateness. The rent and deposit rows share `NudgeLink` and `NudgeEditor`.
 - **Never rent.** It stays out of Overdue, the headline counts, the nav
   badge and the dashboard's Still owed. A booking with no bed is left off
   (they pay on arrival), and so is everyone who has moved out (a settlement
@@ -3812,7 +3817,9 @@ he agreed it that day. No migration.
   tenants paid up on rent, two of them owing deposit; the board's figures;
   only those two listed, with nothing overdue; recording the ₹6,000 left by
   UPI saves a deposit payment, takes them off the list and leaves rent at
-  zero; no section when every deposit is paid.
+  zero; no section when every deposit is paid; the Nudge link opens
+  WhatsApp with the deposit's message. `wa-link.test.ts` pins the message
+  with and without a UPI ID.
 - `payments.test.ts`, `touch-targets.test.ts` and `waivers.test.ts` still
   pass. On the demo at 375, 768 and 1024 wide: two rows (Priya, nothing
   paid; Meera, ₹1,400 of ₹14,000), the form open, nothing scrolls sideways.

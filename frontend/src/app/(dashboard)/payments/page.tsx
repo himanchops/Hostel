@@ -17,7 +17,7 @@ import {
 } from "@/lib/api";
 import { dueDay, dueSoon, dueWeekday, localToday, localYesterday } from "@/lib/due";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
-import { nudgeMessage, roomLabel, settledPhrase, waLink } from "@/lib/wa";
+import { depositNudgeMessage, nudgeMessage, roomLabel, settledPhrase, waLink } from "@/lib/wa";
 import {
   Badge,
   Banner,
@@ -323,26 +323,7 @@ function PayeeRow({
           <p className={`mr-2 text-lg font-bold tabular-nums ${behind ? "text-red-600" : "text-stone-900"}`}>
             {formatCurrency(amountDue(row))}
           </p>
-          {owes && (link ? (
-            <a
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-              title={`Open WhatsApp to ${row.phone}`}
-            >
-              <WhatsAppIcon className="h-4 w-4" />
-              Nudge
-            </a>
-          ) : (
-            <Link
-              href={`/tenants/${row.tenant_id}`}
-              className={`${TOUCH_LINK} text-[13px] font-medium text-amber-700 hover:underline`}
-              title={`"${row.phone}" is not a number WhatsApp can open`}
-            >
-              Fix phone
-            </Link>
-          ))}
+          {owes && <NudgeLink row={row} link={link} />}
           <Button size="sm" variant={open ? "secondary" : "primary"} onClick={onToggle} aria-expanded={open}>
             {open ? "Cancel" : "Record"}
           </Button>
@@ -353,20 +334,13 @@ function PayeeRow({
         <div className="space-y-3 px-4 pb-4">
           <RecordForm row={row} token={token} onRecorded={onRecorded} />
           {link && (
-            editingMessage ? (
-              <div className="space-y-2">
-                <Field label="Message">
-                  <Textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} className="resize-none" />
-                </Field>
-                <Button variant="ghost" size="sm" onClick={() => { setMessage(nudgeMessage(row, owner?.upi_id)); setEditingMessage(false); }}>
-                  Reset message
-                </Button>
-              </div>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setEditingMessage(true)}>
-                Edit nudge message
-              </Button>
-            )
+            <NudgeEditor
+              editing={editingMessage}
+              message={message}
+              onEdit={() => setEditingMessage(true)}
+              onChange={setMessage}
+              onReset={() => { setMessage(nudgeMessage(row, owner?.upi_id)); setEditingMessage(false); }}
+            />
           )}
         </div>
       )}
@@ -374,9 +348,60 @@ function PayeeRow({
   );
 }
 
+/** "Nudge" to WhatsApp, or "Fix phone" when the number can't open a chat. */
+function NudgeLink({ row, link }: { row: CollectionRow; link: string | null }) {
+  return link ? (
+    <a
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={buttonClasses({ variant: "secondary", size: "sm" })}
+      title={`Open WhatsApp to ${row.phone}`}
+    >
+      <WhatsAppIcon className="h-4 w-4" />
+      Nudge
+    </a>
+  ) : (
+    <Link
+      href={`/tenants/${row.tenant_id}`}
+      className={`${TOUCH_LINK} text-[13px] font-medium text-amber-700 hover:underline`}
+      title={`"${row.phone}" is not a number WhatsApp can open`}
+    >
+      Fix phone
+    </Link>
+  );
+}
+
+/** "Edit nudge message", and the message itself once it is being edited. */
+function NudgeEditor({
+  editing, message, onEdit, onChange, onReset,
+}: {
+  editing: boolean;
+  message: string;
+  onEdit: () => void;
+  onChange: (m: string) => void;
+  onReset: () => void;
+}) {
+  return editing ? (
+    <div className="space-y-2">
+      <Field label="Message">
+        <Textarea rows={3} value={message} onChange={(e) => onChange(e.target.value)} className="resize-none" />
+      </Field>
+      <Button variant="ghost" size="sm" onClick={onReset}>
+        Reset message
+      </Button>
+    </div>
+  ) : (
+    <Button variant="ghost" size="sm" onClick={onEdit}>
+      Edit nudge message
+    </Button>
+  );
+}
+
 /**
- * Someone in a bed who has not paid all of the deposit they agreed. No nudge:
- * the deposit is asked for in person, at the desk, not chased on WhatsApp.
+ * Someone in a bed who has not paid all of the deposit they agreed. Nudged on
+ * WhatsApp like rent, with its own message: deposits arrive by UPI at odd
+ * hours too (owner, Oct 2026).
  */
 function DepositRow({
   row, token, open, onToggle, onRecorded,
@@ -387,9 +412,13 @@ function DepositRow({
   onToggle: () => void;
   onRecorded: (amount: number) => void;
 }) {
+  const { owner } = useAuth();
   const owed = row.deposit_owed_paise ?? 0;
   const agreed = row.deposit_amount ?? owed;
   const paid = agreed - owed;
+  const [message, setMessage] = useState(() => depositNudgeMessage(row, owner?.upi_id));
+  const [editingMessage, setEditingMessage] = useState(false);
+  const link = waLink(row.phone, message);
   return (
     <div className={open ? "bg-stone-50" : undefined}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
@@ -410,14 +439,24 @@ function DepositRow({
         </div>
         <div className="ml-auto flex items-center gap-2">
           <p className="mr-2 text-lg font-bold tabular-nums text-stone-900">{formatCurrency(owed)}</p>
+          <NudgeLink row={row} link={link} />
           <Button size="sm" variant={open ? "secondary" : "primary"} onClick={onToggle} aria-expanded={open}>
             {open ? "Cancel" : "Record"}
           </Button>
         </div>
       </div>
       {open && (
-        <div className="px-4 pb-4">
+        <div className="space-y-3 px-4 pb-4">
           <RecordForm row={row} token={token} kind="deposit" onRecorded={onRecorded} />
+          {link && (
+            <NudgeEditor
+              editing={editingMessage}
+              message={message}
+              onEdit={() => setEditingMessage(true)}
+              onChange={setMessage}
+              onReset={() => { setMessage(depositNudgeMessage(row, owner?.upi_id)); setEditingMessage(false); }}
+            />
+          )}
         </div>
       )}
     </div>

@@ -82,6 +82,12 @@ test("deposits still owed: listed apart from rent, and recorded as a deposit", a
   await expect(section.getByText("₹10,000 agreed, none paid")).toBeVisible();
   await expect(section.getByText("₹4,000 of ₹10,000 paid", { exact: false })).toBeVisible();
 
+  // A WhatsApp nudge on each row, with the deposit's own message.
+  const nudge = section.getByRole("link", { name: "Nudge" }).first();
+  const href = decodeURIComponent((await nudge.getAttribute("href"))!);
+  expect(href).toMatch(/^https:\/\/wa\.me\/91\d{10}\?text=/);
+  expect(href).toMatch(/of your deposit is still to pay\. Thank you!$/);
+
   // Rent is paid up for all four, so nothing is overdue or due: a deposit is
   // not rent, and must not put anyone on those lists.
   await expect(page.getByRole("region", { name: "Overdue" })).toHaveCount(0);
