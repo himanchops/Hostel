@@ -237,6 +237,9 @@ export interface Tenant {
   id_proof_back_url?: string;
   /** The owner's own notes. Never sent to the tenant portal (migration 012). */
   notes?: string;
+  /** The house rules they agreed to at registration (migration 018). */
+  rules_version?: string;
+  rules_agreed_at?: string;
   /**
    * Whether this person can sign in at /my at all. Computed server-side from
    * the password hash, which never leaves the backend. False for every tenant
@@ -394,6 +397,8 @@ export interface PublicRegisterData {
   workplace?: string;
   aadhaar_number?: string;
   photo_url?: string;
+  /** The house rules version they ticked through (lib/houseRules.ts). */
+  rules_version: string;
 }
 
 export const registrationApi = {

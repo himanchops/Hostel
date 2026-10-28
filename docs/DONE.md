@@ -15,6 +15,40 @@ When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
 `### <title> (#NN)`. Items with no write-up just leave the board.
 
+### House rules on the registration form (#64)
+Raised 24 Oct 2026 and called crucial; designed with the owner on 28 Oct.
+His calls, each one deliberate:
+- **The two money rules get a tick each, in red**: rent is not refundable,
+  and the deposit needs a month's notice. The rest share one tick.
+- **"A month before you leave" is the wording, and the logic stays.** The
+  move-out sheet keeps `noticeBy` (notice by the start of the last rent
+  month). He didn't want that logic explained to tenants. The words never
+  promise more than the sheet gives: anyone who tells a month ahead is
+  always on time, and the sheet is sometimes kinder.
+- **Dropped**: "what you owe comes out of your deposit", visitors, gate
+  times, damage charges. **Kept**: no smoking, alcohol or drugs anywhere in
+  the hostel; belongings are your own responsibility; lights and fans off and
+  the room tidy; no cooking, and only everyday electronics (no gas stoves,
+  heaters, irons or kettles).
+- **Hardcoded, not an Account setting.** There is one real owner and a rule
+  change is a one-line PR. Per-owner rules wait for a second owner.
+- **A version label per tenant, not a copy of the text.** Every version
+  stays in `lib/houseRules.ts`, word for word.
+- **No signature.** The ticks, the time and the submission carrying their
+  phone, ID and photo are the record.
+- **Hindi with a switch**, the same version either way. He checks the wording.
+- **The sheet opens on Submit, and the photos upload behind it**, his idea:
+  reading covers the slow part.
+- The "You're registered" steps now say what happens: the owner checks, gives
+  a room and a bed, you move in. Signing in is for a payment screenshot or
+  notice, if ever.
+- Found while trying it: the owner's sign-in page had no way to the tenant
+  one, so a tenant who typed the app's address met an email field. Each
+  sign-in page now links to the other.
+
+Parked on the board: sending the rules on WhatsApp to tenants added by hand
+(with the WhatsApp bot), and a printed copy for reception.
+
 ### Waiving what is owed (#63)
 Shipped 27 Oct 2026, the second and last part of "Corrections and
 write-offs", as the owner agreed it that day (he chose to cover leavers too).

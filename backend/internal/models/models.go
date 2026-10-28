@@ -88,7 +88,11 @@ type Tenant struct {
 	IDProofFrontURL       *string `db:"id_proof_front_url" json:"id_proof_front_url,omitempty"`
 	IDProofBackURL        *string `db:"id_proof_back_url" json:"id_proof_back_url,omitempty"`
 	Notes                 *string `db:"notes" json:"notes,omitempty"` // owner-only: portal queries leave it out (migration 012)
-	PasswordHash          string  `db:"password_hash" json:"-"`
+	// RulesVersion and RulesAgreedAt record the house rules someone agreed to
+	// at registration (migration 018). Nil for anyone the owner added by hand.
+	RulesVersion  *string    `db:"rules_version" json:"rules_version,omitempty"`
+	RulesAgreedAt *time.Time `db:"rules_agreed_at" json:"rules_agreed_at,omitempty"`
+	PasswordHash  string     `db:"password_hash" json:"-"`
 	// HasPortalLogin is computed, never stored: whether this tenant can sign
 	// in at /my at all. The hash itself must never leave the process, but
 	// "can they log in?" has to, because an owner-created tenant has no

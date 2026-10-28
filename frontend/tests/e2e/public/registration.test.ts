@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { createOwner, TEST_EMERGENCY } from "../helpers/api";
+import { agreeToRules, createOwner, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -95,6 +95,7 @@ test.describe("Public registration", () => {
     expect(overflow).toBe(0);
 
     await page.getByRole("button", { name: "Submit registration" }).click();
+    await agreeToRules(page);
 
     // The success screen: what happened, and what happens next.
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
@@ -136,6 +137,7 @@ test.describe("Public registration", () => {
     await page.getByLabel("Their phone").fill("9000000001");
     await attachIdFront(page);
     await page.getByRole("button", { name: "Submit registration" }).click();
+    await agreeToRules(page);
 
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
     await expect(page.getByText("Your details have gone to the owner for review.")).toBeVisible();
@@ -175,6 +177,7 @@ test.describe("Public registration", () => {
     await expect(page.getByText(/selfie\.png/)).toBeVisible();
 
     await page.getByRole("button", { name: "Submit registration" }).click();
+    await agreeToRules(page);
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
 
     const pending = await request.get(`${BASE}/api/tenants?pending=true`, {
@@ -232,6 +235,7 @@ test.describe("Public registration", () => {
       buffer: Buffer.from(big, "base64"),
     });
     await page.getByRole("button", { name: "Submit registration" }).click();
+    await agreeToRules(page);
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
 
     const pending = await request.get(`${BASE}/api/tenants?pending=true`, {
@@ -313,7 +317,7 @@ test.describe("Public registration", () => {
         phone: `65${RUN_ID.slice(-8)}`,
         password: "testpassword123",
         id_proof_front_url: "https://anywhere.example/pixel.jpg",
-        ...TEST_EMERGENCY,
+        ...TEST_EMERGENCY, ...TEST_RULES,
       },
     });
     expect(res.status()).toBe(400);
@@ -351,5 +355,30 @@ test.describe("Public registration", () => {
     await expect(page.getByText("Sign in with your phone number.", { exact: true })).toBeVisible();
     // Registration asks for no email, so nothing here should mention one.
     await expect(page.getByText(/email/i)).toHaveCount(0);
+  });
+});
+
+/**
+ * Two sign-in pages, one for each kind of person, and each points at the
+ * other. A tenant who typed the app's address once landed on the owner's
+ * email form with no way across (owner, 28 Oct 2026). On an iPad with touch,
+ * so the links must be a finger's size too.
+ */
+test.describe("Each sign-in page points to the other", () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: true });
+
+  test("owner sign-in to tenant sign-in and back", async ({ page }) => {
+    await page.goto("/login");
+    const toTenant = page.getByRole("link", { name: "Sign in with your phone number" });
+    expect((await toTenant.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await toTenant.tap();
+    await expect(page).toHaveURL(/\/my\/login$/);
+    await expect(page.getByLabel("Phone number")).toBeVisible();
+
+    const toOwner = page.getByRole("link", { name: "Owner sign-in" });
+    expect((await toOwner.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await toOwner.tap();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByLabel("Email")).toBeVisible();
   });
 });

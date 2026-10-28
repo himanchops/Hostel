@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
+import { createOwner, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = `notes-${Date.now()}`;
@@ -91,7 +91,7 @@ test.describe("Tenant notes", () => {
         name: "Self Registered",
         phone: phone(),
         password: "tenant123",
-        id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY,
+        id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES,
         notes: "I am a model tenant.",
       },
     });

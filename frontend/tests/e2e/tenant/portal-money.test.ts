@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -36,7 +36,7 @@ async function registered(
   const phone = `8${suffix.padStart(2, "0")}${RUN_ID.slice(-7)}`;
 
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: `Money ${suffix} ${RUN_ID}`, phone, password: PASSWORD, id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name: `Money ${suffix} ${RUN_ID}`, phone, password: PASSWORD, id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   if (!reg.ok()) throw new Error(`register failed: ${await reg.text()}`);
   const tenant = await reg.json();
@@ -285,7 +285,7 @@ test.describe("Phone numbers", () => {
 
     const reg = (data: Record<string, string>) =>
       request.post(`${BASE}/public/register/${owner.id}`, {
-        data: { name: "Bad Phone", phone: "9845012345", password: PASSWORD, id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...data },
+        data: { name: "Bad Phone", phone: "9845012345", password: PASSWORD, id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES, ...data },
       });
     let res = await reg({ phone: "12345" });
     expect(res.status()).toBe(400);

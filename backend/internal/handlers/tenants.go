@@ -46,6 +46,7 @@ func (h *TenantHandler) respondTenant(c echo.Context, status int, t *models.Tena
 const tenantCols = `id, owner_id, name, phone, email, id_proof_url, photo_url,
 	address, emergency_contact_name, emergency_contact_phone,
 	workplace, aadhaar_number, id_proof_front_url, id_proof_back_url, notes,
+	rules_version, rules_agreed_at,
 	(password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
 	is_approved, created_at, updated_at`
 
@@ -204,6 +205,9 @@ type publicRegisterRequest struct {
 	Workplace             string `json:"workplace"`
 	AadhaarNumber         string `json:"aadhaar_number"`
 	PhotoURL              string `json:"photo_url"`
+	// RulesVersion is the version of the house rules the person ticked
+	// through before submitting (rules.go).
+	RulesVersion string `json:"rules_version"`
 }
 
 // PublicOwner returns just enough about an owner to make a registration link
@@ -364,6 +368,14 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, errorResponse("One of the photos didn't upload properly. Please add it again."))
 		}
 	}
+	// Nobody registers without agreeing to the house rules (Oct 2026). Checked
+	// after every field, because the rules are the last step of the form: a
+	// missing ID should be reported as that, not as a rules problem. The form
+	// will not submit until every rule is ticked, so a mismatch here is a page
+	// left open while the rules changed, or a deploy in between.
+	if !rulesAgreed(req.RulesVersion) {
+		return c.JSON(http.StatusConflict, errorResponse(errRulesChanged))
+	}
 	idProofURL := optionalString(req.IDProofURL)
 	idProofFrontURL := optionalString(req.IDProofFrontURL)
 	idProofBackURL := optionalString(req.IDProofBackURL)
@@ -391,14 +403,14 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		`INSERT INTO tenants (owner_id, name, phone, email, password_hash,
 			id_proof_url, id_proof_front_url, id_proof_back_url, photo_url,
 			address, emergency_contact_name, emergency_contact_phone,
-			workplace, aadhaar_number,
+			workplace, aadhaar_number, rules_version, rules_agreed_at,
 			is_approved, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false, $15, $15)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, false, $16, $16)
 		 RETURNING `+tenantCols,
 		ownerID, req.Name, req.Phone, req.Email, hash,
 		idProofURL, idProofFrontURL, idProofBackURL, photoURL,
 		address, emergencyName, emergencyPhone, workplace, aadhaar,
-		time.Now(),
+		req.RulesVersion, time.Now(),
 	).StructScan(&tenant)
 	if err != nil {
 		return serverError(c, err, "failed to register")

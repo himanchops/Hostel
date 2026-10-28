@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTenantAuth } from "@/contexts/tenantAuth";
-import { Button, Card, Field, FormError, Input, ShowPassword } from "@/components/ui";
+import { Button, Card, Field, FormError, Input, ShowPassword, TOUCH_LINK } from "@/components/ui";
 import { PHONE_ERROR, tenDigits } from "@/lib/phone";
 import { publicMessage } from "@/lib/publicError";
 
@@ -85,6 +86,14 @@ export default function TenantLoginPage() {
             </Button>
           </form>
         </Card>
+        {/* The other way round from the owner's sign-in page, which points
+            tenants here. */}
+        <p className="mt-6 text-center text-sm text-stone-500">
+          Own or run the hostel?{" "}
+          <Link href="/login" className={`${TOUCH_LINK} font-medium text-indigo-600 hover:text-indigo-500`}>
+            Owner sign-in
+          </Link>
+        </p>
       </div>
     </div>
   );
