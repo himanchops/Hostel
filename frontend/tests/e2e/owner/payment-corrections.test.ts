@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import {
-  createOwner, createSiteRoomBed, createTenantViaApi, loginAs, approveIntoStay, TEST_ID_KEY, TEST_EMERGENCY,
+  createOwner, createSiteRoomBed, createTenantViaApi, loginAs, approveIntoStay, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES,
 } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
@@ -140,7 +140,7 @@ test.describe("Correcting a payment", () => {
     const { bedId } = await createSiteRoomBed(request, token, `corr-tenant-${RUN_ID}`);
     const phone = `92${RUN_ID.slice(-8)}`;
     const tenant = await (await request.post(`${BASE}/public/register/${owner.id}`, {
-      data: { name: `Asha ${RUN_ID}`, phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+      data: { name: `Asha ${RUN_ID}`, phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
     })).json();
     await approveIntoStay(request, token, tenant.id, { bed_id: bedId, rent_amount: 600000, deposit_amount: 0, start_date: monthStart(0) });
     const tenantToken = (await (await request.post(`${BASE}/tenant-auth/login`, {

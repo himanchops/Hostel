@@ -42,6 +42,7 @@ import {
   paidTodayError, paidTodaySuffix, recordPaidToday,
 } from "@/components/StayForm";
 import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
+import { RulesAgreed } from "@/components/HouseRules";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { ChangeRentDialog } from "@/components/ChangeRentDialog";
 import { MoveBedDialog } from "@/components/MoveBedDialog";
@@ -677,6 +678,7 @@ export default function TenantDetailPage() {
                 </div>
               </div>
             )}
+            <RulesAgreed version={tenant.rules_version} agreedAt={tenant.rules_agreed_at} />
           </div>
 
           {tenant.notes && (

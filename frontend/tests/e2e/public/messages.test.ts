@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY,
+  createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES,
 } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
@@ -16,7 +16,7 @@ test("a tenant waiting for approval is told so, not that their password is wrong
   const { owner } = await createOwner(request, `msg-a-${RUN_ID}`);
   const phone = `8${RUN_ID.slice(-9)}`;
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: "Waiting Tenant", phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name: "Waiting Tenant", phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect(reg.ok(), await reg.text()).toBeTruthy();
 
@@ -39,13 +39,13 @@ test("public replies are sentences", async ({ request }) => {
 
   const { owner } = await createOwner(request, `msg-b-${RUN_ID}`);
   const short = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: "Short Password", phone: `7${RUN_ID.slice(-9)}`, password: "abc", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name: "Short Password", phone: `7${RUN_ID.slice(-9)}`, password: "abc", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect((await short.json()).error).toBe("Use at least 6 characters for the password.");
 
   // 25 Hindi letters is 75 bytes: refused, and the message says why.
   const hindi = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: "Long Password", phone: `7${RUN_ID.slice(-9)}`, password: "क".repeat(25), id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name: "Long Password", phone: `7${RUN_ID.slice(-9)}`, password: "क".repeat(25), id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect((await hindi.json()).error).toContain("or about 24 letters in Hindi");
 });

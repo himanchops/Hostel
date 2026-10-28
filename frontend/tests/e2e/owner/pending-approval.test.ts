@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -17,7 +17,7 @@ test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: tru
 
 async function register(request: Parameters<typeof createOwner>[0], ownerId: number, name: string, phone: string) {
   const res = await request.post(`${BASE}/public/register/${ownerId}`, {
-    data: { name, phone, password: "applicant1", workplace: "Demo College", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name, phone, password: "applicant1", workplace: "Demo College", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect(res.ok(), await res.text()).toBeTruthy();
   return (await res.json()) as { id: number };

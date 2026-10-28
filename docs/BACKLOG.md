@@ -22,30 +22,6 @@ Most items have no write-up; the line on the board is the whole record.
 
 ## Next up
 
-### House rules on the registration form
-Raised 24 Oct 2026, and the owner called it crucial. Someone registering from
-the QR link should see the hostel's basic rules before they submit, for example:
-- rent is not refundable
-- the deposit comes back only with a month's notice
-- no smoking, no drinking
-
-and other basic rules and regulations. Design questions before building:
-- Where the rules are written. The owner should be able to edit them, so
-  probably a setting, not text in the code.
-- Whether the tenant ticks "I agree", and whether that is recorded.
-- Whether the same rules show in the portal too.
-
-The deposit rule must match what the move-out sheet does
-(`moveOutSettlement`, `noticeBy`): notice by the start of the last rent
-month. Today the app says nothing to the tenant about it.
-
-Revisit the "You're registered" screen in the same pass (owner, 27 Oct
-2026). Its steps say the owner checks the details, you'll hear from them,
-"then sign in with your phone number and password". What really happens is
-the owner checks the details, gives them a room and bed, and they move in;
-most never sign in. Say that, and mention the portal as something they can
-use if they need it: sending a payment proof, giving notice.
-
 ---
 
 ## Money

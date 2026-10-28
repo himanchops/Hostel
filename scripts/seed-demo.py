@@ -415,6 +415,9 @@ def main():
     # the file exists, so the demo uses a well-formed key and uploads nothing.
     # The ID link on these two tenants opens nothing, which is fine for a demo.
     demo_id = "public/de000000000000000000000000000000.jpg"
+    # Registering means agreeing to the house rules; the server takes only the
+    # current version (backend/internal/handlers/rules.go).
+    rules = "2026-10-28"
 
     # PENDING REGISTRATION: waiting in the approval queue.
     call("POST", f"/public/register/{owner_id}", {
@@ -424,7 +427,7 @@ def main():
         "emergency_contact_name": "Anita Joshi",
         "emergency_contact_phone": "9847110017",
         "aadhaar_number": "987654321098",
-        "id_proof_front_url": demo_id,
+        "id_proof_front_url": demo_id, "rules_version": rules,
     })
 
     # PENDING PAYMENT: registered, approved into a bed, then submits a proof.
@@ -436,7 +439,7 @@ def main():
         "password": TENANT_PASSWORD, "workplace": "Cred",
         "emergency_contact_name": "Suresh Pillai",
         "emergency_contact_phone": "9847110018",
-        "id_proof_front_url": demo_id,
+        "id_proof_front_url": demo_id, "rules_version": rules,
     })
     pending = api("GET", "/api/tenants?pending=true")
     meera = next(x for x in pending if x["name"] == "Meera Pillai")

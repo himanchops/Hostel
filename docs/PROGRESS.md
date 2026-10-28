@@ -3720,6 +3720,53 @@ Vercel and Render both reported success and `/health` answers. As with
 #62, no public route reads the new table, so the schema rests on the
 owner's migration output and on a tenant page loading on the live app.
 
+## House rules on registration (Oct 2026)
+The owner wants everyone who registers from the QR link to read the house
+rules and tick the two that decide money at move-out (decisions in
+`docs/DONE.md` → "House rules on the registration form"). **Migration 018**
+(`tenants.rules_version`, `tenants.rules_agreed_at`), which production needs
+before this merges.
+
+- **The rules sheet.** "Submit registration" checks the form as before, then
+  opens `HouseRulesSheet` (`components/HouseRules.tsx`): two red cards, each
+  with its own tick, the house rules with one more, and "Agree and register".
+  Agreeing with a box left says "Tick each one to go on." An English / हिंदी
+  switch changes every word on the sheet; ticks survive the switch and going
+  back to the form.
+- **Uploads start as the sheet opens.** The photo and both sides of the ID
+  upload together (they used to go one after another, after Submit), once
+  per chosen file however often the sheet opens. A failed upload is retried
+  on Agree, and the sheet says so quietly.
+- **The text is versioned, not stored.** `lib/houseRules.ts` keeps every
+  version ever agreed to; `HOUSE_RULES_VERSION` names today's, and
+  `houseRulesVersion` in `handlers/rules.go` must match it. The tenant row
+  keeps only the label and the time. `POST /public/register` refuses any
+  other label with 409 ("The house rules have changed since you opened this
+  page…"), checked after every other field so a missing ID still says so.
+- **Where it shows.** The owner's tenant page: "House rules · Agreed 28 Oct
+  2026", which opens that version read-only. Nothing for a tenant added by
+  hand. The portal: a folded "House rules" section, the version they agreed
+  to ("You agreed on …"), or today's for anyone else, with the same switch.
+- **"You're registered"** says the owner checks your details, then gives you
+  a room and a bed. Signing in is offered for a payment screenshot or notice,
+  if ever.
+- `seed-demo.py` and every API registration in the e2e suite send the
+  version (`TEST_RULES`, `helpers/api.ts`).
+
+### Verification
+- `tests/e2e/public/house-rules.test.ts` at 375px with touch: the upload
+  lands while the sheet is open; every rule is shown and the money title
+  reads red; one tick per money rule plus one; agreeing early registers
+  nothing; Hindi keeps the ticks; back and in again keeps them; agreeing in
+  Hindi registers with the version and a fresh time. The API refuses no
+  version and an old one with 409. The owner's page links the agreed version
+  and shows nothing for a hand-added tenant. The portal shows "You agreed
+  on", and Hindi.
+- The four registration tests that submit through the form now tick
+  through the sheet (`agreeToRules`).
+- Screenshots of the sheet at 375×812 (English and Hindi), 768×1024 and
+  1024×768 with touch: no horizontal overflow at any of them.
+
 ---
 
 ## Architecture Notes

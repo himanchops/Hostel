@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
+import { createOwner, createSiteRoomBed, createTenantViaApi, loginAs, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = `paid-${Date.now()}`;
@@ -161,7 +161,7 @@ test("Paid today, when approving a registration into a bed", async ({ page, requ
   await createSiteRoomBed(request, token, `${RUN_ID}-f`);
   const name = `Approved Arrival ${RUN_ID}`;
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name, phone: "9812400006", password: "applicant1", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name, phone: "9812400006", password: "applicant1", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect(reg.ok(), await reg.text()).toBeTruthy();
   const applicant = await reg.json();

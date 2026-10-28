@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
-  createOwner, createSiteRoomBed, loginAs, approveIntoStay, TEST_ID_KEY, TEST_EMERGENCY,
+  createOwner, createSiteRoomBed, loginAs, approveIntoStay, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES,
 } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
@@ -41,7 +41,7 @@ test("the Pending badge counts proofs, keeps up, and approving asks first", asyn
   // One tenant on the books who sends a payment proof from the portal...
   const phone = `9${RUN_ID.slice(-9)}`;
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: "Proof Sender", phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name: "Proof Sender", phone, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect(reg.ok(), await reg.text()).toBeTruthy();
   const tenant = await reg.json();
@@ -57,7 +57,7 @@ test("the Pending badge counts proofs, keeps up, and approving asks first", asyn
 
   // ...and one registration still waiting.
   const waiting = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: "Still Waiting", phone: `8${RUN_ID.slice(-9)}`, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name: "Still Waiting", phone: `8${RUN_ID.slice(-9)}`, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect(waiting.ok()).toBeTruthy();
 

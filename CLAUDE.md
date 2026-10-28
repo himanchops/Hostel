@@ -301,6 +301,13 @@ Key conventions to carry forward:
   A third script, `scripts/import-notebook.py`, *does* write tenants, stays
   and payments to the real account. It only creates, checks everything before
   its first write, and reads every tenant back. Its data never enters git.
+- **House rules are versioned text, never edited in place** (migration 018).
+  `lib/houseRules.ts` keeps every version anyone agreed to; a tenant row
+  keeps only `rules_version` and `rules_agreed_at`. To change a rule, add a
+  version and move `HOUSE_RULES_VERSION`, `houseRulesVersion`
+  (`handlers/rules.go`) and `seed-demo.py` together; registration refuses
+  any other label. The two money rules must keep saying what the move-out
+  sheet does (`moveOutSettlement`, `noticeBy`).
 - **Tenant notes are owner-only.** The portal's tenant queries name their
   columns and leave `notes` out. Never switch them to `tenantCols`, which
   includes it. `tests/e2e/owner/tenant-notes.test.ts` fails if a note reaches

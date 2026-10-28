@@ -70,6 +70,7 @@ func (h *TenantAuthHandler) Login(c echo.Context) error {
 	var candidates []models.Tenant
 	if err := h.db.Select(&candidates,
 		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url, password_hash,
+		        rules_version, rules_agreed_at,
 		        (password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
 		        is_approved, created_at, updated_at
 		 FROM tenants WHERE `+phoneDigitsSQL+` = $1 AND password_hash <> ''
@@ -113,6 +114,7 @@ func (h *TenantAuthHandler) Me(c echo.Context) error {
 	var tenant models.Tenant
 	err := h.db.QueryRowx(
 		`SELECT id, owner_id, name, phone, email, id_proof_url, photo_url,
+		        rules_version, rules_agreed_at,
 		        (password_hash IS NOT NULL AND password_hash <> '') AS has_portal_login,
 		        is_approved, created_at, updated_at
 		 FROM tenants WHERE id = $1`,

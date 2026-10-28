@@ -1,4 +1,5 @@
 import type { APIRequestContext, Page } from "@playwright/test";
+import { HOUSE_RULES_VERSION } from "../../../src/lib/houseRules";
 
 const BASE = "http://localhost:8080";
 
@@ -15,6 +16,9 @@ export const TEST_ID_KEY = "public/e2e00000000000000000000000000000.jpg";
 
 /** Registration also requires an emergency contact; API-level setup sends this one. */
 export const TEST_EMERGENCY = { emergency_contact_name: "Test Parent", emergency_contact_phone: "9000000001" };
+
+/** Registration also records the house rules they agreed to (migration 018). */
+export const TEST_RULES = { rules_version: HOUSE_RULES_VERSION };
 
 export async function createOwner(
   request: APIRequestContext,
@@ -135,4 +139,15 @@ export async function loginAs(page: Page, token: string) {
 export async function confirmSettle(page: Page) {
   const ask = page.getByRole("dialog").filter({ hasText: "undo the settlement from their page" });
   await ask.getByRole("button", { name: /^(Move out|Settle|Cancel booking)$/ }).click();
+}
+
+/**
+ * Submitting the registration form opens the house rules: tick every one and
+ * agree. For tests about something else that only need to get past them;
+ * tests/e2e/public/house-rules.test.ts tests the sheet itself.
+ */
+export async function agreeToRules(page: Page) {
+  const sheet = page.getByRole("dialog", { name: "Before you register" });
+  for (const box of await sheet.getByRole("checkbox").all()) await box.check();
+  await sheet.getByRole("button", { name: "Agree and register" }).click();
 }

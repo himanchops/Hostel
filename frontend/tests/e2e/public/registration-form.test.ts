@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { createOwner, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
+import { createOwner, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -55,7 +55,7 @@ test("Aadhaar takes digits; each error sits at its field, with the focus", async
 
   // The server holds the same line for anyone who skips the page.
   const res = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name: "Api Tester", phone: `8${RUN_ID.slice(-9)}`, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, aadhaar_number: "12ab", ...TEST_EMERGENCY },
+    data: { name: "Api Tester", phone: `8${RUN_ID.slice(-9)}`, password: "tenant1234", id_proof_front_url: TEST_ID_KEY, aadhaar_number: "12ab", ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect(res.status()).toBe(400);
   expect((await res.json()).error).toBe("An Aadhaar number has 12 digits.");

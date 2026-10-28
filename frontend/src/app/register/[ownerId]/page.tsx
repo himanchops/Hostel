@@ -9,6 +9,8 @@ import {
 } from "@/components/ui";
 import { checkPhones, tenDigits } from "@/lib/phone";
 import { publicMessage } from "@/lib/publicError";
+import { HOUSE_RULES_VERSION } from "@/lib/houseRules";
+import { HouseRulesSheet } from "@/components/HouseRules";
 
 /**
  * An Aadhaar number is twelve digits, written with or without spaces. The
@@ -150,6 +152,13 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [ownerName, setOwnerName] = useState<string | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [uploadState, setUploadState] = useState<"uploading" | "done" | "failed">("uploading");
+  // One upload per file chosen, however often the rules sheet opens: going
+  // back to fix a phone number must not send three photos again. A failed
+  // upload is forgotten, so the next attempt tries it afresh.
+  const uploads = useRef(new Map<File, Promise<string>>());
+  const uploadRun = useRef(0);
 
   // Declared above the isNaN guard below: hooks cannot sit after a conditional
   // return. A failure here costs the header its property name and nothing
@@ -203,14 +212,51 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
       return;
     }
     setFieldError({});
+    // The rules come next, and the photos start uploading behind them: the
+    // uploads were the slow part of submitting, and reading covers them.
+    startUploads();
+    setRulesOpen(true);
+  }
+
+  function uploadOnce(file: File): Promise<string> {
+    let p = uploads.current.get(file);
+    if (!p) {
+      p = uploadApi.publicUpload(file);
+      uploads.current.set(file, p);
+      p.catch(() => uploads.current.delete(file));
+    }
+    return p;
+  }
+
+  /** Photo, ID front, ID back — each upload started once and shared. */
+  function startUploads() {
+    const run = ++uploadRun.current;
+    const all = Promise.all(
+      [photo, idProofFront, idProofBack].map((f) => (f ? uploadOnce(f) : Promise.resolve(undefined))),
+    );
+    setUploadState("uploading");
+    // Only the latest run reports, so an older one finishing late cannot
+    // overwrite a newer state. The catch is also what keeps a failure here
+    // from being an unhandled rejection; agreeing awaits it and shows it.
+    all.then(
+      () => { if (run === uploadRun.current) setUploadState("done"); },
+      () => { if (run === uploadRun.current) setUploadState("failed"); },
+    );
+    return all;
+  }
+
+  async function register() {
+    // Checked already on the way in; the form sits under the sheet and
+    // cannot have changed since. This only narrows the type.
+    const phones = checkPhones(phone, emergencyPhone);
+    if ("error" in phones) {
+      setError(phones.error);
+      return;
+    }
+    setError("");
     setLoading(true);
     try {
-      let photoUrl: string | undefined;
-      let idProofFrontUrl: string | undefined;
-      let idProofBackUrl: string | undefined;
-      if (photo) photoUrl = await uploadApi.publicUpload(photo);
-      if (idProofFront) idProofFrontUrl = await uploadApi.publicUpload(idProofFront);
-      if (idProofBack) idProofBackUrl = await uploadApi.publicUpload(idProofBack);
+      const [photoUrl, idProofFrontUrl, idProofBackUrl] = await startUploads();
 
       await registrationApi.register(ownerIdNum, {
         name,
@@ -225,7 +271,9 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
         emergency_contact_phone: phones.emergency,
         workplace: workplace || undefined,
         aadhaar_number: aadhaarNumber || undefined,
+        rules_version: HOUSE_RULES_VERSION,
       });
+      setRulesOpen(false);
       setSubmitted(true);
     } catch (err) {
       setError(publicMessage(err));
@@ -265,12 +313,13 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
           </p>
 
           {/* What happens next, because "you'll be contacted" leaves someone
-              who just typed their Aadhaar number with nothing to expect. */}
+              who just typed their Aadhaar number with nothing to expect. It
+              once ended "then sign in with your phone number and password",
+              which most tenants never need to do (owner, Oct 2026). */}
           <ol className="mt-6 space-y-3 text-left">
             {[
               "The owner checks your details.",
-              "You'll hear from them on the number you gave.",
-              "Then sign in with your phone number and password.",
+              "They give you a room and a bed, and you move in.",
             ].map((step, i) => (
               <li key={i} className="flex gap-3 text-sm text-stone-600">
                 <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-stone-100 text-xs font-semibold tabular-nums text-stone-500">
@@ -281,9 +330,13 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
             ))}
           </ol>
 
+          <p className="mt-6 text-left text-sm text-stone-500">
+            That&apos;s all you need to do. If you ever want to send a payment
+            screenshot or give notice, sign in with your phone number and password.
+          </p>
           <Link
             href="/my/login"
-            className="mt-6 inline-block text-sm font-semibold text-indigo-600 hover:underline"
+            className="mt-3 inline-block text-sm font-semibold text-indigo-600 hover:underline"
           >
             Go to the tenant portal →
           </Link>
@@ -372,10 +425,19 @@ export default function RegisterPage({ params }: { params: Promise<{ ownerId: st
 
         {error && <FormError>{error}</FormError>}
 
-        <Button type="submit" loading={loading} className="w-full">
-          {loading ? "Submitting…" : "Submit registration"}
+        <Button type="submit" className="w-full">
+          Submit registration
         </Button>
       </form>
+      <HouseRulesSheet
+        open={rulesOpen}
+        version={HOUSE_RULES_VERSION}
+        onClose={() => setRulesOpen(false)}
+        onAgree={register}
+        busy={loading}
+        uploads={uploadState}
+        error={error}
+      />
     </PublicFrame>
   );
 }

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createOwner, loginAs, TEST_ID_KEY, TEST_EMERGENCY } from "../helpers/api";
+import { createOwner, loginAs, TEST_ID_KEY, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -17,7 +17,7 @@ test("approving with agreed terms records no money unless it was paid", async ({
   const { token, owner } = await createOwner(request, `terms-${RUN_ID}`);
   const name = `Terms Applicant ${RUN_ID}`;
   const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
-    data: { name, phone: `94${RUN_ID.slice(-8)}`, password: "applicant1", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY },
+    data: { name, phone: `94${RUN_ID.slice(-8)}`, password: "applicant1", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
   });
   expect(reg.ok()).toBeTruthy();
   const applicant = await reg.json();

@@ -11,6 +11,7 @@ import {
   Payment,
   ApiError,
   formatCurrency,
+  formatDay,
   today,
 } from "@/lib/api";
 import { dueDay } from "@/lib/due";
@@ -18,13 +19,15 @@ import { perCycle } from "@/lib/rent";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
+import { HouseRulesView } from "@/components/HouseRules";
+import { HOUSE_RULES, HOUSE_RULES_VERSION } from "@/lib/houseRules";
 import {
-  Badge, Button, Card, EmptyState, Field, FormError, Input, SegmentedControl, useConfirm, useToast, FileInput,
+  Badge, Button, Card, Collapsible, EmptyState, Field, FormError, Input, SegmentedControl, useConfirm, useToast, FileInput,
   PageLoader,
 } from "@/components/ui";
 
 export default function TenantPortalPage() {
-  const { token, isAuthenticated, isLoading } = useTenantAuth();
+  const { token, tenant, isAuthenticated, isLoading } = useTenantAuth();
   const router = useRouter();
   const [stays, setStays] = useState<TenantStay[]>([]);
   const [summary, setSummary] = useState<TenantSummary | null>(null);
@@ -98,6 +101,21 @@ export default function TenantPortalPage() {
           onUpdate={onUpdate}
         />
       ))}
+      {/* The rules they ticked when they registered, word for word; anyone
+          the owner added by hand reads today's. Folded, because it is
+          reference, not news. */}
+      {(() => {
+        const agreed = tenant?.rules_version && HOUSE_RULES[tenant.rules_version] ? tenant.rules_version : null;
+        return (
+          <Collapsible
+            title="House rules"
+            summary={agreed && tenant?.rules_agreed_at ? `You agreed on ${formatDay(tenant.rules_agreed_at)}` : undefined}
+            defaultOpen={false}
+          >
+            <HouseRulesView version={agreed ?? HOUSE_RULES_VERSION} />
+          </Collapsible>
+        );
+      })()}
     </div>
   );
 }
