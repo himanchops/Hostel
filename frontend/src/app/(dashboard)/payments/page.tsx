@@ -8,6 +8,7 @@ import {
   staysApi,
   CollectionRow,
   PaymentsBoard,
+  PaymentKind,
   RecentPayment,
   ApiError,
   formatCurrency,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/api";
 import { dueDay, dueSoon, dueWeekday, localToday, localYesterday } from "@/lib/due";
 import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
-import { nudgeMessage, roomLabel, settledPhrase, waLink } from "@/lib/wa";
+import { depositNudgeMessage, nudgeMessage, roomLabel, settledPhrase, waLink } from "@/lib/wa";
 import {
   Badge,
   Banner,
@@ -63,7 +64,9 @@ export default function PaymentsPage() {
   const toast = useToast();
   const [board, setBoard] = useState<PaymentsBoard | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [open, setOpen] = useState<number | null>(null);
+  // A stay can be on two lists at once (rent overdue, deposit unpaid), so a
+  // row is opened by list and stay: "rent-12", "deposit-12".
+  const [open, setOpen] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   const load = useCallback(() => {
@@ -82,23 +85,35 @@ export default function PaymentsPage() {
   const overdue = board?.stays.filter((r) => r.due_state === "overdue") ?? [];
   const thisWeek = board?.stays.filter((r) => dueSoon(r, today)) ?? [];
   const matches = useMemo(() => search(board?.stays ?? [], query), [board, query]);
+  const depositsOwed = board?.stays.filter((r) => (r.deposit_owed_paise ?? 0) > 0) ?? [];
 
-  async function handleRecorded(row: CollectionRow, amount: number) {
+  async function handleRecorded(row: CollectionRow, amount: number, kind: PaymentKind = "rent") {
     setOpen(null);
     setQuery("");
     await load();
-    toast.success(`Recorded ${formatCurrency(amount)} from ${row.tenant_name.split(" ")[0]}`);
+    const what = kind === "deposit" ? `${formatCurrency(amount)} deposit` : formatCurrency(amount);
+    toast.success(`Recorded ${what} from ${row.tenant_name.split(" ")[0]}`);
   }
 
-  const toggle = (id: number) => setOpen(open === id ? null : id);
+  const toggle = (id: string) => setOpen(open === id ? null : id);
   const row = (r: CollectionRow) => (
     <PayeeRow
       key={r.stay_id}
       row={r}
       token={token!}
-      open={open === r.stay_id}
-      onToggle={() => toggle(r.stay_id)}
+      open={open === `rent-${r.stay_id}`}
+      onToggle={() => toggle(`rent-${r.stay_id}`)}
       onRecorded={(amount) => handleRecorded(r, amount)}
+    />
+  );
+  const depositRow = (r: CollectionRow) => (
+    <DepositRow
+      key={r.stay_id}
+      row={r}
+      token={token!}
+      open={open === `deposit-${r.stay_id}`}
+      onToggle={() => toggle(`deposit-${r.stay_id}`)}
+      onRecorded={(amount) => handleRecorded(r, amount, "deposit")}
     />
   );
 
@@ -156,6 +171,13 @@ export default function PaymentsPage() {
                     <Section title="Due this week" tone="warning" limit={ROWS_SHOWN}>{thisWeek.map(row)}</Section>
                   )}
                 </>
+              )}
+
+              {/* A deposit is not rent, so it is never in Overdue, the
+                  counts above, or the nav badge: its own short list, shown
+                  only when someone owes one (Oct 2026). */}
+              {depositsOwed.length > 0 && (
+                <Section title="Deposit still owed" limit={ROWS_SHOWN}>{depositsOwed.map(depositRow)}</Section>
               )}
 
               <Recorded payments={board.recorded} />
@@ -301,26 +323,7 @@ function PayeeRow({
           <p className={`mr-2 text-lg font-bold tabular-nums ${behind ? "text-red-600" : "text-stone-900"}`}>
             {formatCurrency(amountDue(row))}
           </p>
-          {owes && (link ? (
-            <a
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-              title={`Open WhatsApp to ${row.phone}`}
-            >
-              <WhatsAppIcon className="h-4 w-4" />
-              Nudge
-            </a>
-          ) : (
-            <Link
-              href={`/tenants/${row.tenant_id}`}
-              className={`${TOUCH_LINK} text-[13px] font-medium text-amber-700 hover:underline`}
-              title={`"${row.phone}" is not a number WhatsApp can open`}
-            >
-              Fix phone
-            </Link>
-          ))}
+          {owes && <NudgeLink row={row} link={link} />}
           <Button size="sm" variant={open ? "secondary" : "primary"} onClick={onToggle} aria-expanded={open}>
             {open ? "Cancel" : "Record"}
           </Button>
@@ -331,20 +334,128 @@ function PayeeRow({
         <div className="space-y-3 px-4 pb-4">
           <RecordForm row={row} token={token} onRecorded={onRecorded} />
           {link && (
-            editingMessage ? (
-              <div className="space-y-2">
-                <Field label="Message">
-                  <Textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} className="resize-none" />
-                </Field>
-                <Button variant="ghost" size="sm" onClick={() => { setMessage(nudgeMessage(row, owner?.upi_id)); setEditingMessage(false); }}>
-                  Reset message
-                </Button>
-              </div>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setEditingMessage(true)}>
-                Edit nudge message
-              </Button>
-            )
+            <NudgeEditor
+              editing={editingMessage}
+              message={message}
+              onEdit={() => setEditingMessage(true)}
+              onChange={setMessage}
+              onReset={() => { setMessage(nudgeMessage(row, owner?.upi_id)); setEditingMessage(false); }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Nudge" to WhatsApp, or "Fix phone" when the number can't open a chat. */
+function NudgeLink({ row, link }: { row: CollectionRow; link: string | null }) {
+  return link ? (
+    <a
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={buttonClasses({ variant: "secondary", size: "sm" })}
+      title={`Open WhatsApp to ${row.phone}`}
+    >
+      <WhatsAppIcon className="h-4 w-4" />
+      Nudge
+    </a>
+  ) : (
+    <Link
+      href={`/tenants/${row.tenant_id}`}
+      className={`${TOUCH_LINK} text-[13px] font-medium text-amber-700 hover:underline`}
+      title={`"${row.phone}" is not a number WhatsApp can open`}
+    >
+      Fix phone
+    </Link>
+  );
+}
+
+/** "Edit nudge message", and the message itself once it is being edited. */
+function NudgeEditor({
+  editing, message, onEdit, onChange, onReset,
+}: {
+  editing: boolean;
+  message: string;
+  onEdit: () => void;
+  onChange: (m: string) => void;
+  onReset: () => void;
+}) {
+  return editing ? (
+    <div className="space-y-2">
+      <Field label="Message">
+        <Textarea rows={3} value={message} onChange={(e) => onChange(e.target.value)} className="resize-none" />
+      </Field>
+      <Button variant="ghost" size="sm" onClick={onReset}>
+        Reset message
+      </Button>
+    </div>
+  ) : (
+    <Button variant="ghost" size="sm" onClick={onEdit}>
+      Edit nudge message
+    </Button>
+  );
+}
+
+/**
+ * Someone in a bed who has not paid all of the deposit they agreed. Nudged on
+ * WhatsApp like rent, with its own message: deposits arrive by UPI at odd
+ * hours too (owner, Oct 2026).
+ */
+function DepositRow({
+  row, token, open, onToggle, onRecorded,
+}: {
+  row: CollectionRow;
+  token: string;
+  open: boolean;
+  onToggle: () => void;
+  onRecorded: (amount: number) => void;
+}) {
+  const { owner } = useAuth();
+  const owed = row.deposit_owed_paise ?? 0;
+  const agreed = row.deposit_amount ?? owed;
+  const paid = agreed - owed;
+  const [message, setMessage] = useState(() => depositNudgeMessage(row, owner?.upi_id));
+  const [editingMessage, setEditingMessage] = useState(false);
+  const link = waLink(row.phone, message);
+  return (
+    <div className={open ? "bg-stone-50" : undefined}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <div className="min-w-48 flex-1">
+          <p className="flex flex-wrap items-baseline gap-x-2">
+            <Link
+              href={`/tenants/${row.tenant_id}`}
+              className={`${TOUCH_LINK} font-medium text-stone-900 hover:text-indigo-600`}
+            >
+              {row.tenant_name}
+            </Link>
+            <span className="text-[13px] text-stone-500">{roomLabel(row)}</span>
+          </p>
+          <p className="text-[13px] tabular-nums text-stone-500">
+            {paid > 0 ? `${formatCurrency(paid)} of ${formatCurrency(agreed)} paid` : `${formatCurrency(agreed)} agreed, none paid`}
+            {row.start_date && ` · moved in ${formatDay(row.start_date)}`}
+          </p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <p className="mr-2 text-lg font-bold tabular-nums text-stone-900">{formatCurrency(owed)}</p>
+          <NudgeLink row={row} link={link} />
+          <Button size="sm" variant={open ? "secondary" : "primary"} onClick={onToggle} aria-expanded={open}>
+            {open ? "Cancel" : "Record"}
+          </Button>
+        </div>
+      </div>
+      {open && (
+        <div className="space-y-3 px-4 pb-4">
+          <RecordForm row={row} token={token} kind="deposit" onRecorded={onRecorded} />
+          {link && (
+            <NudgeEditor
+              editing={editingMessage}
+              message={message}
+              onEdit={() => setEditingMessage(true)}
+              onChange={setMessage}
+              onReset={() => { setMessage(depositNudgeMessage(row, owner?.upi_id)); setEditingMessage(false); }}
+            />
           )}
         </div>
       )}
@@ -360,15 +471,20 @@ const DAY_CHOICES: readonly { value: DayChoice; label: string }[] = [
 ];
 
 function RecordForm({
-  row, token, onRecorded,
+  row, token, kind = "rent", onRecorded,
 }: {
   row: CollectionRow;
   token: string;
+  /** A deposit is saved as a deposit, never as rent (migration 007). */
+  kind?: PaymentKind;
   onRecorded: (amount: number) => void;
 }) {
   // Everything prefilled, so the common case is one tap: what they owe (or
-  // the rent coming due), paid the way they paid last time, today.
-  const [amount, setAmount] = useState(() => (amountDue(row) / 100).toString());
+  // the rent coming due, or the deposit left), paid the way they paid last
+  // time, today.
+  const [amount, setAmount] = useState(() =>
+    ((kind === "deposit" ? row.deposit_owed_paise ?? 0 : amountDue(row)) / 100).toString(),
+  );
   const [method, setMethod] = useState<PayMethod>(row.last_payment_type ?? "cash");
   const [day, setDay] = useState<DayChoice>("today");
   const [otherDate, setOtherDate] = useState(localYesterday());
@@ -389,6 +505,7 @@ function RecordForm({
       await staysApi.addPayment(token, row.stay_id, {
         amount: paise,
         payment_type: method,
+        kind,
         payment_date: day === "today" ? localToday() : day === "yesterday" ? localYesterday() : otherDate,
         notes: notes.trim() || undefined,
       });
@@ -442,7 +559,7 @@ function RecordForm({
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" loading={saving}>
-          {saving ? "Saving…" : valid ? `Save ${formatCurrency(paise)}` : "Save"}
+          {saving ? "Saving…" : valid ? `Save ${formatCurrency(paise)}${kind === "deposit" ? " deposit" : ""}` : "Save"}
         </Button>
         {!addingNote && (
           <Button type="button" variant="ghost" size="sm" onClick={() => setAddingNote(true)}>

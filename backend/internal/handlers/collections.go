@@ -54,6 +54,12 @@ type CollectionRow struct {
 	DuePaise        *int64  `json:"due_paise,omitempty"`
 	DueState        *string `json:"due_state,omitempty"`
 	LastPaymentType *string `json:"last_payment_type,omitempty"`
+	// What is left of the agreed deposit, for Payments' "Deposit still owed"
+	// (Oct 2026). Zero, and left out, for anyone who has paid it all, a
+	// booking with no bed yet (they pay on arrival), and every moved-out row:
+	// a settlement has already dealt with their deposit.
+	DepositOwedPaise int64 `json:"deposit_owed_paise,omitempty"`
+	DepositAmount    int64 `json:"deposit_amount,omitempty"`
 }
 
 // settledOwed is what a tenant still owes on a settled stay.
@@ -218,6 +224,10 @@ type collectionStayRow struct {
 	Waived          int64          `db:"waived"`
 	LastPaymentDate sql.NullString `db:"last_payment_date"`
 	LastPaymentType sql.NullString `db:"last_payment_type"`
+	// DepositAmount is the deposit agreed at intake; DepositPaid is approved
+	// deposit payments, the same sum the tenant summary uses.
+	DepositAmount int64 `db:"deposit_amount"`
+	DepositPaid   int64 `db:"deposit_paid"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -306,6 +316,9 @@ func payeeRow(s collectionStayRow, today time.Time) CollectionRow {
 		name := s.BedName.String
 		row.BedName = &name
 	}
+	if owed := depositOwed(s.DepositAmount, s.DepositPaid, !s.BedName.Valid); owed > 0 {
+		row.DepositOwedPaise, row.DepositAmount = owed, s.DepositAmount
+	}
 	if s.LastPaymentDate.Valid {
 		date := s.LastPaymentDate.String
 		row.LastPaymentDate = &date
@@ -320,6 +333,16 @@ func payeeRow(s collectionStayRow, today time.Time) CollectionRow {
 // buildPayees is every active stay, owing or not, soonest due first: the
 // oldest arrears at the top, then today's, then the week ahead. The Payments
 // screen groups them by DueState and searches the rest for "Who paid?".
+// depositOwed is what is left of an agreed deposit. Never negative: paying
+// more than was agreed is a deposit held, not a deposit owed. Nothing for a
+// booking, which has no bed yet and pays on arrival.
+func depositOwed(agreed, paid int64, booking bool) int64 {
+	if booking || paid >= agreed {
+		return 0
+	}
+	return agreed - paid
+}
+
 func buildPayees(stays []collectionStayRow, today time.Time) []CollectionRow {
 	rows := make([]CollectionRow, 0, len(stays))
 	for _, s := range stays {
@@ -361,6 +384,11 @@ func loadOpenStays(db *sqlx.DB, ownerID int64) ([]collectionStayRow, error) {
 			COALESCE(hs.name, '') AS site_name,
 			COALESCE(r.name, '')  AS room_name,
 			b.name         AS bed_name,
+			s.deposit_amount,
+			COALESCE((
+				SELECT SUM(p.amount) FROM payments p
+				WHERE p.stay_id = s.id AND p.is_approved = true AND p.kind = 'deposit'
+			), 0) AS deposit_paid,
 			-- Rent only, both of them: a deposit paid last week is not a rent
 			-- payment last week, and must not make an arrears case look fresh.
 			COALESCE((

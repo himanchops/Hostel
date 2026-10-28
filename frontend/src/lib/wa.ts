@@ -110,3 +110,19 @@ export function nudgeMessage(
     `${askToPay(row.days_since_due)} ${payTo(upiId)}Thank you!`
   );
 }
+
+/**
+ * The nudge for a deposit not fully paid (Payments' "Deposit still owed").
+ * Plainer than rent's: a deposit has no due date to be late against, so it
+ * says how much is left and where to pay, and nothing about lateness.
+ */
+export function depositNudgeMessage(
+  row: Pick<CollectionRow, "tenant_name"> & { deposit_owed_paise?: number },
+  upiId?: string | null,
+): string {
+  const firstName = row.tenant_name.trim().split(/\s+/)[0] || row.tenant_name;
+  return (
+    `Hi ${firstName}, this is a reminder that ${formatCurrency(row.deposit_owed_paise ?? 0)} ` +
+    `of your deposit is still to pay. ${payTo(upiId)}Thank you!`
+  );
+}
