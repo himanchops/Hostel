@@ -3864,6 +3864,59 @@ Neon's pause costs ~0.7s; Render's sleep 30–60s. No migration.
 - `TestWithConnectTimeout`: a Neon URL, key=value pairs, one already set.
 - Full suite on a fresh backend: 236 e2e, 87 unit, `go test ./...`.
 
+**Production, 28 Oct 2026: live.** Merged as `290bdb3` (#66), no migration.
+Vercel and Render both reported success. Measured from India afterwards:
+the id pages are built in `bom1` (`x-vercel-id: bom1::bom1::…`), 0.14–0.16s
+warm against 0.45s before, 0.4–0.8s on a first visit after the deploy. The
+owner set up the Sentry uptime check on `/health` every 10 minutes the same
+day.
+
+## See how long pages take (Oct 2026)
+The owner asked for visibility after the slow moments (#66): how long a
+page takes, and something logged when it takes too long. Sentry was wired
+into both sides but for errors only, and a slow request is not an error, so
+nothing recorded one. No migration. Where to look: `docs/DEPLOYMENT.md` →
+"When it feels slow: where to look".
+
+- **Tracing on, every page and request.** Browser: page loads, clicks
+  between pages and each API call (`browserTracingIntegration`), named by
+  route (`routeName`: `/tenants/:id`, never a query string). Backend: each
+  request is a transaction named `GET /api/tenants/:id`, continued from the
+  browser's trace (`observability.StartRequest`), so a page and the requests
+  it made read as one. The free plan's 5M spans are far more than two people
+  use; nothing is sampled out. `/health` isn't traced.
+- **Slow alarms.** Backend: any request over 3s is logged `SLOW …` and sent
+  as a Sentry warning (`middleware.Timing`, `observability.ReportSlow`).
+  Browser: any request over 5s (`SLOW_REQUEST_MS`, the trip from India
+  included) and any that got no answer (`reportSlowRequest`,
+  `reportUnreachable`, from `send()`). Each is one Sentry issue per route,
+  so a slow day is one email.
+- **CORS.** Traced requests carry `sentry-trace` and `baggage`;
+  `middleware.AllowHeaders` lists them. Locally there is no DSN, so nothing
+  sends them, which is why `public/cors-trace.test.ts` sends the preflight
+  itself.
+- **Privacy.** Transactions pass through the same scrubbers as errors
+  (`BeforeSendTransaction: ScrubEvent`; the browser's
+  `beforeSendTransaction` drops query strings, URL fields and headers from
+  every span). The API takes no free text in its query strings today
+  (`end_date`, `months`, `pending`).
+- DEPLOYMENT.md's retention said 90 days; the free plan keeps 30.
+
+### Verification
+- `TestTiming_ReportsOnlySlowRequests`: a slow request reported once by
+  route, status and owner; a quick one, and `/health` however slow, not.
+  `TestAllowHeaders_CarryTheTrace`.
+- `tests/unit/routeName.test.ts`: ids become `:id`, query strings and
+  fragments go, a bed called "1U" stays.
+- `tests/e2e/public/cors-trace.test.ts`: the real backend answers a traced
+  preflight with both headers allowed.
+- Both servers run locally with a dummy Sentry DSN, so the SDKs actually
+  switch on: Payments, then a click to Tenants, made 16 API requests, all 16
+  carrying `sentry-trace` and `baggage`, none refused; the browser tried to
+  deliver to the dummy address; the backend logged tracing enabled and no
+  errors.
+- Full suite on normal servers: 237 e2e, 89 unit, `go test ./...`.
+
 ---
 
 ## Architecture Notes

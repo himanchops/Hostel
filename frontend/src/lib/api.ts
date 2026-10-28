@@ -1,5 +1,6 @@
 import type { Due, DueState } from "./due";
 import { shrinkImage } from "@/lib/shrinkImage";
+import { reportSlowRequest, reportUnreachable } from "@/lib/reportError";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -45,6 +46,11 @@ export function isUnreachable(err: unknown): boolean {
 const REPLY_TIMEOUT_MS = 75_000;
 /** How long to wait before the one retry of a dropped read. */
 const RETRY_AFTER_MS = 1_500;
+/**
+ * A request slower than this is reported to Sentry. Longer than the server's
+ * own three seconds, because this one includes the trip from India.
+ */
+export const SLOW_REQUEST_MS = 5_000;
 
 /**
  * fetch, with a timeout, and one retry for a read whose connection dropped.
@@ -55,11 +61,16 @@ const RETRY_AFTER_MS = 1_500;
 async function send(url: string, init: RequestInit): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const retryable = method === "GET";
+  const started = Date.now();
   for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REPLY_TIMEOUT_MS);
     try {
-      return await fetch(url, { ...init, signal: controller.signal });
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      // Slow counts the whole wait the person had, retry included.
+      const took = Date.now() - started;
+      if (took > SLOW_REQUEST_MS) reportSlowRequest(method, url, took, res.status);
+      return res;
     } catch {
       // A TypeError (no connection) or an abort (no reply in time). Either
       // way the server said nothing, so there is no message of its own.
@@ -67,6 +78,7 @@ async function send(url: string, init: RequestInit): Promise<Response> {
         await new Promise((r) => setTimeout(r, RETRY_AFTER_MS));
         continue;
       }
+      reportUnreachable(method, url, Date.now() - started, controller.signal.aborted);
       throw new ApiError(0, UNREACHABLE_MESSAGE);
     } finally {
       clearTimeout(timer);

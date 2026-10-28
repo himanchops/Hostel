@@ -110,9 +110,12 @@ func Init() {
 		// Render exposes the deployed commit as RENDER_GIT_COMMIT. Tagging the
 		// release is what makes "this started after Tuesday's deploy" answerable.
 		Release: os.Getenv("RENDER_GIT_COMMIT"),
-		// Errors only. Tracing would sample every request and is a different
-		// (and much larger) quota conversation.
-		EnableTracing: false,
+		// Every request is traced (Oct 2026), so "it got slow" can be answered
+		// with where the time went. The free plan includes 5M spans; two
+		// people using the app produce a small fraction of that, so nothing
+		// is sampled out. /health is skipped (middleware.Timing).
+		EnableTracing:    true,
+		TracesSampleRate: 1.0,
 		// Turn on with SENTRY_DEBUG=1 to make transport failures visible on
 		// stdout instead of swallowed.
 		Debug: os.Getenv("SENTRY_DEBUG") == "1",
@@ -128,6 +131,9 @@ func Init() {
 		// Second, independent layer. DataCollection governs structured fields;
 		// BeforeSend is the only thing that can reach free text.
 		BeforeSend: ScrubEvent,
+		// Transactions are events too and carry the same request fields, so
+		// they pass through the same scrubber.
+		BeforeSendTransaction: ScrubEvent,
 	})
 	if err != nil {
 		// A bad DSN must be loud. It is not fatal — the app serves traffic
@@ -180,6 +186,50 @@ func CaptureError(err error, req *http.Request, method, route, msg string, owner
 	scope.SetFingerprint([]string{method, route, msg})
 
 	hub.CaptureException(err)
+}
+
+// StartRequest opens the transaction for one request, named by its route
+// ("GET /api/tenants/:id"), never by its URL, and continued from the
+// browser's trace when the request carries one, so a slow page and its
+// slow request read as one trace. Nil when tracing is off.
+func StartRequest(req *http.Request, method, route string) *sentry.Span {
+	if !enabled {
+		return nil
+	}
+	return sentry.StartTransaction(
+		req.Context(),
+		method+" "+route,
+		sentry.ContinueFromRequest(req),
+		sentry.WithOpName("http.server"),
+		sentry.WithTransactionSource(sentry.SourceRoute),
+	)
+}
+
+// ReportSlow sends one "slow request" warning. One issue per route,
+// whatever the duration, so a slow week is one email, not hundreds; the
+// events inside it carry each duration.
+func ReportSlow(req *http.Request, method, route string, took time.Duration, status int, ownerID int64) {
+	if !enabled {
+		return
+	}
+	hub := sentry.CurrentHub().Clone()
+	scope := hub.Scope()
+	if req != nil {
+		scope.SetRequest(req)
+	}
+	scope.SetTag("route", route)
+	scope.SetTag("method", method)
+	scope.SetTag("slow", "server")
+	scope.SetLevel(sentry.LevelWarning)
+	scope.SetContext("timing", sentry.Context{
+		"duration_ms": took.Milliseconds(),
+		"status":      status,
+	})
+	if ownerID > 0 {
+		scope.SetTag("owner_id", strconv.FormatInt(ownerID, 10))
+	}
+	scope.SetFingerprint([]string{"slow", method, route})
+	hub.CaptureMessage("Slow request: " + method + " " + route)
 }
 
 // ScrubEvent is the BeforeSend hook. Exported so it can be unit-tested against

@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+// AllowHeaders is what a browser may send on a cross-origin request. The two
+// Sentry headers carry the trace from a page to the request it made (Oct
+// 2026). Leave them out and every request from a page with tracing on fails
+// its preflight in production, while local development, which has no Sentry
+// DSN and so sends neither, looks fine.
+var AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "sentry-trace", "baggage"}
+
 // ParseOrigins splits a comma-separated origin list (the FRONTEND_URL env var)
 // into individual origins, trimming whitespace and any trailing slash. Browsers
 // send the Origin header without a trailing slash, so an entry like
