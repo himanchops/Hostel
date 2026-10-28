@@ -20,6 +20,7 @@ import { PAY_METHODS, PayMethod, payMethodLabel } from "@/lib/payMethod";
 import { reportError } from "@/lib/reportError";
 import { PaymentStatus, RejectionReason } from "@/components/PaymentStatus";
 import { HouseRulesView } from "@/components/HouseRules";
+import { ServerUnreachable } from "@/components/ServerUnreachable";
 import { HOUSE_RULES, HOUSE_RULES_VERSION } from "@/lib/houseRules";
 import {
   Badge, Button, Card, Collapsible, EmptyState, Field, FormError, Input, SegmentedControl, useConfirm, useToast, FileInput,
@@ -27,7 +28,7 @@ import {
 } from "@/components/ui";
 
 export default function TenantPortalPage() {
-  const { token, tenant, isAuthenticated, isLoading } = useTenantAuth();
+  const { token, tenant, isAuthenticated, isLoading, unreachable, retryRestore } = useTenantAuth();
   const router = useRouter();
   const [stays, setStays] = useState<TenantStay[]>([]);
   const [summary, setSummary] = useState<TenantSummary | null>(null);
@@ -35,8 +36,8 @@ export default function TenantPortalPage() {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/my/login");
-  }, [isAuthenticated, isLoading, router]);
+    if (!isLoading && !isAuthenticated && !unreachable) router.replace("/my/login");
+  }, [isAuthenticated, isLoading, unreachable, router]);
 
   // Stays and what they owe come together, so the money line never shows
   // beside a list it does not match. A failure says so: it once fell through
@@ -62,6 +63,8 @@ export default function TenantPortalPage() {
   const onUpdate = useCallback((updated: TenantStay) => {
     setStays((prev) => prev.map((s) => s.id === updated.id ? updated : s));
   }, []);
+
+  if (unreachable) return <ServerUnreachable onRetry={retryRestore} />;
 
   if (isLoading || loading) {
     return <PageLoader />;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { ServerUnreachable } from "@/components/ServerUnreachable";
 import { useAuth } from "@/contexts/auth";
 import { ApiError, paymentsBoardApi, pendingPaymentsApi, sitesApi, tenantsApi } from "@/lib/api";
 import { PENDING_CHANGED } from "@/lib/pending";
@@ -51,7 +52,7 @@ type NavItem = {
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, owner, logout, token, signedOutByChoice } = useAuth();
+  const { isAuthenticated, isLoading, owner, logout, token, signedOutByChoice, unreachable, retryRestore } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
@@ -95,7 +96,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [token, pathname]);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated && !unreachable) {
       // Say where they were going, so signing in takes them back there — a
       // bookmarked tenant, or a tab left open overnight, should not land on
       // the dashboard (UX audit M10). Not after choosing to sign out.
@@ -104,7 +105,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const plain = signedOutByChoice || here === "/" || here === "/dashboard";
       router.replace(plain ? "/login" : `/login?next=${encodeURIComponent(here)}`);
     }
-  }, [isAuthenticated, isLoading, router, signedOutByChoice]);
+  }, [isAuthenticated, isLoading, router, signedOutByChoice, unreachable]);
+
+  if (unreachable) return <ServerUnreachable onRetry={retryRestore} />;
 
   if (isLoading || !isAuthenticated) {
     return (

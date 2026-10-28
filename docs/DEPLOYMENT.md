@@ -236,6 +236,15 @@ You now have the 4 values you need:
 5. Click "Deploy". First build takes ~3 min.
 6. Once live, Vercel shows the URL, e.g. `https://hostel-xxx.vercel.app`.
 
+**Functions run in Mumbai** (`frontend/vercel.json`, `"regions": ["bom1"]`,
+Oct 2026). Vercel runs a new project's functions in Washington DC, and the
+four pages with an id in their address (`/register/[ownerId]`,
+`/tenants/[id]`, `/sites/[id]`, `/sites/[id]/grid`) are built by a function on
+every visit, including clicks inside the app: about 0.45s warm and 1s+ cold
+from India, measured 28 Oct. Fixed pages were already served from Mumbai.
+The free plan allows one region. This file only names the region; it is not
+the monorepo `vercel.json` that step 3 says to decline.
+
 ---
 
 ## 5. Wire frontend ↔ backend — ~5 min

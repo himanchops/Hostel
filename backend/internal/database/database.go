@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -80,14 +81,40 @@ func IsPooledEndpoint(dsn string) bool {
 	return strings.HasSuffix(label, "-pooler")
 }
 
+// How long the pool keeps a connection nobody is using. Neon pauses a free
+// database after five minutes without queries, and pausing ends its open
+// connections, so an idle one older than that may be dead. Closing it first
+// means the next query opens a fresh one instead of finding out (Oct 2026).
+const maxIdleTime = 4 * time.Minute
+
+// connectTimeoutSeconds bounds opening a connection. lib/pq has no default,
+// so a connection that never completes would hold its request forever.
+const connectTimeoutSeconds = "10"
+
 func connectDSN(dsn string) (*sqlx.DB, error) {
-	db, err := sqlx.Connect("postgres", dsn)
+	db, err := sqlx.Connect("postgres", withConnectTimeout(dsn))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
+	db.SetConnMaxIdleTime(maxIdleTime)
 
 	return db, nil
+}
+
+// withConnectTimeout adds lib/pq's connect_timeout to a DSN that does not
+// set one, in either form it accepts: a postgres:// URL or key=value pairs.
+func withConnectTimeout(dsn string) string {
+	if strings.Contains(dsn, "connect_timeout") {
+		return dsn
+	}
+	if u, err := url.Parse(dsn); err == nil && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+		q := u.Query()
+		q.Set("connect_timeout", connectTimeoutSeconds)
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+	return dsn + " connect_timeout=" + connectTimeoutSeconds
 }

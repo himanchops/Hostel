@@ -24,6 +24,56 @@ export const OWNER_SESSION_ENDED = "hostel:owner-session-ended";
 export const SESSION_ENDED_MESSAGE =
   "You were signed out. Sign in again and save once more — what you typed is still here.";
 
+/**
+ * What a request that never got an answer says, in place of the browser's
+ * own "Failed to fetch" (Oct 2026). Status 0: no reply at all, which is not
+ * the same as the server saying no, and must never sign anyone out.
+ */
+export const UNREACHABLE_MESSAGE = "Couldn't reach the server. Check your connection and try again.";
+
+/** True for a request that got no reply: dropped, offline, or timed out. */
+export function isUnreachable(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 0;
+}
+
+/**
+ * How long to wait for any reply. The backend sleeps on Render's free plan
+ * and can take most of a minute to wake, and a request cut off while it
+ * wakes would only start the wait again, so this is long: it is for a
+ * connection that has truly died, which otherwise spins forever.
+ */
+const REPLY_TIMEOUT_MS = 75_000;
+/** How long to wait before the one retry of a dropped read. */
+const RETRY_AFTER_MS = 1_500;
+
+/**
+ * fetch, with a timeout, and one retry for a read whose connection dropped.
+ * A server that is waking up can drop the first connection and answer the
+ * next. Writes are never retried: a dropped POST may well have arrived, and
+ * sending it again could record a payment twice.
+ */
+async function send(url: string, init: RequestInit): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const retryable = method === "GET";
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPLY_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } catch {
+      // A TypeError (no connection) or an abort (no reply in time). Either
+      // way the server said nothing, so there is no message of its own.
+      if (retryable && attempt === 0 && !controller.signal.aborted) {
+        await new Promise((r) => setTimeout(r, RETRY_AFTER_MS));
+        continue;
+      }
+      throw new ApiError(0, UNREACHABLE_MESSAGE);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -35,7 +85,7 @@ async function request<T>(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await send(`${API_BASE}${path}`, { ...options, headers });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Request failed" }));
@@ -362,7 +412,7 @@ async function uploadFile(endpoint: string, file: File, token?: string): Promise
   form.append("file", await shrinkImage(file));
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", headers, body: form });
+  const res = await send(`${API_BASE}${endpoint}`, { method: "POST", headers, body: form });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Upload failed" }));
     throw new ApiError(res.status, body.error || "Upload failed");
