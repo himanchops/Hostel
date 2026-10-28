@@ -3824,6 +3824,46 @@ he agreed it that day. No migration.
   pass. On the demo at 375, 768 and 1024 wide: two rows (Priya, nothing
   paid; Meera, ₹1,400 of ₹14,000), the form open, nothing scrolls sideways.
 
+**Production, 28 Oct 2026: live.** Merged as `891421d` (#65), no migration.
+Vercel and Render both reported success, `/health` answers and
+`/api/payments/board` answers 401 without a sign-in, as it should.
+
+## Slow moments: Mumbai, and failing gracefully (Oct 2026)
+The owner found the live app slow after a quiet spell and, he added, while
+using it. Measured from India before changing anything (`docs/DONE.md` →
+"After a quiet spell the app hangs, then fails"): the four pages with an id
+in their address ran in a Vercel function in Washington DC on every visit;
+Neon's pause costs ~0.7s; Render's sleep 30–60s. No migration.
+
+- **Mumbai.** `frontend/vercel.json` sets `"regions": ["bom1"]`, the one
+  region the free plan allows. Fixed pages were already served from Mumbai.
+- **`send()` in `lib/api.ts`**, under every request and upload: a GET whose
+  connection dropped is tried once more after 1.5s; a write never is, since
+  it may have arrived. Nothing waits more than 75s (`REPLY_TIMEOUT_MS`, long
+  enough for Render to wake). No answer is `ApiError` status 0 with
+  `UNREACHABLE_MESSAGE`; `isUnreachable()` tells it apart from a no.
+- **The sign-in survives no answer.** Both auth contexts drop the token only
+  when `/me` gets a reply that isn't a success; no reply sets `unreachable`,
+  and `ServerUnreachable` says "You're still signed in" with Try again
+  (`retryRestore`). The signed-in layout, the root page and `/my` show it.
+  The root page shows `PageLoader`, which says the server is waking.
+- **Database pool:** `SetConnMaxIdleTime(4m)`, under Neon's 5-minute pause,
+  and `connect_timeout=10` added to the DSN when it has none
+  (`withConnectTimeout`).
+- Not done, by choice: caching the id pages (measure after Mumbai first);
+  keeping Render awake is a Sentry uptime check the owner sets up.
+
+### Verification
+- `tests/unit/request.test.ts`: a dropped read retried once, a read dropped
+  twice gives up with status 0 and the sentence, a write sent once, a 401 is
+  not "unreachable".
+- `tests/e2e/owner/server-unreachable.test.ts` (iPad, touch): `/api/me`
+  refused → the screen, still on `/dashboard`, token kept; Try again lands on
+  the dashboard; a 401 still goes to `/login`.
+  `tests/e2e/tenant/portal-unreachable.test.ts`: the same for `/my`.
+- `TestWithConnectTimeout`: a Neon URL, key=value pairs, one already set.
+- Full suite on a fresh backend: 236 e2e, 87 unit, `go test ./...`.
+
 ---
 
 ## Architecture Notes

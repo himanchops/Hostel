@@ -34,34 +34,6 @@ Most items have no write-up; the line on the board is the whole record.
 
 ## Ops and security
 
-### After a quiet spell the app hangs, then fails
-Owner, 27 Oct 2026: after a quiet spell, opening the site showed a spinner
-until a refresh, then the login page, though he had been signed in. After
-signing in, Insights took a long time and showed "Failed to fetch
-(hostel-backend-k7ar.onrender.com)"; Retry loaded it at once.
-
-The cause is Render's free plan: the backend sleeps after about 15 minutes
-without a request, and the first request after that waits about a minute
-while it wakes. Three things in our code make that minute worse:
-- The root page (`app/page.tsx`) shows a bare spinner while `authApi.me`
-  checks the stored sign-in. It is not `PageLoader`, so it never says the
-  server is waking, and nothing gives up.
-- `contexts/auth.tsx` forgets the token when that check fails for *any*
-  reason, so a dropped connection to a sleeping server signs the owner out.
-  Only a 401 should.
-- `request()` in `lib/api.ts` shows the browser's own "Failed to fetch"
-  (a request that got no answer at all, likely the server mid-wake; not
-  confirmed from Render's logs) and never tries again.
-
-Two fixes, not exclusive:
-- **Keep it awake:** a free outside pinger (cron-job.org or UptimeRobot)
-  calling `/health` every 10 minutes. One always-on service fits Render's
-  free monthly hours. `/health` doesn't touch the database, so Neon still
-  sleeps. Owner's setup, not code.
-- **Client fixes:** keep the sign-in on a network failure, retry once when
-  the connection drops, `PageLoader` on the root page, and a plain sentence
-  instead of "Failed to fetch". A small frontend PR.
-
 ### Back up the database from the laptop
 The only copy of the real data is Neon's own restore history, which on the
 free plan covers hours, not weeks (check the exact window in the Neon

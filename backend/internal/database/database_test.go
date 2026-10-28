@@ -75,3 +75,30 @@ func TestIsPooledEndpoint(t *testing.T) {
 		})
 	}
 }
+
+func TestWithConnectTimeout(t *testing.T) {
+	cases := []struct{ name, dsn, want string }{
+		{
+			"a Neon URL gets one",
+			"postgres://u:p@ep-cool-name-123456.ap-southeast-1.aws.neon.tech/hostel?sslmode=require",
+			"postgres://u:p@ep-cool-name-123456.ap-southeast-1.aws.neon.tech/hostel?connect_timeout=10&sslmode=require",
+		},
+		{
+			"key=value pairs get one",
+			"host=localhost port=5432 user=hostel password=hostel dbname=hostel sslmode=disable",
+			"host=localhost port=5432 user=hostel password=hostel dbname=hostel sslmode=disable connect_timeout=10",
+		},
+		{
+			"one already set is left alone",
+			"postgres://u:p@h/db?connect_timeout=3",
+			"postgres://u:p@h/db?connect_timeout=3",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := withConnectTimeout(c.dsn); got != c.want {
+				t.Fatalf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}

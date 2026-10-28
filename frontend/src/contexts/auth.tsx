@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { authApi, ApiError, Owner, OWNER_SESSION_ENDED } from "@/lib/api";
+import { authApi, ApiError, Owner, OWNER_SESSION_ENDED, isUnreachable } from "@/lib/api";
 import { OWNER_TOKEN_KEY, forgetAllSessions } from "@/lib/session";
 
 interface AuthContextValue {
@@ -36,6 +36,13 @@ interface AuthContextValue {
   signedOutByChoice: boolean;
   /** Merge a change the owner just saved, such as their UPI ID, into `owner`. */
   updateOwner: (change: Partial<Owner>) => void;
+  /**
+   * The saved sign-in could not be checked because the server never
+   * answered. The sign-in is kept: only the server saying no ends it.
+   */
+  unreachable: boolean;
+  /** Check the saved sign-in again, after `unreachable`. */
+  retryRestore: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -48,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [signedOutByChoice, setSignedOutByChoice] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const onEnded = () => setSessionEnded(true);
@@ -55,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(OWNER_SESSION_ENDED, onEnded);
   }, []);
 
-  // Restore session on mount
+  // Restore session on mount, and again on retryRestore.
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
     if (!stored) {
@@ -67,14 +76,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((o) => {
         setToken(stored);
         setOwner(o);
+        setUnreachable(false);
       })
-      .catch(() => {
-        // Nobody is mid-form on a cold load, so there is nothing to keep: the
-        // layout sends them to /login?next= instead of the dialog.
+      .catch((err) => {
+        // No answer is not a no. This once forgot the sign-in on any
+        // failure, so a server still waking up signed the owner out (Oct
+        // 2026). Keep it and say the server can't be reached instead.
+        if (isUnreachable(err)) {
+          setUnreachable(true);
+          return;
+        }
+        // The server said no. Nobody is mid-form on a cold load, so there
+        // is nothing to keep: the layout sends them to /login?next= instead
+        // of the dialog.
         localStorage.removeItem(TOKEN_KEY);
         setSessionEnded(false);
       })
       .finally(() => setIsLoading(false));
+  }, [attempt]);
+
+  const retryRestore = useCallback(() => {
+    setUnreachable(false);
+    setIsLoading(true);
+    setAttempt((n) => n + 1);
   }, []);
 
   const persist = useCallback((tok: string, o: Owner) => {
@@ -137,6 +161,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       reauthenticate,
       signedOutByChoice,
       updateOwner: (change: Partial<Owner>) => setOwner((o) => (o ? { ...o, ...change } : o)),
+      unreachable,
+      retryRestore,
     }}>
       {children}
     </AuthContext.Provider>
