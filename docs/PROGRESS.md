@@ -3747,8 +3747,9 @@ before this merges.
   2026", which opens that version read-only. Nothing for a tenant added by
   hand. The portal: a folded "House rules" section under their stays, the
   version they agreed to ("You agreed on …"), or today's for anyone else,
-  with the same switch. Only with a stay: someone approved without a bed
-  sees "You're approved" and nothing else, as before.
+  with the same switch, with or without a stay: someone approved and
+  waiting for a bed is about to pay a deposit, the moment the notice rule
+  is read again (owner's call, after trying it).
 - **"You're registered"** says the owner checks your details, then gives you
   a room and a bed. Signing in is offered for a payment screenshot or notice,
   if ever.
@@ -3767,7 +3768,7 @@ before this merges.
   Hindi registers with the version and a fresh time. The API refuses no
   version and an old one with 409. The owner's page links the agreed version
   and shows nothing for a hand-added tenant. The portal shows "You agreed
-  on", and Hindi.
+  on", and Hindi, and so does a tenant approved with no bed yet.
 - "Each sign-in page points to the other" (`registration.test.ts`) taps
   both links at 768×1024 with touch, and each is at least 44px tall.
 - The four registration tests that submit through the form now tick

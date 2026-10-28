@@ -167,3 +167,32 @@ test("the portal shows the rules a tenant agreed to", async ({ page, request }) 
   await page.getByRole("button", { name: "हिंदी" }).tap();
   await expect(page.getByText(RULES.hi.money[0].detail)).toBeVisible();
 });
+
+// Approved, no bed yet: about to hand over a deposit, which is exactly when
+// the notice rule gets read again. The portal once showed them only
+// "You're approved" (owner, 28 Oct 2026).
+test("an approved tenant with no bed yet still has the rules", async ({ page, request }) => {
+  const { token, owner } = await createOwner(request, `rules-nobed-${RUN_ID}`);
+  const phone = `9${RUN_ID.slice(-8)}2`;
+  const reg = await request.post(`${BASE}/public/register/${owner.id}`, {
+    data: {
+      name: `No Bed ${RUN_ID}`, phone, password: "tenant1234",
+      id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES,
+    },
+  });
+  const tenant = await reg.json();
+  const approve = await request.post(`${BASE}/api/tenants/${tenant.id}/approve`, {
+    headers: { Authorization: `Bearer ${token}` }, data: {},
+  });
+  expect(approve.ok()).toBe(true);
+  const login = await request.post(`${BASE}/tenant-auth/login`, { data: { phone, password: "tenant1234" } });
+  const tenantToken = (await login.json()).token;
+
+  await page.addInitScript((t) => localStorage.setItem("hostel_tenant_token", t), tenantToken);
+  await page.goto("/my");
+  await expect(page.getByText("You're approved")).toBeVisible();
+  const fold = page.getByRole("button", { name: /House rules/ });
+  await expect(fold).toContainText("You agreed on");
+  await fold.tap();
+  await expect(page.getByText(RULES.en.money[1].detail)).toBeVisible();
+});

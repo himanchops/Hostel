@@ -67,6 +67,22 @@ export default function TenantPortalPage() {
     return <PageLoader />;
   }
 
+  // The rules they ticked when they registered, word for word; anyone the
+  // owner added by hand reads today's. Folded, because it is reference, not
+  // news. Shown with or without a stay: someone approved and waiting for a
+  // bed is about to hand over a deposit, which is when the notice rule gets
+  // read again.
+  const agreedVersion = tenant?.rules_version && HOUSE_RULES[tenant.rules_version] ? tenant.rules_version : null;
+  const rules = (
+    <Collapsible
+      title="House rules"
+      summary={agreedVersion && tenant?.rules_agreed_at ? `You agreed on ${formatDay(tenant.rules_agreed_at)}` : undefined}
+      defaultOpen={false}
+    >
+      <HouseRulesView version={agreedVersion ?? HOUSE_RULES_VERSION} />
+    </Collapsible>
+  );
+
   if (failed) {
     return (
       <EmptyState
@@ -80,10 +96,13 @@ export default function TenantPortalPage() {
   // Approved with nothing set up yet: the owner chose "Just approve".
   if (stays.length === 0) {
     return (
-      <EmptyState
-        title="You're approved"
-        message="Your room will show here once it's set up."
-      />
+      <div className="space-y-6">
+        <EmptyState
+          title="You're approved"
+          message="Your room will show here once it's set up."
+        />
+        {rules}
+      </div>
     );
   }
 
@@ -101,21 +120,7 @@ export default function TenantPortalPage() {
           onUpdate={onUpdate}
         />
       ))}
-      {/* The rules they ticked when they registered, word for word; anyone
-          the owner added by hand reads today's. Folded, because it is
-          reference, not news. */}
-      {(() => {
-        const agreed = tenant?.rules_version && HOUSE_RULES[tenant.rules_version] ? tenant.rules_version : null;
-        return (
-          <Collapsible
-            title="House rules"
-            summary={agreed && tenant?.rules_agreed_at ? `You agreed on ${formatDay(tenant.rules_agreed_at)}` : undefined}
-            defaultOpen={false}
-          >
-            <HouseRulesView version={agreed ?? HOUSE_RULES_VERSION} />
-          </Collapsible>
-        );
-      })()}
+      {rules}
     </div>
   );
 }
