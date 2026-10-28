@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiError } from "@/contexts/auth";
-import { Banner, Button, Card, Field, FormError, Input, ShowPassword } from "@/components/ui";
+import { Banner, Button, Card, Field, FormError, Input, ShowPassword, TOUCH_LINK } from "@/components/ui";
 import { safeNext } from "@/lib/session";
 
 export default function LoginPage() {
@@ -95,6 +95,15 @@ export default function LoginPage() {
         No account?{" "}
         <Link href="/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
           Create one
+        </Link>
+      </p>
+      {/* A tenant who types the app's address lands here, on an email field
+          they cannot fill: tenants sign in with their phone, on a page of
+          their own (owner, Oct 2026). */}
+      <p className="mt-3 text-center text-sm text-stone-500">
+        Staying here?{" "}
+        <Link href="/my/login" className={`${TOUCH_LINK} font-medium text-indigo-600 hover:text-indigo-500`}>
+          Sign in with your phone number
         </Link>
       </p>
     </Card>

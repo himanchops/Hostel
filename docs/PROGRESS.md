@@ -3750,6 +3750,10 @@ before this merges.
 - **"You're registered"** says the owner checks your details, then gives you
   a room and a bed. Signing in is offered for a payment screenshot or notice,
   if ever.
+- **Each sign-in page points to the other.** The owner's `/login` has
+  "Staying here? Sign in with your phone number" to `/my/login`, and the
+  portal's has "Own or run the hostel? Owner sign-in". The owner, trying
+  the portal on the demo, landed on the email form with no way across.
 - `seed-demo.py` and every API registration in the e2e suite send the
   version (`TEST_RULES`, `helpers/api.ts`).
 
@@ -3762,6 +3766,8 @@ before this merges.
   version and an old one with 409. The owner's page links the agreed version
   and shows nothing for a hand-added tenant. The portal shows "You agreed
   on", and Hindi.
+- "Each sign-in page points to the other" (`registration.test.ts`) taps
+  both links at 768×1024 with touch, and each is at least 44px tall.
 - The four registration tests that submit through the form now tick
   through the sheet (`agreeToRules`).
 - Screenshots of the sheet at 375×812 (English and Hindi), 768×1024 and

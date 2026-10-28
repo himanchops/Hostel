@@ -42,6 +42,9 @@ His calls, each one deliberate:
 - The "You're registered" steps now say what happens: the owner checks, gives
   a room and a bed, you move in. Signing in is for a payment screenshot or
   notice, if ever.
+- Found while trying it: the owner's sign-in page had no way to the tenant
+  one, so a tenant who typed the app's address met an email field. Each
+  sign-in page now links to the other.
 
 Parked on the board: sending the rules on WhatsApp to tenants added by hand
 (with the WhatsApp bot), and a printed copy for reception.
