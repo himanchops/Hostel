@@ -3946,7 +3946,10 @@ account that was every stay and payment the hostel had. No migration.
   empty site deletes; another owner's delete is a 404 with no count; on the
   Sites page at iPad size with touch, a site with history explains with no
   Delete button and an empty one deletes.
+- `owner/hover-reveal.test.ts` looks for the locked control now: its seeded
+  site has a stay.
 - On the demo data: Koramangala explains "29 stays and 117 payments".
+- Full suite: 241 e2e, 89 unit, `go test ./...`.
 
 ---
 

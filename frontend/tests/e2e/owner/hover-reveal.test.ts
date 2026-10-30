@@ -79,12 +79,14 @@ for (const device of TOUCH) {
       // what a finger on glass reports. Without this the rest proves nothing.
       expect(await pointer(page)).toEqual({ fine: false, hover: false });
 
-      const deleteSite = page.getByRole("button", { name: /^Delete site/ });
+      // The seeded site has a stay, so its control explains rather than
+      // deletes (delete-guard.test.ts); reachable either way is the point.
+      const deleteSite = page.getByRole("button", { name: /^Why site .* cannot be deleted/ });
       await expectShown(deleteSite);
       await deleteSite.tap();
       const confirmDelete = page.getByRole("dialog");
       await expect(confirmDelete).toBeVisible();
-      await confirmDelete.getByRole("button", { name: "Cancel" }).tap();
+      await confirmDelete.getByRole("button", { name: "OK" }).tap();
       await expect(confirmDelete).toHaveCount(0);
 
       // The one Phase 16 had already "fixed" — invisible here until now.
@@ -134,7 +136,7 @@ test.describe("with a mouse", () => {
     await page.goto("/sites");
     expect(await pointer(page)).toEqual({ fine: true, hover: true });
 
-    const deleteSite = page.getByRole("button", { name: /^Delete site/ });
+    const deleteSite = page.getByRole("button", { name: /^Why site .* cannot be deleted/ });
     await expect(deleteSite).toHaveCSS("opacity", "0");
 
     await deleteSite.locator("..").hover(); // the site's card
