@@ -251,3 +251,82 @@ test.describe("Deleting a bed or room cannot destroy a ledger", () => {
     expect(renamedRoom.stay_count).toBe(1);
   });
 });
+
+/**
+ * Rooms and beds refused, but a site did not: the trash icon on the Sites
+ * page and one confirm cascaded sites → rooms → beds → stays → payments,
+ * every rent record the owner had. Same rule now, any stay ended or not.
+ */
+test.describe("Deleting a site cannot destroy a ledger", () => {
+  test("a site whose only stay has ended still refuses, and keeps everything", async ({ request }) => {
+    const { token } = await createOwner(request, `${RUN_ID}-site`);
+    const { siteId, roomId, bedId, stay, auth } = await seedLedger(request, token, "site");
+    await request.put(`${BASE}/api/stays/${stay.id}`, { headers: auth, data: { end_date: isoDate(new Date()) } });
+
+    const listed = (await (await request.get(`${BASE}/api/sites`, { headers: auth })).json())
+      .find((s: { id: number }) => s.id === siteId);
+    expect(listed.stay_count).toBe(1);
+    expect(listed.payment_count).toBe(1);
+
+    const res = await request.delete(`${BASE}/api/sites/${siteId}`, { headers: auth });
+    expect(res.status()).toBe(409);
+    expect((await res.json()).error).toContain("1 stay and 1 payment");
+
+    expect((await request.get(`${BASE}/api/stays/${stay.id}`, { headers: auth })).status()).toBe(200);
+    const beds = await (await request.get(`${BASE}/api/sites/${siteId}/rooms/${roomId}/beds`, { headers: auth })).json();
+    expect(beds.map((b: { id: number }) => b.id)).toContain(bedId);
+  });
+
+  test("a site nobody has stayed in deletes, rooms and beds with it", async ({ request }) => {
+    const { token } = await createOwner(request, `${RUN_ID}-site-clean`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { siteId } = await createSiteRoomBed(request, token, `${RUN_ID}-site-clean`);
+
+    const listed = (await (await request.get(`${BASE}/api/sites`, { headers: auth })).json())
+      .find((s: { id: number }) => s.id === siteId);
+    expect(listed.stay_count).toBe(0);
+
+    expect((await request.delete(`${BASE}/api/sites/${siteId}`, { headers: auth })).status()).toBe(200);
+    expect((await request.get(`${BASE}/api/sites/${siteId}`, { headers: auth })).status()).toBe(404);
+  });
+
+  test("another owner's site is not found, never counted", async ({ request }) => {
+    const a = await createOwner(request, `${RUN_ID}-site-a`);
+    const b = await createOwner(request, `${RUN_ID}-site-b`);
+    const { siteId } = await seedLedger(request, a.token, "site-a");
+
+    const res = await request.delete(`${BASE}/api/sites/${siteId}`, { headers: { Authorization: `Bearer ${b.token}` } });
+    expect(res.status()).toBe(404);
+    expect((await res.json()).error).not.toContain("stay");
+  });
+
+  test.describe("on the Sites page", () => {
+    test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: true });
+
+    test("a site with history explains instead of offering Delete; an empty one deletes", async ({ page, request }) => {
+      const { token } = await createOwner(request, `${RUN_ID}-site-ui`);
+      const auth = { Authorization: `Bearer ${token}` };
+      const { siteId } = await seedLedger(request, token, "site-ui");
+      const kept = (await (await request.get(`${BASE}/api/sites/${siteId}`, { headers: auth })).json()).name;
+      const spare = await (await request.post(`${BASE}/api/sites`, { headers: auth, data: { name: `Spare ${RUN_ID}` } })).json();
+
+      await loginAs(page, token);
+      await page.goto("/sites");
+
+      await page.getByRole("button", { name: `Why site ${kept} cannot be deleted` }).tap();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toContainText(`${kept} cannot be deleted`);
+      await expect(dialog).toContainText("1 stay and 1 payment on record");
+      await expect(page.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+      await dialog.getByRole("button", { name: "OK" }).tap();
+      await expect(page.getByText(kept, { exact: true })).toBeVisible();
+
+      await page.getByRole("button", { name: `Delete site ${spare.name}` }).tap();
+      await expect(page.getByRole("dialog")).toContainText("Nobody has ever stayed here");
+      await page.getByRole("button", { name: "Delete", exact: true }).tap();
+      await expect(page.getByText(`Deleted ${spare.name}`)).toBeVisible();
+      await expect(page.getByText(spare.name, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(kept, { exact: true })).toBeVisible();
+    });
+  });
+});

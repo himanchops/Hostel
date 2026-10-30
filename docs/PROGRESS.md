@@ -3985,6 +3985,40 @@ private and unreachable, but personal data kept for no reason. No migration.
   until the second goes; replacing a photo removes the old one, an edit that
   sends no photo keeps it; rejecting a registration removes its ID.
 
+## Deleting a site keeps its ledger (Oct 2026)
+Rooms and beds refused deletion when anyone had ever stayed in them
+(Phase 16), but a site did not: the trash icon on the Sites page and one
+confirm cascaded sites → rooms → beds → stays → payments. On the live
+account that was every stay and payment the hostel had. No migration.
+
+- **The same rule as rooms and beds:** any stay, ended or not, and the site
+  is refused with a 409 that gives the counts (`occupancyRefusal`). Another
+  owner's site is a 404, checked before anything is counted. A site nobody
+  has stayed in still deletes, rooms and beds with it.
+- **`GET /api/sites` carries `stay_count` and `payment_count`**, the same
+  joins as `ledgerFootprint` (now a package function, with
+  `siteFootprintSQL`). Only the list has them; nothing else needs them.
+- **The Sites page explains instead of offering Delete**, as room setup
+  does: the trash icon goes grey, and a tap says "This site has N stays and
+  M payments on record…". `ledgerRefusal` moved to `lib/ledger.ts` for all
+  three. A refusal from the server now shows its own sentence, not "Failed
+  to delete site".
+- **The owner's reservation:** "any history refuses" is more binding than
+  he wants, for sites, rooms and beds alike. It was chosen because it is
+  simple and matches what exists. Rethinking it (archiving, perhaps) is on
+  the board.
+
+### Verification
+- `owner/delete-guard.test.ts`, four new: a site whose only stay has ended
+  is refused and keeps its stay and beds, and its listed counts say so; an
+  empty site deletes; another owner's delete is a 404 with no count; on the
+  Sites page at iPad size with touch, a site with history explains with no
+  Delete button and an empty one deletes.
+- `owner/hover-reveal.test.ts` looks for the locked control now: its seeded
+  site has a stay.
+- On the demo data: Koramangala explains "29 stays and 117 payments".
+- Full suite: 241 e2e, 89 unit, `go test ./...`.
+
 ---
 
 ## Architecture Notes

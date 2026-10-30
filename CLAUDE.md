@@ -258,6 +258,12 @@ Key conventions to carry forward:
   accept and not-accept all refuse until `DELETE /api/stays/:id/settlement`
   takes the settlement off. A new action that changes a payment's money
   carries the same condition.
+- **A site, room or bed anyone ever stayed in cannot be deleted** (Oct 2026).
+  Every link from sites to payments is ON DELETE CASCADE, so the server
+  refuses with `ledgerFootprint` and the lists carry `stay_count` so the page
+  explains first (`ledgerRefusal`, `lib/ledger.ts`). The owner finds "any
+  history" too binding; it stands until that is redesigned, not loosened
+  case by case.
 - **Three dates end a stay, and they are not the same date.** `notice_date` is
   when they told you, `expected_end_date` is when they say they are going,
   `end_date` is when they actually went. Only the last one ends a stay, and

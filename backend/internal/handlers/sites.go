@@ -25,20 +25,43 @@ type siteRequest struct {
 	Address string `json:"address"`
 }
 
+// listedSite is a site with the ledger behind it, so the Sites page knows
+// before anyone taps Delete whether the server will refuse. Only the list
+// carries the counts; nothing else on a site needs them.
+type listedSite struct {
+	models.HostelSite
+	StayCount    int `db:"stay_count" json:"stay_count"`
+	PaymentCount int `db:"payment_count" json:"payment_count"`
+}
+
+// siteFootprintSQL is the predicate ledgerFootprint uses for a site. The
+// list's counts below must agree with it, as roomSelect and bedSelect agree
+// for rooms and beds; `owner/delete-guard.test.ts` checks that they do.
+const siteFootprintSQL = "b.room_id IN (SELECT id FROM rooms WHERE site_id = $1)"
+
 func (h *SiteHandler) List(c echo.Context) error {
 	ownerID := appMiddleware.GetOwnerID(c)
 
-	var sites []models.HostelSite
+	var sites []listedSite
 	err := h.db.Select(&sites,
-		`SELECT id, owner_id, name, address, created_at, updated_at
-		 FROM hostel_sites WHERE owner_id = $1 ORDER BY created_at DESC`,
+		`SELECT hs.id, hs.owner_id, hs.name, hs.address, hs.created_at, hs.updated_at,
+		        COUNT(DISTINCT s.id) AS stay_count,
+		        COUNT(p.id)          AS payment_count
+		 FROM hostel_sites hs
+		 LEFT JOIN rooms r    ON r.site_id = hs.id
+		 LEFT JOIN beds b     ON b.room_id = r.id
+		 LEFT JOIN stays s    ON s.bed_id = b.id
+		 LEFT JOIN payments p ON p.stay_id = s.id
+		 WHERE hs.owner_id = $1
+		 GROUP BY hs.id
+		 ORDER BY hs.created_at DESC`,
 		ownerID,
 	)
 	if err != nil {
 		return serverError(c, err, "failed to fetch sites")
 	}
 	if sites == nil {
-		sites = []models.HostelSite{}
+		sites = []listedSite{}
 	}
 
 	return c.JSON(http.StatusOK, sites)
@@ -125,6 +148,29 @@ func (h *SiteHandler) Delete(c echo.Context) error {
 	siteID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid site id"))
+	}
+
+	// The same rule as a room or a bed: any stay, ended or not, and the site
+	// stays. The cascade runs sites → rooms → beds → stays → payments, so
+	// this one DELETE once took every rent record the owner had.
+	//
+	// Ownership first, so another owner's site is a 404, never a count.
+	var owned bool
+	if err := h.db.Get(&owned,
+		`SELECT EXISTS (SELECT 1 FROM hostel_sites WHERE id = $1 AND owner_id = $2)`,
+		siteID, ownerID,
+	); err != nil {
+		return serverError(c, err, "failed to delete site")
+	}
+	if !owned {
+		return c.JSON(http.StatusNotFound, errorResponse("site not found"))
+	}
+	stays, payments, err := ledgerFootprint(h.db, siteFootprintSQL, siteID)
+	if err != nil {
+		return serverError(c, err, "failed to check site occupancy")
+	}
+	if stays > 0 {
+		return c.JSON(http.StatusConflict, occupancyRefusal("site", stays, payments))
 	}
 
 	result, err := h.db.Exec(

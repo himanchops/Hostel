@@ -192,14 +192,14 @@ func (h *RoomHandler) UpdateRoom(c echo.Context) error {
 // with it, silently and unrecoverably. These counts turn that into a refusal
 // the owner can read.
 //
-// `where` is the predicate against `stays s`, with the id as $1 — the bed and
-// room cases differ only in how they reach the stay.
-func (h *RoomHandler) ledgerFootprint(where string, id int64) (stays, payments int, err error) {
+// `where` is the predicate against `stays s`, with the id as $1 — the bed,
+// room and site cases differ only in how they reach the stay.
+func ledgerFootprint(db *sqlx.DB, where string, id int64) (stays, payments int, err error) {
 	var row struct {
 		Stays    int `db:"stays"`
 		Payments int `db:"payments"`
 	}
-	err = h.db.Get(&row, `
+	err = db.Get(&row, `
 		SELECT COUNT(DISTINCT s.id) AS stays,
 		       COUNT(p.id)          AS payments
 		FROM stays s
@@ -240,7 +240,7 @@ func (h *RoomHandler) DeleteRoom(c echo.Context) error {
 	// Refuse if ANY bed in the room has stay history, ended or not. A former
 	// tenant's ledger is exactly the record you get sued over, so "they moved
 	// out" is not a reason to let it be destroyed.
-	stays, payments, err := h.ledgerFootprint("b.room_id = $1", roomID)
+	stays, payments, err := ledgerFootprint(h.db, "b.room_id = $1", roomID)
 	if err != nil {
 		return serverError(c, err, "failed to check room occupancy")
 	}
@@ -404,7 +404,7 @@ func (h *RoomHandler) DeleteBed(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid bed id"))
 	}
 
-	stays, payments, err := h.ledgerFootprint("s.bed_id = $1", bedID)
+	stays, payments, err := ledgerFootprint(h.db, "s.bed_id = $1", bedID)
 	if err != nil {
 		return serverError(c, err, "failed to check bed occupancy")
 	}

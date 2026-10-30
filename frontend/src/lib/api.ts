@@ -167,6 +167,9 @@ export interface Site {
   address?: string;
   created_at: string;
   updated_at: string;
+  /** Only on the list: any stay at all, ended or not, blocks a delete. */
+  stay_count?: number;
+  payment_count?: number;
 }
 
 export const sitesApi = {
