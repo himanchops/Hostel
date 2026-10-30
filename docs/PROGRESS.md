@@ -3986,10 +3986,9 @@ private and unreachable, but personal data kept for no reason. No migration.
   sends no photo keeps it; rejecting a registration removes its ID.
 
 **Production, 30 Oct 2026: live.** Merged as `3872f7c` (#68), no migration.
-Vercel and Render both reported success and `/health` answers. Not yet run:
-`storage-check` against R2, whose last line proves the token can delete
-(the owner runs it, since it needs the R2 keys). Until then a refused
-delete shows up only as Sentry errors.
+Vercel and Render both reported success and `/health` answers. The owner
+ran `storage-check` against R2 the same day: "OK: deleted, and the signed
+link no longer opens it", so the production token can delete.
 
 ## Deleting a site keeps its ledger (Oct 2026)
 Rooms and beds refused deletion when anyone had ever stayed in them
