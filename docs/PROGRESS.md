@@ -3951,6 +3951,40 @@ number. No migration.
   link doesn't work. Set, it is the same hostel's form as `/register/<id>`;
   that test runs only when the server is started with the setting.
 
+## Deleted tenants' files leave the bucket (Oct 2026)
+Deleting a tenant left their photo, ID scans and payment proofs in R2:
+private and unreachable, but personal data kept for no reason. No migration.
+
+- **`storage.Service` has `Delete`.** S3's `DeleteObject`, and `os.Remove`
+  locally; a key already gone is success.
+- **`removeFiles`** (`handlers/files.go`) runs after the row is gone, from
+  Delete tenant, Reject registration and Update tenant (`replacedFiles`: a
+  photo or scan the edit replaced or cleared). Delete and Reject read the
+  files first with `tenantFilesSQL`, since the cascade takes the payments.
+- **A file still in use is kept** (`fileInUseSQL`, every file column, every
+  owner, since a key names one object in a shared bucket). Nothing should
+  share a key, but a duplicate tenant may have been made from one upload.
+- **It never fails the request.** A failed check or delete is logged and
+  sent to Sentry, and the delete still succeeds; the file cannot be reached.
+- **Deleting a payment** needs none of it: only a tenant's payment has a
+  proof, and that is marked not accepted, never deleted.
+- **`storage-check`** now deletes its file too and checks the link dies,
+  which proves the R2 token can delete ("Object Read & Write" can).
+- Tenant Update returned 404 for any database error; it now says 404 only
+  when there is no such tenant and reports anything else.
+- Not done, by choice: a sweep of the bucket for files nothing points at
+  (uploads from forms never sent, and what deletes left before this). It is
+  on the board.
+
+### Verification
+- `TestReplacedFiles`: replaced and cleared go, kept and never-set don't.
+  `TestLocalDelete`: the file goes, and a second delete is not an error.
+- `tests/e2e/owner/deleted-files.test.ts`, real uploads through the portal's
+  route: Delete tenant removes photo, ID front and a portal payment's proof
+  (another owner's attempt removes nothing); a photo two tenants share stays
+  until the second goes; replacing a photo removes the old one, an edit that
+  sends no photo keeps it; rejecting a registration removes its ID.
+
 ## Deleting a site keeps its ledger (Oct 2026)
 Rooms and beds refused deletion when anyone had ever stayed in them
 (Phase 16), but a site did not: the trash icon on the Sites page and one

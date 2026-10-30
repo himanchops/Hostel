@@ -155,7 +155,10 @@ Key conventions to carry forward:
   to a browser goes through `signTenant`/`signPayment` (`handlers/files.go`),
   and anything that accepts a file reference checks `validFileRef`. A new file
   column needs both, or it either ships a raw key (a broken image) or accepts a
-  URL from any host.
+  URL from any host. Anything that deletes a row holding files, or replaces a
+  file, calls `removeFiles` after the change. A new file column also joins
+  `fileInUseSQL` and `tenantFilesSQL`, or a delete can remove a file another
+  row still uses.
 - **Rent and money are two questions** (`handlers/money.go`). "Collected" is
   rent: rent payments, plus rent a deposit paid off at settlement, less an
   advance handed back. It never includes a deposit. "Net in" is money: every

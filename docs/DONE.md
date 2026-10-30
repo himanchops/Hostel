@@ -15,6 +15,27 @@ When an item with a write-up ships, its write-up moves here from
 `docs/BACKLOG.md` in the same PR, under a heading with the PR number:
 `### <title> (#NN)`. Items with no write-up just leave the board.
 
+### Deleted tenants' photos and IDs stay in the bucket (#68)
+Shipped 30 Oct 2026. Deleting a tenant, or rejecting a registration, now
+deletes their photo, ID scans and payment proofs from R2 once the rows are
+gone, and replacing a photo or scan on an edit deletes the old one. A file
+another row still points at is kept. A failed delete is logged and sent to
+Sentry; the request still succeeds. Deleting a payment needed nothing: only
+a tenant's payment has a proof, and that is never deleted.
+
+The owner's call: the files the app causes to be left (option A), not a
+sweep of the whole bucket for now. A sweep would also catch uploads whose
+form was never sent and what deletes left before this shipped, but one
+mistake in its "is this still used?" query deletes a real tenant's ID. The
+original write-up:
+
+Deleting a tenant removes their rows (ON DELETE CASCADE), but their photo and
+ID scans stay in R2. They are private and nothing references them, so nothing
+can reach them. Still, it is personal data kept for no reason.
+`storage.Service` has no Delete yet; adding one, and calling it after the row
+is gone, is small. A sweep for unreferenced keys would also catch uploads from
+registrations that were rejected.
+
 ### After a quiet spell the app hangs, then fails (#66)
 Shipped 28 Oct 2026. The owner added that it was slow mid-session too, while
 clicking around, and on the registration page. Measured that day from India:
