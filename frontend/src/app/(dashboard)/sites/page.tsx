@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth";
 import { sitesApi, Site, ApiError } from "@/lib/api";
+import { ledgerRefusal } from "@/lib/ledger";
 import {
   BuildingIcon,
   Button,
@@ -59,10 +60,23 @@ export default function SitesPage() {
 
   async function handleDelete(id: number) {
     if (!token) return;
-    const name = sites.find((s) => s.id === id)?.name ?? "Site";
+    const site = sites.find((s) => s.id === id);
+    const name = site?.name ?? "Site";
+
+    // The same rule as a room or a bed: anyone who ever stayed here, and the
+    // site stays. Deleting it once took every stay and payment with it.
+    if (site?.stay_count) {
+      await confirm({
+        title: `${name} cannot be deleted`,
+        message: ledgerRefusal("site", site.stay_count, site.payment_count ?? 0),
+        acknowledge: true,
+      });
+      return;
+    }
+
     const ok = await confirm({
-      title: "Delete this site?",
-      message: "All rooms and data will be removed.",
+      title: `Delete ${name}?`,
+      message: "Its rooms and beds go with it. Nobody has ever stayed here, so there is no ledger to lose.",
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -71,8 +85,8 @@ export default function SitesPage() {
       await sitesApi.delete(token, id);
       setSites((prev) => prev.filter((s) => s.id !== id));
       toast.success(`Deleted ${name}`);
-    } catch {
-      toast.error("Failed to delete site");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Failed to delete site");
     }
   }
 
@@ -145,12 +159,17 @@ export default function SitesPage() {
               </Link>
               {/* Was hidden with display:none until hover — so absent on
                   every touchscreen and unreachable by keyboard. See
-                  HOVER_REVEAL. */}
+                  HOVER_REVEAL. With history it still answers a tap, to say
+                  why, but stops looking like an action. */}
               <button
                 onClick={() => handleDelete(site.id)}
-                aria-label={`Delete site ${site.name}`}
-                title="Delete site"
-                className={`${TOUCH_TARGET} absolute right-2 top-2 inline-flex items-center justify-center rounded-lg p-2 text-stone-400 transition duration-150 ease-out hover:bg-red-50 hover:text-red-500 ${HOVER_REVEAL}`}
+                aria-label={site.stay_count ? `Why site ${site.name} cannot be deleted` : `Delete site ${site.name}`}
+                title={site.stay_count ? "Has stay history — cannot be deleted" : "Delete site"}
+                className={`${TOUCH_TARGET} absolute right-2 top-2 inline-flex items-center justify-center rounded-lg p-2 transition duration-150 ease-out ${
+                  site.stay_count
+                    ? "text-stone-300 hover:bg-stone-100 hover:text-stone-400"
+                    : "text-stone-400 hover:bg-red-50 hover:text-red-500"
+                } ${HOVER_REVEAL}`}
               >
                 <TrashIcon className="h-4 w-4" />
               </button>
