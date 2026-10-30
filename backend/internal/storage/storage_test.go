@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -95,5 +97,25 @@ func TestS3SignedURL_Expires(t *testing.T) {
 	}
 	if !strings.Contains(u.RawQuery, "X-Amz-Signature=") {
 		t.Errorf("link carries no signature: %s", link)
+	}
+}
+
+func TestLocalDelete(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	s := NewLocalStorage(dir, "http://localhost:8080")
+
+	if err := s.Upload(ctx, sampleKey, "image/jpeg", strings.NewReader("x")); err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	if err := s.Delete(ctx, sampleKey); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, sampleKey)); !os.IsNotExist(err) {
+		t.Errorf("file still there after Delete (stat err %v)", err)
+	}
+	// A key that is already gone is success, not an error.
+	if err := s.Delete(ctx, sampleKey); err != nil {
+		t.Errorf("deleting a missing key: %v, want nil", err)
 	}
 }

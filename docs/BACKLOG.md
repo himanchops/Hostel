@@ -41,14 +41,6 @@ dashboard). Now that the data is real, a scheduled `pg_dump` from the owner's
 laptop is worth having. The script must not need `NEON_URL` on Claude's side:
 he runs anything that holds the connection string himself.
 
-### Deleted tenants' photos and IDs stay in the bucket
-Deleting a tenant removes their rows (ON DELETE CASCADE), but their photo and
-ID scans stay in R2. They are private and nothing references them, so nothing
-can reach them. Still, it is personal data kept for no reason.
-`storage.Service` has no Delete yet; adding one, and calling it after the row
-is gone, is small. A sweep for unreferenced keys would also catch uploads from
-registrations that were rejected.
-
 ---
 
 ## Parked

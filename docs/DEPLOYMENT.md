@@ -204,7 +204,9 @@ You now have the 4 values you need:
      go run ./cmd/storage-check --file ./some-image.png
    ```
    It should print `Backend: *storage.S3Storage`, then "OK: signed link opens
-   the file". Check
+   the file", and last "OK: deleted, and the signed link no longer opens it"
+   (deleting a tenant deletes their files, so the token must be allowed to
+   delete; "Object Read & Write" is). Check
    that backend line — the selector falls back to local storage on an
    unrecognised `STORAGE_BACKEND` rather than erroring, so `*storage.LocalStorage`
    means the variable did not reach the process and the test proved nothing.

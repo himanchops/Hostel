@@ -473,6 +473,10 @@ func (h *TenantHandler) Reject(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid tenant id"))
 	}
 
+	var files []string
+	if err := h.db.Select(&files, tenantFilesSQL, tenantID, ownerID); err != nil {
+		return serverError(c, err, "failed to reject")
+	}
 	res, err := h.db.Exec(
 		`DELETE FROM tenants WHERE id = $1 AND owner_id = $2 AND is_approved = false`,
 		tenantID, ownerID,
@@ -484,6 +488,7 @@ func (h *TenantHandler) Reject(c echo.Context) error {
 	if rows == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("pending tenant not found"))
 	}
+	removeFiles(c, h.db, h.storage, files...)
 	return c.JSON(http.StatusNoContent, nil)
 }
 
@@ -511,6 +516,19 @@ func (h *TenantHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse(msg))
 	}
 
+	// The files before the edit, so a photo or scan it replaces can go.
+	var before models.Tenant
+	err = h.db.Get(&before,
+		`SELECT `+tenantCols+` FROM tenants WHERE id = $1 AND owner_id = $2`,
+		tenantID, ownerID,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+		}
+		return serverError(c, err, "failed to update tenant")
+	}
+
 	var tenant models.Tenant
 	err = h.db.QueryRowx(
 		`UPDATE tenants
@@ -532,9 +550,35 @@ func (h *TenantHandler) Update(c echo.Context) error {
 		req.Notes, time.Now(), tenantID, ownerID,
 	).StructScan(&tenant)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
+		}
+		return serverError(c, err, "failed to update tenant")
 	}
+	removeFiles(c, h.db, h.storage, replacedFiles(&before, &tenant)...)
 	return h.respondTenant(c, http.StatusOK, &tenant)
+}
+
+// replacedFiles names the files an edit took off a tenant: each one that was
+// set before and is something else, or nothing, after.
+func replacedFiles(before, after *models.Tenant) []string {
+	pairs := [][2]*string{
+		{before.PhotoURL, after.PhotoURL},
+		{before.IDProofURL, after.IDProofURL},
+		{before.IDProofFrontURL, after.IDProofFrontURL},
+		{before.IDProofBackURL, after.IDProofBackURL},
+	}
+	var gone []string
+	for _, p := range pairs {
+		was, now := p[0], p[1]
+		if was == nil || *was == "" {
+			continue
+		}
+		if now == nil || *now != *was {
+			gone = append(gone, *was)
+		}
+	}
+	return gone
 }
 
 // Delete removes a tenant and, through ON DELETE CASCADE, every stay,
@@ -546,9 +590,8 @@ func (h *TenantHandler) Update(c echo.Context) error {
 // tenant before it offers the button. It exists because an owner who added a
 // test tenant, or a duplicate, had no way to remove them at all.
 //
-// Uploaded photos and ID scans stay in the bucket. They are private and
-// unreferenced, so nothing can reach them; removing them is noted in
-// docs/BACKLOG.md rather than done halfway here.
+// Their photo, ID scans and payment proofs go from the bucket too, once the
+// rows are gone (removeFiles).
 //
 // DELETE /api/tenants/:id
 func (h *TenantHandler) Delete(c echo.Context) error {
@@ -558,6 +601,10 @@ func (h *TenantHandler) Delete(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("invalid tenant id"))
 	}
 
+	var files []string
+	if err := h.db.Select(&files, tenantFilesSQL, tenantID, ownerID); err != nil {
+		return serverError(c, err, "failed to delete tenant")
+	}
 	res, err := h.db.Exec(`DELETE FROM tenants WHERE id = $1 AND owner_id = $2`, tenantID, ownerID)
 	if err != nil {
 		return serverError(c, err, "failed to delete tenant")
@@ -569,6 +616,7 @@ func (h *TenantHandler) Delete(c echo.Context) error {
 	if rows == 0 {
 		return c.JSON(http.StatusNotFound, errorResponse("tenant not found"))
 	}
+	removeFiles(c, h.db, h.storage, files...)
 	return c.JSON(http.StatusOK, map[string]string{"message": "tenant deleted"})
 }
 
