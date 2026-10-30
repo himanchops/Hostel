@@ -3,7 +3,8 @@
 Step-by-step guide to deploying the app to a free/cheap public stack.
 
 > **Live as of Aug 2026.**
-> Frontend: https://hostel-ten-kappa.vercel.app
+> Frontend: https://choprahostel.vercel.app (since 30 Oct 2026; the first
+> address, https://hostel-ten-kappa.vercel.app, redirects to it)
 > Backend: https://hostel-backend-k7ar.onrender.com
 >
 > The steps below are kept as the record of how it was set up, and as the guide
@@ -235,6 +236,11 @@ You now have the 4 values you need:
    the prompt disappears.
 4. **Environment Variables:**
    - `NEXT_PUBLIC_API_URL` = the Render backend URL from step 3.6.
+   - `NEXT_PUBLIC_REGISTER_OWNER_ID` = the owner whose form a bare `/register`
+     shows (4 in production). Optional: unset, `/register` says the link
+     doesn't work and only `/register/:ownerId` registers anyone. Like every
+     `NEXT_PUBLIC_` value it is read at build time, so a change needs a
+     redeploy.
 5. Click "Deploy". First build takes ~3 min.
 6. Once live, Vercel shows the URL, e.g. `https://hostel-xxx.vercel.app`.
 
@@ -638,6 +644,14 @@ should load, and its link should point at `r2.cloudflarestorage.com` and carry
 Production is not just demo data any more. **Chopra Boys Hostel** is on it:
 owner #4 (`lnchopra66@yahoo.co.in`), site #1, 7 rooms, 45 beds. The structure
 was seeded; tenants, stays and payments are entered by hand.
+
+**Its registration link is `https://choprahostel.vercel.app/register`**, the
+one on the poster at reception (Oct 2026). The address is a free `vercel.app`
+name added under the Vercel project's Domains, and `/register` with no
+number is owner #4 because Vercel sets `NEXT_PUBLIC_REGISTER_OWNER_ID=4`.
+Changing the address means: add it under Domains, add it to `FRONTEND_URL`
+on Render beside the old one (or sign-in and registration fail from it with
+a silent CORS refusal), and reprint anything with a QR code.
 
 ### Putting demo data on the deployed site
 

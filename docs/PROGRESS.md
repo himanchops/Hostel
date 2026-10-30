@@ -3917,6 +3917,40 @@ nothing recorded one. No migration. Where to look: `docs/DEPLOYMENT.md` →
   errors.
 - Full suite on normal servers: 237 e2e, 89 unit, `go test ./...`.
 
+**Production, 29 Oct 2026: live.** Merged as `fb67401` (#67), no migration.
+Both deploys succeeded, and a preflight to the live backend carrying both
+trace headers came back 204 with them allowed.
+
+---
+
+## A short registration link (Oct 2026)
+The owner wanted posters for the hostel, starting with the house rules and a
+QR code to register. The code would have carried
+`hostel-ten-kappa.vercel.app/register/4`: a random address and an owner
+number. No migration.
+
+- **The address** is now `choprahostel.vercel.app`, a free `vercel.app` name
+  the owner added in Vercel, with the new origin added to `FRONTEND_URL` on
+  Render. The old address redirects to the new one with the path kept, so
+  every link already shared still works. No code named the frontend's
+  address: the pending queue's share link uses `window.location.origin`.
+- **`/register` with no number** shows the form of the owner named by
+  `NEXT_PUBLIC_REGISTER_OWNER_ID` (4 on Vercel). Unset, or anything but a
+  plain number (`registerOwnerId`), it shows the "link doesn't work" card
+  rather than guess, so a typo can't send someone's ID to another owner.
+  Renumbering the owner to 1 in the database was considered and turned down:
+  every table carries `owner_id`, and the sign-in token carries it too.
+- The form moved from `register/[ownerId]/page.tsx` to
+  `register/RegisterForm.tsx`, behind both routes, unchanged.
+- DEPLOYMENT.md and the seed scripts use the new address.
+
+### Verification
+- `tests/unit/registerOwner.test.ts`: "4" is owner 4; unset, blank, "4a",
+  "4.5", "0" and "04" are nobody.
+- `tests/e2e/public/register-default.test.ts`: unset, `/register` says the
+  link doesn't work. Set, it is the same hostel's form as `/register/<id>`;
+  that test runs only when the server is started with the setting.
+
 ## Deleted tenants' files leave the bucket (Oct 2026)
 Deleting a tenant left their photo, ID scans and payment proofs in R2:
 private and unreachable, but personal data kept for no reason. No migration.
