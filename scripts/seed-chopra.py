@@ -250,7 +250,7 @@ def main():
 
     print(f"\n✓ created {made_rooms} rooms and {made_beds} beds "
           f"(existing ones were left alone)")
-    print(f"  Grid: https://hostel-ten-kappa.vercel.app/sites/{sid}/grid\n")
+    print(f"  Grid: https://choprahostel.vercel.app/sites/{sid}/grid\n")
 
 
 if __name__ == "__main__":

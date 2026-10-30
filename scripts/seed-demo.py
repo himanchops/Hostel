@@ -76,7 +76,7 @@ APP = os.environ.get("HOSTEL_APP") or (
     "http://localhost:3000"
     if "localhost" in os.environ.get("HOSTEL_API", "http://localhost:8080")
     or "127.0.0.1" in os.environ.get("HOSTEL_API", "http://localhost:8080")
-    else "https://hostel-ten-kappa.vercel.app"
+    else "https://choprahostel.vercel.app"
 )
 
 TODAY = date.today()
