@@ -3985,6 +3985,12 @@ private and unreachable, but personal data kept for no reason. No migration.
   until the second goes; replacing a photo removes the old one, an edit that
   sends no photo keeps it; rejecting a registration removes its ID.
 
+**Production, 30 Oct 2026: live.** Merged as `3872f7c` (#68), no migration.
+Vercel and Render both reported success and `/health` answers. Not yet run:
+`storage-check` against R2, whose last line proves the token can delete
+(the owner runs it, since it needs the R2 keys). Until then a refused
+delete shows up only as Sentry errors.
+
 ## Deleting a site keeps its ledger (Oct 2026)
 Rooms and beds refused deletion when anyone had ever stayed in them
 (Phase 16), but a site did not: the trash icon on the Sites page and one
@@ -4018,6 +4024,10 @@ account that was every stay and payment the hostel had. No migration.
   site has a stay.
 - On the demo data: Koramangala explains "29 stays and 117 payments".
 - Full suite: 241 e2e, 89 unit, `go test ./...`.
+
+**Production, 30 Oct 2026: live.** Merged as `1c2d44b` (#70), no migration.
+Vercel and Render both reported success, `/health` answers and `/api/sites`
+answers 401 without a sign-in, as it should.
 
 ---
 
