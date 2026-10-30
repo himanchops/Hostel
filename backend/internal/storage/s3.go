@@ -103,3 +103,16 @@ func (s *S3Storage) SignedURL(ctx context.Context, key string, ttl time.Duration
 	}
 	return req.URL, nil
 }
+
+// Delete implements Service. S3's DeleteObject already succeeds for a key
+// that does not exist, which is the contract Service asks for.
+func (s *S3Storage) Delete(ctx context.Context, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("s3 delete %q: %w", key, err)
+	}
+	return nil
+}

@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -40,4 +42,12 @@ func (s *LocalStorage) Upload(_ context.Context, key, _ string, r io.Reader) err
 
 func (s *LocalStorage) SignedURL(_ context.Context, key string, _ time.Duration) (string, error) {
 	return s.baseURL + "/uploads/" + key, nil
+}
+
+func (s *LocalStorage) Delete(_ context.Context, key string) error {
+	err := os.Remove(filepath.Join(s.dir, key))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
 }

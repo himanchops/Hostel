@@ -20,6 +20,9 @@ type Service interface {
 	Upload(ctx context.Context, key, contentType string, r io.Reader) error
 	// SignedURL returns a link to key that stops working after ttl.
 	SignedURL(ctx context.Context, key string, ttl time.Duration) (string, error)
+	// Delete removes key. A key that is already gone is not an error, so a
+	// delete that is retried, or that races another, reports success.
+	Delete(ctx context.Context, key string) error
 }
 
 // keyPattern is the only shape of key the upload handler ever creates:

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/winnow/hostel/internal/models"
 )
 
 // fakeStorage signs by prefixing, so a test can see exactly which key was
@@ -15,6 +16,7 @@ import (
 type fakeStorage struct{ ttl time.Duration }
 
 func (f *fakeStorage) Upload(context.Context, string, string, io.Reader) error { return nil }
+func (f *fakeStorage) Delete(context.Context, string) error                    { return nil }
 func (f *fakeStorage) SignedURL(_ context.Context, key string, ttl time.Duration) (string, error) {
 	f.ttl = ttl
 	return "https://signed.example/" + key + "?sig", nil
@@ -64,5 +66,32 @@ func TestValidFileRef(t *testing.T) {
 	// any host's .jpg could be stored and later fetched by the owner's browser.
 	if validFileRef("https://anywhere.example/x.jpg") {
 		t.Error("a URL must be rejected, whatever its extension")
+	}
+}
+
+func TestReplacedFiles(t *testing.T) {
+	str := func(s string) *string { return &s }
+	const (
+		photo    = "tenant/00000000000000000000000000000001.jpg"
+		newPhoto = "tenant/00000000000000000000000000000002.jpg"
+		front    = "public/00000000000000000000000000000003.jpg"
+		back     = "public/00000000000000000000000000000004.jpg"
+	)
+	before := &models.Tenant{PhotoURL: str(photo), IDProofFrontURL: str(front), IDProofBackURL: str(back)}
+	after := &models.Tenant{
+		PhotoURL:        str(newPhoto), // replaced
+		IDProofFrontURL: str(front),    // kept
+		IDProofBackURL:  str(""),       // cleared
+		IDProofURL:      str(""),       // was never set
+	}
+
+	got := replacedFiles(before, after)
+	want := []string{photo, back}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("replacedFiles = %v, want %v", got, want)
+	}
+
+	if got := replacedFiles(before, before); len(got) != 0 {
+		t.Errorf("an edit that changes no file removes none, got %v", got)
 	}
 }

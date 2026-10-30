@@ -3,8 +3,10 @@
 // Reads STORAGE_BACKEND and the matching env vars (same as the server),
 // uploads a single file, and proves the two things private storage promises:
 // the signed link the app would hand a browser opens the file, and the
-// file's plain address does not. Use it after a deploy, or after changing
-// the bucket's public-access setting, without touching the live UI.
+// file's plain address does not. Then it deletes the file, as deleting a
+// tenant does, and checks the signed link stops working. Use it after a
+// deploy, or after changing the bucket's public-access setting or its API
+// token, without touching the live UI.
 //
 // Usage:
 //
@@ -90,14 +92,23 @@ func main() {
 
 	if *publicURL == "" {
 		fmt.Println("Skipped: public-access check (pass --public-url to run it)")
-		return
-	}
-	plain := strings.TrimRight(*publicURL, "/") + "/" + key
-	if status := get(plain); status == http.StatusOK {
-		log.Fatalf("FAIL: %s is still publicly readable — public access is still on for this bucket.", plain)
 	} else {
-		fmt.Printf("OK: plain link refused (%d) — the bucket is private\n", status)
+		plain := strings.TrimRight(*publicURL, "/") + "/" + key
+		if status := get(plain); status == http.StatusOK {
+			log.Fatalf("FAIL: %s is still publicly readable — public access is still on for this bucket.", plain)
+		} else {
+			fmt.Printf("OK: plain link refused (%d) — the bucket is private\n", status)
+		}
 	}
+
+	if err := svc.Delete(context.Background(), key); err != nil {
+		log.Fatalf("FAIL: delete failed: %v\n"+
+			"Deleted tenants' files would stay in the bucket. Check that the API token can delete objects.", err)
+	}
+	if status := get(link); status == http.StatusOK {
+		log.Fatalf("FAIL: the file still opens after Delete reported success.")
+	}
+	fmt.Println("OK: deleted, and the signed link no longer opens it")
 }
 
 // get returns the HTTP status for url, treating a transport failure (e.g. a
