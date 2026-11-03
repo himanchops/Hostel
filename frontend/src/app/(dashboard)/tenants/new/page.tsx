@@ -220,11 +220,13 @@ export default function NewTenantPage() {
             <Field label="Aadhaar number">
               <Input value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} maxLength={12} inputMode="numeric" placeholder="12-digit number" />
             </Field>
-            <Field label="Emergency contact">
-              <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
+            {/* Worded as on the tenant's edit form. "Emergency contact" and
+                "Their phone" read as one field and a phone with no owner. */}
+            <Field label="Emergency contact name">
+              <Input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Mother, father, guardian…" />
             </Field>
-            <Field label="Their phone">
-              <Input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="Phone number" />
+            <Field label="Emergency contact phone">
+              <Input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="10-digit mobile" />
             </Field>
             <Field label="Photo">
               <FileInput accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />

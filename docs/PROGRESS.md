@@ -4114,6 +4114,34 @@ with the path kept. But Pending offered `/register/4` while the poster says
   `http://localhost:3000/register` on Pending, and `public/register-default`'s
   configured-owner test passes against it.
 
+## Registration in three steps, no password (Nov 2026)
+
+Owner, 3 Nov 2026: people registering found the form too long and got
+confused. "Emergency contact" and "Their phone" sat between the Aadhaar box
+and the ID photos, so the phone read as nobody's, and the password asked for
+a portal he wants stashed, not removed. He picked the layout from a mockup.
+
+- Server (#73): `POST /public/register` no longer needs a password. Without
+  one the tenant has no portal login, like one the owner adds by hand, and
+  "Set portal password" on the tenant page still gives them one. A password
+  that is sent is still checked and kept. Live 3 Nov 2026: Render and
+  Vercel deployed, `/health` ok, and a live registration with no password
+  is refused for the missing ID photo, not the password.
+- Form: three numbered steps, each about one thing. **About you** (name,
+  phone number, workplace, address), **Emergency contact** (their name,
+  their phone number, always stacked), **Your ID** (Aadhaar, photo of the
+  front, the back, a photo of you). No password, no "You'll sign in with
+  this", and the success screen no longer points at the portal. Nothing else
+  was dropped.
+- Add tenant says "Emergency contact name / phone", as the edit form did.
+
+### Verification
+- `public/registration.test.ts`: a registration with no password is a 201
+  with `has_portal_login: false`, a short one is still refused, the form has
+  no password field and says nothing about signing in, and the three step
+  headings are there. The other public tests fill the new labels.
+- Screenshots at 375×812, 768×1024 and 1024×768 with touch, no overflow.
+
 ---
 
 ## Architecture Notes

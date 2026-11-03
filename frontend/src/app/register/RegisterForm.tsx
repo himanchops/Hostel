@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { registrationApi, uploadApi, ApiError } from "@/lib/api";
 import {
-  Button, Card, Field, FileInput, FormError, Input, ShowPassword, Textarea,
+  Button, Card, Field, FileInput, FormError, Input, Textarea,
 } from "@/components/ui";
 import { checkPhones, tenDigits } from "@/lib/phone";
 import { publicMessage } from "@/lib/publicError";
@@ -36,7 +35,7 @@ function aadhaarError(value: string): string | null {
  */
 function PublicFrame({
   ownerName,
-  subtitle = "Fill in your details to get started.",
+  subtitle = "Three short steps. Keep your Aadhaar card handy.",
   children,
 }: {
   ownerName: string | null;
@@ -120,6 +119,22 @@ function UploadField({
 }
 
 /**
+ * A card heading with its step number, so someone on a phone can see how
+ * much of the form is left. The number is decoration: the heading's name is
+ * the words alone.
+ */
+function StepTitle({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <h2 className="flex items-center gap-2 text-base font-semibold text-stone-900">
+      <span aria-hidden="true" className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold tabular-nums text-indigo-600">
+        {n}
+      </span>
+      {children}
+    </h2>
+  );
+}
+
+/**
  * The registration form for one owner, behind both `/register/:ownerId` and
  * a bare `/register`. NaN, from a link with no usable owner in it, shows the
  * "link doesn't work" card instead of a form.
@@ -127,7 +142,6 @@ function UploadField({
 export function RegisterForm({ ownerId: ownerIdNum }: { ownerId: number }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
   const [address, setAddress] = useState("");
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
@@ -144,7 +158,6 @@ export function RegisterForm({ ownerId: ownerIdNum }: { ownerId: number }) {
   const phoneRef = useRef<HTMLInputElement>(null);
   const emergencyRef = useRef<HTMLInputElement>(null);
   const aadhaarRef = useRef<HTMLInputElement>(null);
-  const [reveal, setReveal] = useState(false);
   // A wrong link used to show the whole form and fail only on submit, after
   // three photo uploads. "bad" replaces the form; a network failure leaves
   // it up, because the link may well be fine.
@@ -262,7 +275,6 @@ export function RegisterForm({ ownerId: ownerIdNum }: { ownerId: number }) {
       await registrationApi.register(ownerIdNum, {
         name,
         phone: phones.phone,
-        password,
         photo_url: photoUrl,
         id_proof_url: idProofFrontUrl,       // legacy fallback
         id_proof_front_url: idProofFrontUrl,
@@ -316,7 +328,9 @@ export function RegisterForm({ ownerId: ownerIdNum }: { ownerId: number }) {
           {/* What happens next, because "you'll be contacted" leaves someone
               who just typed their Aadhaar number with nothing to expect. It
               once ended "then sign in with your phone number and password",
-              which most tenants never need to do (owner, Oct 2026). */}
+              which most tenants never need to do (owner, Oct 2026). The
+              portal is stashed now and registration makes no login at all
+              (Nov 2026), so nothing here points at it. */}
           <ol className="mt-6 space-y-3 text-left">
             {[
               "The owner checks your details.",
@@ -332,42 +346,31 @@ export function RegisterForm({ ownerId: ownerIdNum }: { ownerId: number }) {
           </ol>
 
           <p className="mt-6 text-left text-sm text-stone-500">
-            That&apos;s all you need to do. If you ever want to send a payment
-            screenshot or give notice, sign in with your phone number and password.
+            That&apos;s all you need to do.
           </p>
-          <Link
-            href="/my/login"
-            className="mt-3 inline-block text-sm font-semibold text-indigo-600 hover:underline"
-          >
-            Go to the tenant portal →
-          </Link>
         </Card>
       </PublicFrame>
     );
   }
 
-  // The same four groups, in the same order and with the same labels, as the
-  // owner's Add tenant form, so what the owner reviews reads the way they
-  // would have typed it. Only what is required is marked; "(optional)" beside
-  // most fields read as permission to skip them, and every hint that did not
-  // change what someone types is gone. The owner wants an emergency contact
-  // from everyone and no email at all (Oct 2026).
+  // Three numbered steps, each about one thing (Nov 2026). People
+  // registering found the old four groups long and confusing: the emergency
+  // contact sat between the Aadhaar box and the ID photos, so "Their phone"
+  // read as nobody's, and a password asked for a portal most never use. It
+  // asks for no password now. Only what is required is marked; "(optional)"
+  // beside most fields read as permission to skip them. The owner wants an
+  // emergency contact from everyone and no email at all (Oct 2026).
   return (
     <PublicFrame ownerName={ownerName}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Card title="You">
+        <Card title={<StepTitle n={1}>About you</StepTitle>}>
           <div className="space-y-4">
             <Field label="Full name" required>
               <Input required value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <Field label="Phone" required hint="You'll sign in with this." error={fieldError.phone}>
-              <Input ref={phoneRef} required type="tel" inputMode="tel" placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Field label="Phone number" required error={fieldError.phone}>
+              <Input ref={phoneRef} required type="tel" inputMode="tel" placeholder="10-digit mobile" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </Field>
-          </div>
-        </Card>
-
-        <Card title="About you">
-          <div className="space-y-4">
             <Field label="Workplace / College">
               <Input value={workplace} onChange={(e) => setWorkplace(e.target.value)} />
             </Field>
@@ -377,11 +380,24 @@ export function RegisterForm({ ownerId: ownerIdNum }: { ownerId: number }) {
           </div>
         </Card>
 
-        <Card title="ID and emergency contact">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Always stacked, never side by side, so the name and the number
+            read as one person. */}
+        <Card title={<StepTitle n={2}>Emergency contact</StepTitle>}>
+          <div className="space-y-4">
+            <Field label="Their name" required>
+              <Input required value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Mother, father, guardian…" />
+            </Field>
+            <Field label="Their phone number" required error={fieldError.emergency}>
+              <Input ref={emergencyRef} required type="tel" inputMode="tel" placeholder="10-digit mobile" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
+            </Field>
+          </div>
+        </Card>
+
+        <Card title={<StepTitle n={3}>Your ID</StepTitle>}>
+          <div className="space-y-4">
             {/* The one hint kept for trust: this is a stranger typing an
                 Aadhaar number into a page they reached from a sticker. */}
-            <Field label="Aadhaar number" hint="Only the owner sees this." className="sm:col-span-2" error={fieldError.aadhaar}>
+            <Field label="Aadhaar number" hint="Only the owner sees this." error={fieldError.aadhaar}>
               <Input
                 ref={aadhaarRef}
                 value={aadhaarNumber}
@@ -393,35 +409,23 @@ export function RegisterForm({ ownerId: ownerIdNum }: { ownerId: number }) {
                 placeholder="12 digits"
               />
             </Field>
-            <Field label="Emergency contact" required>
-              <Input required value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} placeholder="Parent / guardian" />
-            </Field>
-            <Field label="Their phone" required error={fieldError.emergency}>
-              <Input ref={emergencyRef} required type="tel" inputMode="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
-            </Field>
             <UploadField
-              label="ID front"
+              label="Photo of the front of your ID"
               required
               onChange={(f) => { setIdProofFront(f); if (f) setIdFrontError(""); }}
               file={idProofFront}
               error={idFrontError}
               hint="Aadhaar, passport or driving licence"
             />
-            <UploadField label="ID back" onChange={setIdProofBack} file={idProofBack} />
+            <UploadField label="Photo of the back" onChange={setIdProofBack} file={idProofBack} />
             <UploadField
-              label="Your photo"
+              label="A photo of you"
               onChange={setPhoto}
               file={photo}
+              hint="A selfie is fine."
               accept="image/jpeg,image/png,image/webp"
             />
           </div>
-        </Card>
-
-        <Card title="Sign-in">
-          <Field label="Password" required hint="At least 6 characters">
-            <Input required type={reveal ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} />
-          </Field>
-          <ShowPassword checked={reveal} onChange={setReveal} />
         </Card>
 
         {error && <FormError>{error}</FormError>}

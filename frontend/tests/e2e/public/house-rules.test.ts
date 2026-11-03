@@ -26,11 +26,10 @@ const RULES = HOUSE_RULES[HOUSE_RULES_VERSION];
 
 async function fillForm(page: Page, name: string, phone: string) {
   await page.getByLabel("Full name").fill(name);
-  await page.getByPlaceholder("10-digit number").fill(phone);
-  await page.getByLabel("Emergency contact").fill("Test Parent");
+  await page.getByLabel(/^Phone number/).fill(phone);
+  await page.getByLabel("Their name").fill("Test Parent");
   await page.getByLabel("Their phone").fill("9000000001");
-  await page.getByLabel("ID front").setInputFiles({ name: "id.png", mimeType: "image/png", buffer: PNG });
-  await page.getByLabel(/^Password/).fill("tenant1234");
+  await page.getByLabel("Photo of the front of your ID").setInputFiles({ name: "id.png", mimeType: "image/png", buffer: PNG });
 }
 
 test("registering means ticking each money rule and the house rules", async ({ page, request }) => {
