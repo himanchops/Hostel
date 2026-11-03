@@ -101,3 +101,15 @@ test("just approving puts them on the books with no stay, and only once", async 
   const again = await request.post(`${BASE}/api/tenants/${applicant.id}/approve`, { headers: auth, data: {} });
   expect(again.status()).toBe(404);
 });
+
+// The short /register on the poster belongs to the one owner this deployment
+// is set up for (NEXT_PUBLIC_REGISTER_OWNER_ID, unit-tested in
+// registerOwner.test.ts). A new owner is never that one, whatever the dev
+// server was started with, so they are offered their own /register/:id.
+test("the registration link to share is the owner's own form", async ({ page, request }) => {
+  const { token, owner } = await createOwner(request, `link-${RUN_ID}`);
+  await loginAs(page, token);
+  await page.goto("/pending");
+  const origin = new URL(page.url()).origin;
+  await expect(page.getByText(`${origin}/register/${owner.id}`, { exact: true })).toBeVisible();
+});

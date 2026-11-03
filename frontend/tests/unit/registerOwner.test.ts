@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { registerOwnerId } from "../../src/lib/registerOwner";
+import { registerOwnerId, registrationLink } from "../../src/lib/registerOwner";
 
 /**
  * Whose form a bare /register shows (Oct 2026). Only a plain whole number
@@ -23,4 +23,17 @@ test("anything that is not a plain positive number names nobody", () => {
   for (const raw of ["4a", "4.5", "0", "-4", "04", "four", "1e2"]) {
     expect(registerOwnerId(raw), raw).toBeNaN();
   }
+});
+
+test("the Pending page offers the short link only to the owner it is set up for", () => {
+  const origin = "https://choprahostel.vercel.app";
+  expect(registrationLink(origin, 4, "4")).toBe(`${origin}/register`);
+  expect(registrationLink(origin, 7, "4")).toBe(`${origin}/register/7`);
+  expect(registrationLink(origin, 4, undefined)).toBe(`${origin}/register/4`);
+  expect(registrationLink(origin, 4, "4a")).toBe(`${origin}/register/4`);
+});
+
+test("no link before the owner has loaded", () => {
+  expect(registrationLink("https://choprahostel.vercel.app", undefined, "4")).toBe("");
+  expect(registrationLink("", 4, "4")).toBe("");
 });

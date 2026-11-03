@@ -46,6 +46,7 @@ import {
 import { payMethodLabel } from "@/lib/payMethod";
 import { phoneKey } from "@/lib/phone";
 import { pendingChanged } from "@/lib/pending";
+import { registrationLink } from "@/lib/registerOwner";
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -363,7 +364,11 @@ function PendingQueue() {
   const [actioningPayId, setActioningPayId] = useState<number | null>(null);
   const [rejectingProof, setRejectingProof] = useState<PendingPayment | null>(null);
 
-  const registrationUrl = typeof window !== "undefined" ? `${window.location.origin}/register/${owner?.id}` : "";
+  const registrationUrl = registrationLink(
+    typeof window !== "undefined" ? window.location.origin : "",
+    owner?.id,
+    process.env.NEXT_PUBLIC_REGISTER_OWNER_ID,
+  );
 
   const loadRegistrations = useCallback(() => {
     if (!token) return;
