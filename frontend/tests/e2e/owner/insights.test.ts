@@ -239,11 +239,10 @@ test.describe("Insights", () => {
 
     await loginAs(page, token);
     await page.goto("/insights");
-    const month = firstOf(0).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
     const tile = page.getByText("Rent collected").locator("..");
     await expect(tile).toContainText("₹8,000");
-    await expect(tile).toContainText(`of ₹14,000 expected in ${month}`);
-    await expect(tile).toContainText("₹8,000 due so far · 100% of it paid");
+    await expect(tile).toContainText("of ₹14,000 expected");
+    await expect(tile).toContainText("₹8,000 due so far · 100% paid");
     const row = monthRow(page, firstOf(0));
     await expect(row).toContainText("₹14,000");
     await expect(row).toContainText("₹8,000 due so far");
@@ -296,14 +295,22 @@ test.describe("Insights", () => {
     // The tiles. Three months expected (₹24,000), all of it due since the
     // rent day is the 1st, one paid: 33%, counted for this tenant alone.
     const rentTile = page.getByText("Rent collected").locator("..");
-    await expect(rentTile).toContainText("of ₹24,000 expected in these months");
-    await expect(rentTile).toContainText("33% of it paid");
+    await expect(rentTile).toContainText("of ₹24,000 expected");
+    await expect(rentTile).toContainText("33% paid");
     await expect(rentTile).not.toContainText("due so far");
     await expect(page.getByText("Still owed now").locator("..")).toContainText("1 of 1 tenants owe · chase\u00a0them\u00a0→");
     const beds = page.getByText("Occupied today").locator("..");
     await expect(beds).toContainText("1 of 2");
     await expect(beds).toContainText("50% today");
     await expect(beds).toContainText(`over ${firstOf(0).toLocaleString("en-US", { month: "long", timeZone: "UTC" })} so far`);
+
+    // Three tiles side by side are one height. "Still owed now" is a link
+    // when someone owes, and its card once stopped short of the others
+    // (owner, Nov 2026).
+    const heights = await Promise.all(["Rent collected", "Still owed now", "Occupied today"].map(
+      async (label) => (await page.getByText(label, { exact: true }).locator("..").boundingBox())!.height,
+    ));
+    expect(new Set(heights.map(Math.round)).size).toBe(1);
 
     // "By room" is shut by default, and its summary has to be worth reading
     // shut — it names the room earning nothing without being opened.

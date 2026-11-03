@@ -4048,11 +4048,19 @@ picked "add expected this month, in plain words" from three options.
   nothing is still to come in them.
 - **Due is the old figure, kept beside it**: `RevenuePoint.due_paise` and
   the dashboard's `due_this_month`. They differ only for the month under way.
-- **The tile:** "₹40,700 · of ₹1,04,800 expected in November · ₹83,500 due
-  so far · 63% of it paid" (demo). The % is still tenant by tenant against
-  rent due (`computePaidShare`, his October choice). "Due so far" drops out
-  once nothing is still to come; before the first rent day it says
-  "nothing due yet".
+- **The tile:** "₹40,700 · of ₹1,04,800 expected · ₹83,500 due so far ·
+  63% paid" (demo). A first version said "expected in November" and "63% of
+  it paid"; the owner found it crowded, and the page's subtitle already names
+  the months. The % is still tenant by tenant against rent due
+  (`computePaidShare`, his October choice). "Due so far" drops out once
+  nothing is still to come; before the first rent day it says "nothing due
+  yet".
+- **The three tiles are one height.** "Still owed now" is a link when anyone
+  owes, and its card stopped short of the others; `Tile`'s card is `h-full`
+  now. `insights.test.ts` measures them in a fixture where someone owes (in
+  one where nobody does, the tile is no link and was never short).
+- **All money's first tile says "rent and deposits, minus what went back"**,
+  not "rent and deposits, cash and UPI, less refunds" (owner: wordy).
 - **The table:** "Billed" is now "Expected". The month under way shows the
   whole month with "₹83,500 due so far" under it and no %. The tile already
   says "of ₹X expected", so the screen has one percentage for that month,
