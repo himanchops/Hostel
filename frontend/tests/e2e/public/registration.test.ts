@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { agreeToRules, createOwner, TEST_EMERGENCY, TEST_RULES } from "../helpers/api";
+import { agreeToRules, createOwner, TEST_EMERGENCY, TEST_ID_KEY, TEST_RULES } from "../helpers/api";
 
 const BASE = "http://localhost:8080";
 const RUN_ID = Date.now().toString();
@@ -321,6 +321,27 @@ test.describe("Public registration", () => {
       },
     });
     expect(res.status()).toBe(400);
+  });
+
+  // The form stopped asking for a password (Nov 2026). Such a registration
+  // has no portal login, like a tenant the owner adds by hand, until the
+  // owner sets one from the tenant page. One that is sent is still checked.
+  test("registration needs no password, and makes no portal login without one", async ({ request }) => {
+    const { token, owner } = await createOwner(request, `pub-nopw-${RUN_ID}`);
+    const phone = `66${RUN_ID.slice(-8)}`;
+    const res = await request.post(`${BASE}/public/register/${owner.id}`, {
+      data: { name: `No Password ${RUN_ID}`, phone, id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
+    });
+    expect(res.status()).toBe(201);
+    const { id } = await res.json();
+
+    const seen = await request.get(`${BASE}/api/tenants/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    expect((await seen.json()).has_portal_login).toBe(false);
+
+    const short = await request.post(`${BASE}/public/register/${owner.id}`, {
+      data: { name: `Short ${RUN_ID}`, phone: `67${RUN_ID.slice(-8)}`, password: "abc", id_proof_front_url: TEST_ID_KEY, ...TEST_EMERGENCY, ...TEST_RULES },
+    });
+    expect(short.status()).toBe(400);
   });
 
   /**
