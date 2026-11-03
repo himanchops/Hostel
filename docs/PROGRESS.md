@@ -4171,7 +4171,8 @@ because nothing is billed before the start date.
   fails if a status is left out of it.
 
 The bed is still taken: one open stay to a bed, unchanged. Lending it to
-someone else until the arrival is on the board, parked as rare.
+someone else until the arrival is on the board, parked as rare. Live 3 Nov
+2026 (#75): Vercel and Render deployed, `/health` ok.
 
 ### Verification
 - `grid_status_test.go` (`TestBuildBed_FutureStartIsArriving`): arriving
@@ -4184,6 +4185,34 @@ someone else until the arrival is on the board, parked as rare.
   line, tile and panel. `owner/rent-due.test.ts` now expects "arrives" on
   its tenant who moves in three days from now.
 - Screenshots at 375×812, 768×1024 and 1024×768 with touch.
+
+---
+
+## The tenants list opens newest first (Nov 2026)
+
+Owner, 3 Nov 2026: the list was by name, and the owner wanted the newest
+arrivals at the top, with a way to re-sort.
+
+- It opens by **Moved in, newest first**. People staying come first, then
+  people who left (most recently left first), then anyone never given a
+  stay. Someone booked from a later day is the newest of all. Not by when
+  the record was made, which for the notebook import was one afternoon for
+  everyone.
+- **Name** and **Moved in** in the header sort it; tapping the active one
+  turns it round, and an arrow marks it. The direction turns round each
+  group, never the order of the groups. A phone, which had no header row,
+  gets a slim one with the two buttons and Owes.
+- The list waits for the Payments board as well as the tenants, so it does
+  not open by name and then jump. Without the board it falls back to names.
+- Each visit opens newest first; the choice is not remembered.
+
+Frontend only.
+
+### Verification
+- `owner/tenants-sort.test.ts` at 375×812 and 768×1024 with touch: the
+  opening order, oldest first, A to Z, Z to A, and search keeping the order.
+- Layout and touch-target suites pass; screenshots at 375×812, 768×1024 and
+  1024×768 with touch.
 
 ---
 
