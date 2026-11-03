@@ -4144,6 +4144,44 @@ a portal he wants stashed, not removed. He picked the layout from a mockup.
 
 ---
 
+## A bed whose tenant hasn't arrived reads "arriving" (Nov 2026)
+
+Owner, 3 Nov 2026: someone booked a bed from 10 Nov and paid ₹500 to hold it
+on the 3rd. The grid showed him like everyone living there: a green Paid
+tile, counted as occupied, and "Paid ₹500 of ₹0 expected" in the bed panel,
+because nothing is billed before the start date.
+
+- Server: a stay on a bed whose `start_date` is after today has a new bed
+  status, `arriving` (`grid.go`). It outranks every other status, since
+  nothing else about the stay has begun. The dashboard's occupancy counts
+  those beds as `arriving_beds`, not `occupied_beds`. No migration.
+- Grid: a sky-blue tile saying "arrives 10 Nov" where a rent date would go
+  (`arrivalChip`, `lib/due.ts`); "Arriving" in the legend, which is also a
+  filter; "10 tenants · 1 bed free · 1 arriving" in the header and
+  "2/3 occupied · 1 arriving" on the room. The bed panel says "Arrives Tue,
+  10 Nov, in 7 days" (`arrivalLine`), shows "Paid before arriving ₹500"
+  instead of a balance, and drops "of ₹0 expected". "Next rent ₹4,500 due
+  10 Nov" stays as it was.
+- Tenant page: the stay's badge says "Arrives 10 Nov 2026", not "Active".
+- Dashboard: a site's row adds "· 1 arriving".
+
+The bed is still taken: one open stay to a bed, unchanged. Lending it to
+someone else until the arrival is on the board, parked as rare.
+
+### Verification
+- `grid_status_test.go` (`TestBuildBed_FutureStartIsArriving`): arriving
+  before the start date, with ₹0 billed and ₹4,500 due on the start day;
+  still arriving with a leaving date given at booking; partial on the day
+  itself.
+- `tests/unit/due.test.ts`: the tile and panel wording.
+- `owner/arriving.test.ts` at 768×1024 with touch: the grid status, the
+  dashboard counts, a second stay on the bed refused, the header, room
+  line, tile and panel. `owner/rent-due.test.ts` now expects "arrives" on
+  its tenant who moves in three days from now.
+- Screenshots at 375×812, 768×1024 and 1024×768 with touch.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`

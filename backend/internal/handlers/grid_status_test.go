@@ -242,3 +242,50 @@ func TestBuildBed_StatusFromStayAndPayments(t *testing.T) {
 		t.Error("a vacant bed must not carry stay, tenant or money fields")
 	}
 }
+
+// A stay that begins after today is arriving, whatever its money says: before
+// the start date nothing is billed, so the ₹500 paid to hold the bed would
+// otherwise read as Paid, and the bed as lived in.
+func TestBuildBed_FutureStartIsArriving(t *testing.T) {
+	today := date(2026, time.November, 3)
+	const rent = 500000 // ₹5,000
+
+	row := func(start time.Time, paid int64) gridRow {
+		return gridRow{
+			BedID:      nullInt(21),
+			BedName:    nullStr("1U"),
+			StayID:     nullInt(601),
+			RentAmount: nullInt(rent),
+			RentCycle:  nullStr("monthly"),
+			StartDate:  nullTime(start),
+			TenantID:   nullInt(88),
+			TenantName: nullStr("Ravi Kumar"),
+			TotalPaid:  paid,
+		}
+	}
+
+	arriving := buildBed(row(date(2026, time.November, 10), 50000), today)
+	if arriving.Status != StatusArriving {
+		t.Errorf("Status = %q, want %q", arriving.Status, StatusArriving)
+	}
+	if *arriving.TotalExpected != 0 {
+		t.Errorf("TotalExpected = %d, want 0 before the start date", *arriving.TotalExpected)
+	}
+	// What is still owed on the first rent, due the day they arrive.
+	if arriving.DueDate == nil || *arriving.DueDate != "2026-11-10" || *arriving.DuePaise != 450000 {
+		t.Errorf("due = %v %v, want 2026-11-10 450000", arriving.DueDate, arriving.DuePaise)
+	}
+
+	// A leaving date known at booking does not make them vacating yet.
+	withEnd := row(date(2026, time.November, 10), 0)
+	withEnd.NoticeDate = nullTime(date(2026, time.November, 10))
+	withEnd.ExpectedEndDate = nullTime(date(2026, time.November, 20))
+	if got := buildBed(withEnd, today).Status; got != StatusArriving {
+		t.Errorf("with a leaving date: Status = %q, want %q", got, StatusArriving)
+	}
+
+	// On the start day they live here: rent falls due and the money decides.
+	if got := buildBed(row(today, 50000), today).Status; got != StatusPartial {
+		t.Errorf("start day: Status = %q, want %q", got, StatusPartial)
+	}
+}

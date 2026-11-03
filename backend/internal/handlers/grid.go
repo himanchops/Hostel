@@ -33,6 +33,11 @@ const (
 	// leaving them the same colour means a bed sits orange for months while
 	// nobody can tell which it is.
 	StatusDepartureDue BedStatus = "departure_due"
+	// StatusArriving is a stay whose start date is still to come: someone who
+	// has been given this bed and paid to hold it, but does not live here yet.
+	// It outranks everything, because nothing else about the stay has begun.
+	// The bed is still taken (one open stay to a bed), so it is not vacant.
+	StatusArriving BedStatus = "arriving"
 )
 
 type GridTenant struct {
@@ -276,7 +281,11 @@ func buildBed(row gridRow, today time.Time) GridBed {
 		bed.DueDate, bed.DuePaise, bed.DueState = &dueDate, &due.Paise, &due.State
 	}
 
-	bed.Status = computeBedStatus(balance, currentRent, noticeDate, expectedEnd, today)
+	if dateOnly(startDate).After(today) {
+		bed.Status = StatusArriving
+	} else {
+		bed.Status = computeBedStatus(balance, currentRent, noticeDate, expectedEnd, today)
+	}
 	return bed
 }
 

@@ -4,7 +4,7 @@ import { BedStatus } from "@/lib/api";
 import { TOUCH_TARGET } from "./touch";
 
 /**
- * The six bed states, styled from the status tokens in globals.css. This
+ * The seven bed states, styled from the status tokens in globals.css. This
  * record is the only place those tokens are read — grid tiles, the legend and
  * any status chip all come through here, so the colours cannot drift apart.
  *
@@ -18,6 +18,10 @@ export const STATUS_STYLES: Record<
   vacant: {
     bg: "bg-vacant-100", border: "border-vacant-200", text: "text-vacant-500",
     dot: "bg-vacant-500", tint: "bg-vacant-50", stripe: "border-l-vacant-200", label: "Vacant",
+  },
+  arriving: {
+    bg: "bg-arriving-100", border: "border-arriving-200", text: "text-arriving-800",
+    dot: "bg-arriving-500", tint: "bg-arriving-50", stripe: "border-l-arriving-500", label: "Arriving",
   },
   paid: {
     bg: "bg-paid-100", border: "border-paid-200", text: "text-paid-800",

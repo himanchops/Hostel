@@ -271,6 +271,11 @@ Key conventions to carry forward:
   explains first (`ledgerRefusal`, `lib/ledger.ts`). The owner finds "any
   history" too binding; it stands until that is redesigned, not loosened
   case by case.
+- **A stay that hasn't started is "arriving"** (Nov 2026). A bed whose stay
+  has a `start_date` after today has the `arriving` status, which outranks
+  every other status. The bed is taken but not lived in: the grid's
+  headcount, a room's "occupied" and the dashboard's `occupied_beds` leave it
+  out, and `arriving_beds` counts it. It is still one open stay to a bed.
 - **Three dates end a stay, and they are not the same date.** `notice_date` is
   when they told you, `expected_end_date` is when they say they are going,
   `end_date` is when they actually went. Only the last one ends a stay, and

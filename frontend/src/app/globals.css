@@ -71,6 +71,15 @@
   --color-departure-500: #a855f7;
   --color-departure-700: #7e22ce;
   --color-departure-800: #6b21a8;
+
+  /* arriving — sky. A bed promised to someone whose stay starts later: not
+     lived in, so not green, and nothing is owed yet, so not amber or red. */
+  --color-arriving-50: #f0f9ff;
+  --color-arriving-100: #e0f2fe;
+  --color-arriving-200: #bae6fd;
+  --color-arriving-500: #0ea5e9;
+  --color-arriving-700: #0369a1;
+  --color-arriving-800: #075985;
 }
 
 :root {

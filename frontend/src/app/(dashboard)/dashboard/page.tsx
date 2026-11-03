@@ -304,6 +304,7 @@ export default function DashboardPage() {
                   <p className="truncate text-sm font-medium text-stone-900">{site.site_name}</p>
                   <p className="text-xs tabular-nums text-stone-500">
                     {site.occupied_beds} / {site.total_beds} beds occupied
+                    {site.arriving_beds > 0 && ` · ${site.arriving_beds} arriving`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

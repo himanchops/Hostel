@@ -136,6 +136,23 @@ export function leavingChip(bed: Leaving, today: string): string | null {
   return `leaves ${dueDay(date)}`;
 }
 
+/**
+ * When someone who has a bed but has not moved in yet arrives: "arrives
+ * 10 Nov" on their tile, null for anyone else. Their stay starts that day, so
+ * the start date is the arrival; on it they live here and this stops.
+ */
+export function arrivalChip(bed: { status: string; start_date?: string }): string | null {
+  if (bed.status !== "arriving" || !bed.start_date) return null;
+  return `arrives ${dueDay(bed.start_date.slice(0, 10))}`;
+}
+
+/** "Arrives Mon, 10 Nov, in 7 days" — the bed panel's version. */
+export function arrivalLine(start: string, today: string): string {
+  const date = start.slice(0, 10);
+  const days = daysUntil(date, today);
+  return `Arrives ${dueWeekday(date)}${days === 1 ? ", tomorrow" : `, in ${days} days`}`;
+}
+
 /** Today in the owner's own timezone, as "YYYY-MM-DD". */
 export function localToday(): string {
   const d = new Date();
