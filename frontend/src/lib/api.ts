@@ -452,7 +452,8 @@ export interface PublicRegisterData {
   name: string;
   phone: string;
   email?: string;
-  password: string;
+  /** Optional: the form asks for none, so it makes no portal login. */
+  password?: string;
   id_proof_url?: string;        // legacy
   id_proof_front_url?: string;
   id_proof_back_url?: string;

@@ -20,7 +20,7 @@ const PNG = Buffer.from(
 
 /** Registration requires the front of an ID; every submitting test attaches one. */
 async function attachIdFront(page: Page) {
-  await page.getByLabel("ID front").setInputFiles({
+  await page.getByLabel("Photo of the front of your ID").setInputFiles({
     name: "id-front.png",
     mimeType: "image/png",
     buffer: PNG,
@@ -80,10 +80,9 @@ test.describe("Public registration", () => {
     await expect(page.getByRole("heading", { name: `Welcome to ${hostel}` })).toBeVisible();
 
     await page.getByLabel("Full name").fill(applicant);
-    await page.getByPlaceholder("10-digit number").fill(phone);
+    await page.getByLabel(/^Phone number/).fill(phone);
     await page.getByLabel("Workplace / College").fill("Zoho");
-    await page.getByLabel(/^Password/).fill("testpassword123");
-    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel("Their name").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
     await attachIdFront(page);
 
@@ -101,10 +100,9 @@ test.describe("Public registration", () => {
     await expect(page.getByRole("heading", { name: "You're registered" })).toBeVisible();
     await expect(page.getByText(`Your details have gone to ${hostel} for review.`)).toBeVisible();
     await expect(page.getByText("The owner checks your details.")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Go to the tenant portal →" })).toHaveAttribute(
-      "href",
-      "/my/login"
-    );
+    // The portal is stashed and registration makes no login, so the
+    // success screen no longer sends anyone there (Nov 2026).
+    await expect(page.getByRole("link", { name: /tenant portal/ })).toHaveCount(0);
 
     // And it actually reached the owner's pending queue with the details typed.
     const pending = await request.get(`${BASE}/api/tenants?pending=true`, {
@@ -131,9 +129,8 @@ test.describe("Public registration", () => {
     await expect(page.getByRole("heading", { name: "Welcome", exact: true })).toBeVisible();
 
     await page.getByLabel("Full name").fill(applicant);
-    await page.getByPlaceholder("10-digit number").fill(`8${RUN_ID.slice(-9)}`);
-    await page.getByLabel(/^Password/).fill("testpassword123");
-    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel(/^Phone number/).fill(`8${RUN_ID.slice(-9)}`);
+    await page.getByLabel("Their name").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
     await attachIdFront(page);
     await page.getByRole("button", { name: "Submit registration" }).click();
@@ -160,12 +157,11 @@ test.describe("Public registration", () => {
     await page.goto(`/register/${owner.id}`);
 
     await page.getByLabel("Full name").fill(applicant);
-    await page.getByPlaceholder("10-digit number").fill(`7${RUN_ID.slice(-9)}`);
-    await page.getByLabel(/^Password/).fill("testpassword123");
-    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel(/^Phone number/).fill(`7${RUN_ID.slice(-9)}`);
+    await page.getByLabel("Their name").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
 
-    await page.getByLabel("Your photo").setInputFiles({
+    await page.getByLabel("A photo of you").setInputFiles({
       name: "selfie.png",
       mimeType: "image/png",
       buffer: PNG,
@@ -225,11 +221,10 @@ test.describe("Public registration", () => {
     });
 
     await page.getByLabel("Full name").fill(applicant);
-    await page.getByPlaceholder("10-digit number").fill(`64${RUN_ID.slice(-8)}`);
-    await page.getByLabel(/^Password/).fill("testpassword123");
-    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel(/^Phone number/).fill(`64${RUN_ID.slice(-8)}`);
+    await page.getByLabel("Their name").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
-    await page.getByLabel("ID front").setInputFiles({
+    await page.getByLabel("Photo of the front of your ID").setInputFiles({
       name: "id-front.png",
       mimeType: "image/png",
       buffer: Buffer.from(big, "base64"),
@@ -265,14 +260,13 @@ test.describe("Public registration", () => {
 
     await page.goto(`/register/${owner.id}`);
     await page.getByLabel("Full name").fill(applicant);
-    await page.getByPlaceholder("10-digit number").fill(`6${RUN_ID.slice(-9)}`);
-    await page.getByLabel(/^Password/).fill("testpassword123");
-    await page.getByLabel("Emergency contact").fill("Test Parent");
+    await page.getByLabel(/^Phone number/).fill(`6${RUN_ID.slice(-9)}`);
+    await page.getByLabel("Their name").fill("Test Parent");
     await page.getByLabel("Their phone").fill("9000000001");
     await page.getByRole("button", { name: "Submit registration" }).click();
 
     // The browser stops the submit at the field, not with a banner at the top.
-    const idFront = page.getByLabel("ID front");
+    const idFront = page.getByLabel("Photo of the front of your ID");
     expect(await idFront.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
     await expect(page.getByRole("heading", { name: "You're registered" })).toHaveCount(0);
 
@@ -293,7 +287,7 @@ test.describe("Public registration", () => {
   test("an emergency contact is required to register", async ({ page, request }) => {
     const { owner } = await createOwner(request, `pub-sos-${RUN_ID}`);
     await page.goto(`/register/${owner.id}`);
-    for (const label of ["Emergency contact", "Their phone"]) {
+    for (const label of ["Their name", "Their phone"]) {
       expect(await page.getByLabel(label).evaluate((el: HTMLInputElement) => el.required)).toBe(true);
     }
     // No email: the owner dropped it from the form.
@@ -345,28 +339,29 @@ test.describe("Public registration", () => {
   });
 
   /**
-   * The owner asked "what email does the tenant log in with, if email is
-   * optional?" — a reasonable question that the form invited and never
-   * answered. They do not: portal login is phone + password, and email takes
-   * no part in authentication at all.
+   * The form asked for a password for a portal most tenants never use, and
+   * people registering found it confusing (Nov 2026). It asks for none now,
+   * and says nothing about signing in.
    */
-  test("the form says plainly that the phone number is the login", async ({ page, request }) => {
+  test("the form asks for no password and says nothing about signing in", async ({ page, request }) => {
     const { owner } = await createOwner(request, `pub-hint-${RUN_ID}`);
     await page.goto(`/register/${owner.id}`);
-
-    // Said once, beside the field it is about.
-    await expect(page.getByText("You'll sign in with this.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
+    await expect(page.getByLabel(/password/i)).toHaveCount(0);
+    await expect(page.getByText(/sign in/i)).toHaveCount(0);
   });
 
   /**
    * "(optional)" beside most fields read as permission to skip them, so only
    * what is required is marked, with the asterisk the rest of the app uses
-   * (Oct 2026). The groups match the owner's Add tenant form.
+   * (Oct 2026). Three numbered steps, each about one thing (Nov 2026).
    */
   test("the form marks what is required and nothing else", async ({ page, request }) => {
     const { owner } = await createOwner(request, `pub-plain-${RUN_ID}`);
     await page.goto(`/register/${owner.id}`);
-    await expect(page.getByRole("heading", { name: "ID and emergency contact" })).toBeVisible();
+    for (const step of ["About you", "Emergency contact", "Your ID"]) {
+      await expect(page.getByRole("heading", { name: step, exact: true })).toBeVisible();
+    }
     await expect(page.getByText("(optional)")).toHaveCount(0);
     await expect(page.getByLabel("Aadhaar number")).toHaveAttribute("inputmode", "numeric");
   });

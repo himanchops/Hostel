@@ -8,7 +8,8 @@ const RUN_ID = Date.now().toString();
  * The QR registration form, from four board items (owner, 27 Oct 2026): a
  * wrong link says so before anyone fills anything in, the Aadhaar field
  * takes digits, each error sits under its own field with the focus on it,
- * and the password can be shown.
+ * and the password can be shown. Registration has no password now
+ * (Nov 2026); the sign-in pages still do.
  */
 test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
 
@@ -20,11 +21,10 @@ const PNG = Buffer.from(
 
 async function fillValid(page: Page, phone: string) {
   await page.getByLabel("Full name").fill("Form Tester");
-  await page.getByPlaceholder("10-digit number").fill(phone);
-  await page.getByLabel("Emergency contact").fill("Test Parent");
+  await page.getByLabel(/^Phone number/).fill(phone);
+  await page.getByLabel("Their name").fill("Test Parent");
   await page.getByLabel("Their phone").fill("9000000001");
-  await page.getByLabel("ID front").setInputFiles({ name: "id.png", mimeType: "image/png", buffer: PNG });
-  await page.getByLabel(/^Password/).fill("tenant1234");
+  await page.getByLabel("Photo of the front of your ID").setInputFiles({ name: "id.png", mimeType: "image/png", buffer: PNG });
 }
 
 test("a wrong link says so instead of showing the form", async ({ page }) => {
@@ -47,10 +47,10 @@ test("Aadhaar takes digits; each error sits at its field, with the focus", async
   await expect(aadhaar).toBeFocused();
 
   await aadhaar.fill("1234 5678 9012");
-  await page.getByPlaceholder("10-digit number").fill("1234567899");
+  await page.getByLabel(/^Phone number/).fill("1234567899");
   await page.getByRole("button", { name: "Submit registration" }).tap();
   await expect(page.getByText("Enter a 10-digit mobile number", { exact: false })).toBeVisible();
-  await expect(page.getByPlaceholder("10-digit number")).toBeFocused();
+  await expect(page.getByLabel(/^Phone number/)).toBeFocused();
   await expect(page.getByText("An Aadhaar number has 12 digits.")).toHaveCount(0);
 
   // The server holds the same line for anyone who skips the page.
@@ -61,9 +61,8 @@ test("Aadhaar takes digits; each error sits at its field, with the focus", async
   expect((await res.json()).error).toBe("An Aadhaar number has 12 digits.");
 });
 
-test("every password field can be shown", async ({ page, request }) => {
-  const { owner } = await createOwner(request, `regpw-${RUN_ID}`);
-  for (const path of [`/register/${owner.id}`, "/login", "/signup", "/my/login"]) {
+test("every password field can be shown", async ({ page }) => {
+  for (const path of ["/login", "/signup", "/my/login"]) {
     await page.goto(path);
     const field = page.getByLabel(/^Password/);
     await expect(field).toHaveAttribute("type", "password");
