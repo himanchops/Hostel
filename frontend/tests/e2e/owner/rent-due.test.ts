@@ -82,8 +82,8 @@ test.describe("When rent is due", () => {
     const tile = (name: string) => page.getByTitle(new RegExp(`^${name} —`));
     // Behind: the red tile says since when.
     await expect(tile("Behind Tenant")).toContainText(`due ${day(due["Behind Tenant"].due_date)}`);
-    // Due within the week: a date, so it can be collected on time.
-    await expect(tile("Soon Tenant")).toContainText(`due ${day(due["Soon Tenant"].due_date)}`);
+    // Not here yet: the day they arrive, which is also when their rent is due.
+    await expect(tile("Soon Tenant")).toContainText(`arrives ${day(due["Soon Tenant"].due_date)}`);
     // Paid ahead: nothing to act on, nothing on the tile.
     await expect(tile("Ahead Tenant")).not.toContainText("due");
 

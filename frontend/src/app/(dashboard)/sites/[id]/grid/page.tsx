@@ -12,7 +12,7 @@ import {
 } from "@/lib/api";
 import { depositSummary } from "@/lib/settlement";
 import { perCycle } from "@/lib/rent";
-import { departureFacts, dueChip, dueLine, leavingChip, localToday } from "@/lib/due";
+import { arrivalChip, arrivalLine, departureFacts, dueChip, dueLine, leavingChip, localToday } from "@/lib/due";
 import {
   Avatar,
   Badge,
@@ -30,6 +30,7 @@ import {
   PageHeader,
   NotFound,
   PageLoader,
+  BED_LIFE,
   STATUS_STYLES,
   Select,
   Skeleton,
@@ -162,9 +163,11 @@ export default function GridPage() {
   }, {} as Record<BedStatus, number>);
 
   // One tenant to a bed, so occupied beds are the headcount. A booking with no
-  // bed yet is not living here, and the grid does not show it either.
+  // bed yet is not living here, and the grid does not show it either. Nor is
+  // someone given a bed from a later day: their bed is taken but not lived in.
   const vacant = statusCounts.vacant ?? 0;
-  const occupied = totalBeds - vacant;
+  const arriving = statusCounts.arriving ?? 0;
+  const occupied = totalBeds - vacant - arriving;
 
   const owing = allBeds.filter(owesMoney);
   const owedTotal = owing.reduce((sum, b) => sum - (b.balance ?? 0), 0);
@@ -219,6 +222,12 @@ export default function GridPage() {
             {occupied === 1 ? "tenant" : "tenants"} ·{" "}
             <span className="font-medium text-stone-700">{vacant}</span>{" "}
             {vacant === 1 ? "bed" : "beds"} free
+            {arriving > 0 && (
+              <>
+                {" · "}
+                <span className="font-medium text-stone-700">{arriving}</span> arriving
+              </>
+            )}
           </span>
         }
         actions={
@@ -247,14 +256,22 @@ export default function GridPage() {
           >
             All {totalBeds}
           </button>
-          {(Object.keys(STATUS_STYLES) as BedStatus[]).map((status) => (
-            <StatusPill
-              key={status}
-              status={status}
-              count={statusCounts[status] ?? 0}
-              active={filter === status}
-              onClick={() => setFilter(filter === status ? "all" : status)}
-            />
+          {/* A bed's life, in three groups (BED_LIFE). A group wraps as one,
+              so "leaving" never splits across lines, and its divider travels
+              with it rather than stranding at the end of a line. */}
+          {BED_LIFE.map((group, g) => (
+            <span key={group[0]} className="inline-flex items-center gap-2">
+              {g > 0 && <span aria-hidden className="mx-1 h-4 w-px bg-stone-300" />}
+              {group.map((status) => (
+                <StatusPill
+                  key={status}
+                  status={status}
+                  count={statusCounts[status] ?? 0}
+                  active={filter === status}
+                  onClick={() => setFilter(filter === status ? "all" : status)}
+                />
+              ))}
+            </span>
           ))}
           {/* The divider travels with the chip, so a wrap never strands it. */}
           <span className="inline-flex items-center gap-2">
@@ -440,7 +457,8 @@ function owesMoney(bed: GridBed): boolean {
 
 /** "3/4 occupied · ₹24,000 due" — the room's state without opening anything. */
 function RoomSummary({ room }: { room: GridRoom }) {
-  const occupied = room.beds.filter((b) => b.status !== "vacant").length;
+  const occupied = room.beds.filter((b) => b.status !== "vacant" && b.status !== "arriving").length;
+  const arriving = room.beds.filter((b) => b.status === "arriving").length;
   const owed = room.beds.reduce(
     (sum, b) => sum + (b.balance !== undefined && b.balance < 0 ? -b.balance : 0),
     0
@@ -449,6 +467,7 @@ function RoomSummary({ room }: { room: GridRoom }) {
   return (
     <p className="text-xs tabular-nums text-stone-500">
       {occupied}/{room.beds.length} occupied
+      {arriving > 0 && ` · ${arriving} arriving`}
       {owed > 0 && (
         <>
           {" · "}
@@ -477,7 +496,8 @@ function BedTile({ bed, selected, onClick }: { bed: GridBed; selected: boolean; 
   // A date only when it is worth acting on: when a vacating tenant goes,
   // since when they are behind, or due within the week. Everyone else's tile
   // stays as quiet as before.
-  const leaving = bed.stay_id ? leavingChip(bed, localToday()) : null;
+  // Someone yet to arrive gets the day they come, not the rent due that day.
+  const leaving = bed.stay_id ? (arrivalChip(bed) ?? leavingChip(bed, localToday())) : null;
   const chip = leaving
     ? { text: leaving, className: cfg.text }
     : bed.stay_id
@@ -765,6 +785,9 @@ function OccupiedPanel({
 
   const balance = bed.balance ?? 0;
   const settled = balance >= 0;
+  // Before their first day nothing is billed, so "Balance +₹500, paid ₹500 of
+  // ₹0 expected" was true and told the owner nothing. Said plainly instead.
+  const arriving = bed.status === "arriving";
   // Agreed against received, the same line the tenant page and the settlement
   // drawer show — undefined while loading so it never claims ₹0 received early.
   const depositReceived = payments
@@ -812,20 +835,28 @@ function OccupiedPanel({
         </p>
       )}
 
+      {arriving && bed.start_date && (
+        <p className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${STATUS_STYLES.arriving.tint} ${STATUS_STYLES.arriving.text}`}>
+          {arrivalLine(bed.start_date, localToday())}
+        </p>
+      )}
+
       {/* Balance */}
       <div className={`mb-4 rounded-xl p-4 ${settled ? "bg-paid-50" : "bg-overdue-50"}`}>
-        <p className="text-xs font-medium text-stone-500">Balance</p>
+        <p className="text-xs font-medium text-stone-500">{arriving ? "Paid before arriving" : "Balance"}</p>
         <p className={`text-2xl font-bold tabular-nums ${settled ? "text-paid-800" : "text-overdue-800"}`}>
-          {settled ? "+" : ""}{formatCurrency(balance)}
+          {settled && !arriving ? "+" : ""}{formatCurrency(arriving ? bed.total_paid ?? 0 : balance)}
         </p>
         {line && (
           <p className={`mt-1 text-sm font-medium ${line.tone === "danger" ? "text-overdue-800" : line.tone === "warning" ? "text-amber-800" : "text-stone-700"}`}>
             {line.text}
           </p>
         )}
-        <p className="mt-1 text-xs tabular-nums text-stone-400">
-          Paid {formatCurrency(bed.total_paid ?? 0)} of {formatCurrency(bed.total_expected ?? 0)} expected
-        </p>
+        {!arriving && (
+          <p className="mt-1 text-xs tabular-nums text-stone-400">
+            Paid {formatCurrency(bed.total_paid ?? 0)} of {formatCurrency(bed.total_expected ?? 0)} expected
+          </p>
+        )}
         {bed.rent_amount && (
           <p className="mt-0.5 text-xs tabular-nums text-stone-400">
             Rent {formatCurrency(bed.rent_amount)}{bed.rent_cycle ? ` ${perCycle(bed.rent_cycle)}` : ""}

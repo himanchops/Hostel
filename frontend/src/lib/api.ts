@@ -239,7 +239,7 @@ export const bedsApi = {
 
 // ─── Grid ────────────────────────────────────────────────────────────────────
 
-export type BedStatus = "vacant" | "paid" | "partial" | "overdue" | "vacating_soon" | "departure_due";
+export type BedStatus = "vacant" | "arriving" | "paid" | "partial" | "overdue" | "vacating_soon" | "departure_due";
 
 export interface GridTenant {
   id: number;
@@ -784,6 +784,8 @@ export interface SiteOccupancy {
   site_name: string;
   total_beds: number;
   occupied_beds: number;
+  /** Taken by someone whose stay has not begun: neither occupied nor free. */
+  arriving_beds: number;
   percentage: number;
 }
 
@@ -791,6 +793,7 @@ export interface OccupancySummary {
   sites: SiteOccupancy[];
   total_beds: number;
   occupied_beds: number;
+  arriving_beds: number;
   percentage: number;
 }
 

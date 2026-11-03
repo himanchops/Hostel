@@ -4,7 +4,7 @@ import { BedStatus } from "@/lib/api";
 import { TOUCH_TARGET } from "./touch";
 
 /**
- * The six bed states, styled from the status tokens in globals.css. This
+ * The seven bed states, styled from the status tokens in globals.css. This
  * record is the only place those tokens are read — grid tiles, the legend and
  * any status chip all come through here, so the colours cannot drift apart.
  *
@@ -18,6 +18,10 @@ export const STATUS_STYLES: Record<
   vacant: {
     bg: "bg-vacant-100", border: "border-vacant-200", text: "text-vacant-500",
     dot: "bg-vacant-500", tint: "bg-vacant-50", stripe: "border-l-vacant-200", label: "Vacant",
+  },
+  arriving: {
+    bg: "bg-arriving-100", border: "border-arriving-200", text: "text-arriving-800",
+    dot: "bg-arriving-500", tint: "bg-arriving-50", stripe: "border-l-arriving-500", label: "Arriving",
   },
   paid: {
     bg: "bg-paid-100", border: "border-paid-200", text: "text-paid-800",
@@ -40,6 +44,18 @@ export const STATUS_STYLES: Record<
     dot: "bg-departure-500", tint: "bg-departure-50", stripe: "border-l-departure-500", label: "Confirm departure",
   },
 };
+
+/**
+ * The legend's order: a bed's life, left to right. Empty, someone coming;
+ * someone living there, from square to furthest behind; someone leaving, then
+ * someone who should have gone. A new status goes where it falls in that
+ * story, and the grid draws a divider between the three groups.
+ */
+export const BED_LIFE: readonly (readonly BedStatus[])[] = [
+  ["vacant", "arriving"],
+  ["paid", "partial", "overdue"],
+  ["vacating_soon", "departure_due"],
+];
 
 export function StatusPill({
   status,

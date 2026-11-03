@@ -814,6 +814,9 @@ export default function TenantDetailPage() {
             // until the day they arrive. One that ended with no bed was
             // cancelled, and billed nothing (endedCycles, helpers.go).
             const booked = active && unassigned;
+            // Given a bed from a day still to come: it's theirs, but they
+            // don't live here yet.
+            const arriving = active && !unassigned && stay.start_date.slice(0, 10) > today();
             const stayPayments = payments[stay.id];
             // Rent and deposit are different money: "Paid" is rent, the same
             // figure as the summary above, and the deposit gets its own line.
@@ -834,8 +837,16 @@ export default function TenantDetailPage() {
                 <div className="flex items-start justify-between gap-3 px-4 py-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={active ? (booked ? "info" : "success") : "neutral"}>
-                        {active ? (booked ? "Booked" : "Active") : unassigned ? "Booking cancelled" : "Ended"}
+                      <Badge tone={active ? (booked || arriving ? "info" : "success") : "neutral"}>
+                        {active
+                          ? booked
+                            ? "Booked"
+                            : arriving
+                              ? `Arrives ${formatDay(stay.start_date)}`
+                              : "Active"
+                          : unassigned
+                            ? "Booking cancelled"
+                            : "Ended"}
                       </Badge>
                       {settlement && <Badge tone="info">Settled</Badge>}
                       {active && !booked && stay.expected_end_date && (

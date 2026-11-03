@@ -21,10 +21,13 @@ func NewDashboardHandler(db *sqlx.DB) *DashboardHandler {
 // ── Response shapes ──────────────────────────────────────────────────────────
 
 type SiteOccupancy struct {
-	SiteID       int64   `json:"site_id"       db:"site_id"`
-	SiteName     string  `json:"site_name"     db:"site_name"`
-	TotalBeds    int     `json:"total_beds"    db:"total_beds"`
-	OccupiedBeds int     `json:"occupied_beds" db:"occupied_beds"`
+	SiteID       int64  `json:"site_id"       db:"site_id"`
+	SiteName     string `json:"site_name"     db:"site_name"`
+	TotalBeds    int    `json:"total_beds"    db:"total_beds"`
+	OccupiedBeds int    `json:"occupied_beds" db:"occupied_beds"`
+	// ArrivingBeds are taken by someone whose stay has not begun: neither
+	// occupied nor free.
+	ArrivingBeds int     `json:"arriving_beds" db:"arriving_beds"`
 	Percentage   float64 `json:"percentage"`
 }
 
@@ -32,6 +35,7 @@ type OccupancySummary struct {
 	Sites        []SiteOccupancy `json:"sites"`
 	TotalBeds    int             `json:"total_beds"`
 	OccupiedBeds int             `json:"occupied_beds"`
+	ArrivingBeds int             `json:"arriving_beds"`
 	Percentage   float64         `json:"percentage"`
 }
 
@@ -232,6 +236,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		SiteName     string `db:"site_name"`
 		TotalBeds    int    `db:"total_beds"`
 		OccupiedBeds int    `db:"occupied_beds"`
+		ArrivingBeds int    `db:"arriving_beds"`
 	}
 	var siteRows []siteOccRow
 	err := h.db.Select(&siteRows, `
@@ -239,7 +244,8 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			hs.id         AS site_id,
 			hs.name       AS site_name,
 			COUNT(b.id)   AS total_beds,
-			COUNT(s.id)   AS occupied_beds
+			COUNT(s.id) FILTER (WHERE s.start_date <= $2) AS occupied_beds,
+			COUNT(s.id) FILTER (WHERE s.start_date > $2)  AS arriving_beds
 		FROM hostel_sites hs
 		JOIN rooms r       ON r.site_id = hs.id
 		JOIN beds b        ON b.room_id = r.id
@@ -247,7 +253,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		WHERE hs.owner_id = $1
 		GROUP BY hs.id, hs.name
 		ORDER BY hs.name
-	`, ownerID)
+	`, ownerID, today)
 	if err != nil {
 		return serverError(c, err, "failed to fetch occupancy")
 	}
@@ -263,10 +269,12 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			SiteName:     r.SiteName,
 			TotalBeds:    r.TotalBeds,
 			OccupiedBeds: r.OccupiedBeds,
+			ArrivingBeds: r.ArrivingBeds,
 			Percentage:   pct,
 		})
 		occupancy.TotalBeds += r.TotalBeds
 		occupancy.OccupiedBeds += r.OccupiedBeds
+		occupancy.ArrivingBeds += r.ArrivingBeds
 	}
 	if occupancy.TotalBeds > 0 {
 		occupancy.Percentage = float64(occupancy.OccupiedBeds) / float64(occupancy.TotalBeds) * 100

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { dueChip, dueLine, daysUntil, dueSoon, dueWeekday, leavingChip, departureFacts } from "../../src/lib/due";
+import { arrivalChip, arrivalLine, dueChip, dueLine, daysUntil, dueSoon, dueWeekday, leavingChip, departureFacts } from "../../src/lib/due";
 import { payMethodLabel } from "../../src/lib/payMethod";
 import { formatDay } from "../../src/lib/api";
 
@@ -78,4 +78,12 @@ test("money that arrived online is labelled UPI", () => {
   expect(payMethodLabel("online")).toBe("UPI");
   expect(payMethodLabel("cash")).toBe("Cash");
   expect(payMethodLabel(undefined)).toBe("");
+});
+
+test("someone yet to arrive is told by the day they come", () => {
+  expect(arrivalChip({ status: "arriving", start_date: "2026-11-10T00:00:00Z" })).toBe("arrives 10 Nov");
+  // On the day they arrive the bed is lived in, and the server stops saying arriving.
+  expect(arrivalChip({ status: "paid", start_date: "2026-11-10" })).toBeNull();
+  expect(arrivalLine("2026-11-10", "2026-11-03")).toBe("Arrives Tue, 10 Nov, in 7 days");
+  expect(arrivalLine("2026-11-04", "2026-11-03")).toBe("Arrives Wed, 4 Nov, tomorrow");
 });
