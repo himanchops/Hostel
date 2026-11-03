@@ -794,7 +794,9 @@ export interface OccupancySummary {
 }
 
 export interface RevenueSummary {
+  /** The month's whole rent, rent days still to come included; due_this_month is the part due by today. */
   expected_this_month: number;  // paise
+  due_this_month: number;       // paise
   collected_this_month: number; // paise
   overdue_amount: number;       // paise, including moved_out_owed
   /** Everyone billed now, and how many of them owe anything: "18 of 21 paid up". */
@@ -926,7 +928,9 @@ export const paymentsBoardApi = {
  * one answers "what has been happening".
  *
  * Each month answers two questions (backend money.go):
- *  - Rent: `expected_paise` against `collected_paise`. Collected is rent
+ *  - Rent: `expected_paise` against `collected_paise`. Expected is the whole
+ *    month, rent days still to come included; `due_paise` is the part due by
+ *    today, and differs only for the month under way. Collected is rent
  *    received, plus rent a deposit paid off at move-out, less rent paid ahead
  *    and handed back. The last month equals the dashboard's tile.
  *  - Money: `net_in_paise`, which is every rupee in (rent and deposits, cash
@@ -939,7 +943,8 @@ export interface RevenuePoint {
   month: string;   // "2026-09"
   label: string;   // "Sep 26"
   expected_paise: number;
-  /** Rent waived off this month, already out of expected_paise. */
+  due_paise: number;
+  /** Rent waived off this month, already out of expected_paise and due_paise. */
   waived_paise: number;
   collected_paise: number;
   net_in_paise: number;
@@ -977,7 +982,7 @@ export interface RoomInsight {
 
 export interface InsightsData {
   months: number;
-  /** Rent billed in the range, and how much of it is paid by today, stay by stay. */
+  /** Rent due in the range by today, and how much of it is paid, stay by stay. */
   rent_billed_paise: number;
   rent_paid_paise: number;
   from_date: string;

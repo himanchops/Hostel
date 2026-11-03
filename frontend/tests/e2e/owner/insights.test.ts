@@ -208,6 +208,52 @@ test.describe("Insights", () => {
     await expect(tile).toContainText("+ ₹1,500 deposit held");
   });
 
+  test("this month expects rent days still to come, and says how much is due so far", async ({ page, request }) => {
+    const today = utcToday();
+    const tomorrow = new Date(today.getTime() + 86_400_000);
+    test.skip(tomorrow.getUTCMonth() !== today.getUTCMonth(), "on a month's last day no rent day is still to come");
+
+    const { token } = await createOwner(request, `${RUN_ID}-tocome`);
+    const auth = { Authorization: `Bearer ${token}` };
+    const { siteId, roomId, bedId } = await createSiteRoomBed(request, token, `${RUN_ID}-tocome`);
+    const bedRes = await request.post(`${BASE}/api/sites/${siteId}/rooms/${roomId}/beds`, { headers: auth, data: { name: "2L" } });
+    expect(bedRes.ok()).toBeTruthy();
+    const secondBed = (await bedRes.json()).id;
+
+    async function stay(name: string, bed: number, start: Date, rupees: number) {
+      const tenant = await createTenantViaApi(request, token, { name, phone: phone() });
+      const res = await request.post(`${BASE}/api/stays`, {
+        headers: auth,
+        data: { tenant_id: tenant.id, bed_id: bed, rent_amount: rupees * 100, deposit_amount: 0, rent_cycle: "monthly", start_date: isoDate(start) },
+      });
+      expect(res.ok()).toBeTruthy();
+      return (await res.json()).id as number;
+    }
+    // Rent day the 1st, paid. Rent day tomorrow: nothing due yet, still expected.
+    const early = await stay("Early Rent", bedId, firstOf(0), 8000);
+    await stay("Later Rent", secondBed, tomorrow, 6000);
+    const payRes = await request.post(`${BASE}/api/stays/${early}/payments`, {
+      headers: auth, data: { amount: 800000, payment_type: "cash", payment_date: isoDate(firstOf(0)) },
+    });
+    expect(payRes.ok()).toBeTruthy();
+
+    await loginAs(page, token);
+    await page.goto("/insights");
+    const tile = page.getByText("Rent collected").locator("..");
+    await expect(tile).toContainText("₹8,000");
+    await expect(tile).toContainText("of ₹14,000 expected");
+    await expect(tile).toContainText("₹8,000 due so far · 100% paid");
+    const row = monthRow(page, firstOf(0));
+    await expect(row).toContainText("₹14,000");
+    await expect(row).toContainText("₹8,000 due so far");
+    // One % on the screen for a month under way: the tile's.
+    await expect(row).not.toContainText("%");
+
+    // The dashboard expects the same whole month.
+    await page.goto("/dashboard");
+    await expect(page.getByText("Collected This Month").locator("..").locator("..")).toContainText("of ₹14,000 expected");
+  });
+
   test("shows a full-house room and a never-let room side by side", async ({ page, request }) => {
     const { token } = await createOwner(request, `${RUN_ID}-rooms`);
     const auth = { Authorization: `Bearer ${token}` };
@@ -246,14 +292,25 @@ test.describe("Insights", () => {
     await expect(monthRow(page, firstOf(-2))).toContainText("₹8,000");
     await expect(monthRow(page, firstOf(-3))).toHaveCount(0);
 
-    // The tiles. Three months billed (₹24,000), one paid: 33%, counted for
-    // this tenant alone.
-    await expect(page.getByText("Rent collected").locator("..")).toContainText("₹24,000 billed in these months · 33% of it paid");
+    // The tiles. Three months expected (₹24,000), all of it due since the
+    // rent day is the 1st, one paid: 33%, counted for this tenant alone.
+    const rentTile = page.getByText("Rent collected").locator("..");
+    await expect(rentTile).toContainText("of ₹24,000 expected");
+    await expect(rentTile).toContainText("33% paid");
+    await expect(rentTile).not.toContainText("due so far");
     await expect(page.getByText("Still owed now").locator("..")).toContainText("1 of 1 tenants owe · chase\u00a0them\u00a0→");
     const beds = page.getByText("Occupied today").locator("..");
     await expect(beds).toContainText("1 of 2");
     await expect(beds).toContainText("50% today");
     await expect(beds).toContainText(`over ${firstOf(0).toLocaleString("en-US", { month: "long", timeZone: "UTC" })} so far`);
+
+    // Three tiles side by side are one height. "Still owed now" is a link
+    // when someone owes, and its card once stopped short of the others
+    // (owner, Nov 2026).
+    const heights = await Promise.all(["Rent collected", "Still owed now", "Occupied today"].map(
+      async (label) => (await page.getByText(label, { exact: true }).locator("..").boundingBox())!.height,
+    ));
+    expect(new Set(heights.map(Math.round)).size).toBe(1);
 
     // "By room" is shut by default, and its summary has to be worth reading
     // shut — it names the room earning nothing without being opened.

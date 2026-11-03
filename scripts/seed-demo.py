@@ -315,7 +315,14 @@ def main():
 
     # `kind` here is how the money arrived (the API's payment_type); `purpose`
     # is what it was for (the API's kind). The names predate the second one.
+    #
+    # A payment the history dates after today has not happened yet, and the
+    # server refuses it, so it is skipped: early in the month a late payer has
+    # simply not paid this month's rent. (Paying every cycle a few days after
+    # its rent day broke the seed on the 1st–12th of every month.)
     def pay(s, amount, when, kind="cash", notes=None, purpose="rent"):
+        if when > TODAY.isoformat():
+            return None
         return api("POST", f"/api/stays/{s['id']}/payments", {
             "amount": amount, "payment_type": kind, "kind": purpose,
             "payment_date": when, "notes": notes,

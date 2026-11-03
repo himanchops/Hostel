@@ -26,11 +26,15 @@ func NewInsightsHandler(db *sqlx.DB) *InsightsHandler {
 // against collected) and the money question (what came in, what went back).
 // See money.go for why those are different figures.
 type RevenuePoint struct {
-	Month          string `json:"month"` // "2026-09", sortable
-	Label          string `json:"label"` // "Sep 26"
-	ExpectedPaise  int64  `json:"expected_paise"`
-	CollectedPaise int64  `json:"collected_paise"` // rent collected: moneyMonth.rentCollected
-	NetInPaise     int64  `json:"net_in_paise"`    // all money in, less refunds: moneyMonth.netIn
+	Month string `json:"month"` // "2026-09", sortable
+	Label string `json:"label"` // "Sep 26"
+	// ExpectedPaise is the month's whole rent, rent days still to come
+	// included (expectedCycles); DuePaise is the part due by today. They
+	// differ only for the month under way.
+	ExpectedPaise  int64 `json:"expected_paise"`
+	DuePaise       int64 `json:"due_paise"`
+	CollectedPaise int64 `json:"collected_paise"` // rent collected: moneyMonth.rentCollected
+	NetInPaise     int64 `json:"net_in_paise"`    // all money in, less refunds: moneyMonth.netIn
 	// WaivedPaise is rent the owner waived off this month (waivers.go), already
 	// taken out of ExpectedPaise.
 	WaivedPaise int64 `json:"waived_paise"`
@@ -77,6 +81,9 @@ type insightStay struct {
 	StartDate  time.Time  `db:"start_date"`
 	EndDate    *time.Time `db:"end_date"`
 	Booking    bool       `db:"booking"` // never had a bed: see endedCycles
+	// ExpectedEnd is the day they say they are going (migration 006). It only
+	// trims what a month still under way is expected to bill.
+	ExpectedEnd *time.Time `db:"expected_end_date"`
 	// Schedule is the rent over time when it has ever changed (migration
 	// 011). Nil means flat at RentAmount.
 	Schedule rentSchedule `db:"-"`
@@ -171,6 +178,23 @@ func billedCycles(s insightStay, asOf time.Time) int {
 	return cyclesElapsed(dateOnly(s.StartDate), asOf, s.RentCycle)
 }
 
+// expectedCycles is billedCycles at the last day of a month. For a month
+// still under way that counts the rent days yet to come as well as those gone
+// by: what the month will bill if everyone stays. Someone who has said when
+// they are going is not counted for a rent day on or after it, but never for
+// less than they have been billed already: a leaving date that has passed with
+// them still here bills as usual, because only a human ends a stay.
+func expectedCycles(s insightStay, lastDay, today time.Time) int {
+	n := billedCycles(s, lastDay)
+	if s.EndDate != nil || s.ExpectedEnd == nil || !lastDay.After(today) {
+		return n
+	}
+	if going := cyclesThroughEnd(s.StartDate, *s.ExpectedEnd, s.RentCycle); going < n {
+		n = max(going, billedCycles(s, today))
+	}
+	return n
+}
+
 // ── Pure computations ────────────────────────────────────────────────────────
 
 // computeRevenueSeries builds the collected-vs-expected series.
@@ -180,6 +204,11 @@ func billedCycles(s insightStay, asOf time.Time) int {
 // pro-rating — so the last point on this chart equals the dashboard's
 // "expected this month" card. Two screens disagreeing about the same month is
 // worse than either number being debatable on its own.
+//
+// For the month under way, Expected is the whole month and Due is what has
+// fallen due by today. Expected was once only the second, so on the 3rd it
+// read ₹10,000 for a building whose month brings in ten times that (owner,
+// Nov 2026): most rent days were still to come.
 //
 // Collected comes from the payments table keyed by calendar month, so a tenant
 // paying three months of arrears in one go shows the whole payment in the month
@@ -193,19 +222,23 @@ func computeRevenueSeries(stays []insightStay, money map[string]moneyMonth, toda
 		start, end := w[0], w[1]
 		key := start.Format("2006-01")
 
-		// Cycles billed by the last day of this window, minus those billed by
-		// the day before it opened.
+		// Cycles billed by the last day of this window (Due) or of its month
+		// (Expected), minus those billed by the day before it opened.
 		asOf := end.AddDate(0, 0, -1)
 		before := start.AddDate(0, 0, -1)
+		lastDay := start.AddDate(0, 1, -1)
 
-		var expected int64
+		var expected, due int64
 		for _, s := range stays {
-			upTo, from := billedCycles(s, asOf), billedCycles(s, before)
-			if upTo > from {
-				sched := s.Schedule
-				if len(sched) == 0 {
-					sched = flatSchedule(s.StartDate, s.RentAmount)
-				}
+			from := billedCycles(s, before)
+			sched := s.Schedule
+			if len(sched) == 0 {
+				sched = flatSchedule(s.StartDate, s.RentAmount)
+			}
+			if upTo := billedCycles(s, asOf); upTo > from {
+				due += sched.billed(s.StartDate, s.RentCycle, from, upTo)
+			}
+			if upTo := expectedCycles(s, lastDay, today); upTo > from {
 				expected += sched.billed(s.StartDate, s.RentCycle, from, upTo)
 			}
 		}
@@ -215,6 +248,7 @@ func computeRevenueSeries(stays []insightStay, money map[string]moneyMonth, toda
 			Month:          key,
 			Label:          start.Format("Jan 06"),
 			ExpectedPaise:  expected,
+			DuePaise:       due,
 			CollectedPaise: m.rentCollected(),
 			NetInPaise:     m.netIn(),
 			moneyMonth:     m,
@@ -423,7 +457,7 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	err := h.db.Select(&stays, `
 		SELECT s.id AS stay_id, COALESCE(r.id, 0) AS room_id,
 		       s.rent_amount, s.rent_cycle, s.start_date, s.end_date,
-		       s.bed_id IS NULL AS booking
+		       s.expected_end_date, s.bed_id IS NULL AS booking
 		FROM stays s
 		JOIN tenants t   ON t.id = s.tenant_id
 		LEFT JOIN beds b ON b.id = s.bed_id
@@ -612,6 +646,7 @@ func (h *InsightsHandler) GetInsights(c echo.Context) error {
 	}
 	for i := range revenue {
 		revenue[i].ExpectedPaise -= waivedByMonth[revenue[i].Month]
+		revenue[i].DuePaise -= waivedByMonth[revenue[i].Month]
 		revenue[i].WaivedPaise = waivedByMonth[revenue[i].Month]
 	}
 

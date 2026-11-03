@@ -112,6 +112,39 @@ func TestComputeRevenueSeries_ArrearsLandInThePayingMonth(t *testing.T) {
 	}
 }
 
+// On the 11th, a rent day on the 20th has not come yet: due leaves it out and
+// expected counts it. A month that is over has nothing still to come, so the
+// two are the same there — and both agree with the dashboard.
+func TestComputeRevenueSeries_ThisMonthExpectsRentDaysStillToCome(t *testing.T) {
+	const rent = 750000 // ₹7,500
+
+	stays := []insightStay{
+		{RoomID: 1, RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.May, 20)},
+		{RoomID: 1, RentAmount: 500000, RentCycle: "monthly", StartDate: date(2026, time.May, 1)},
+	}
+	series := computeRevenueSeries(stays, nil, insightsToday, 2)
+	july, aug := series[0], series[1]
+
+	if july.ExpectedPaise != rent+500000 || july.DuePaise != rent+500000 {
+		t.Errorf("July expected, due = %d, %d; want %d for both", july.ExpectedPaise, july.DuePaise, rent+500000)
+	}
+	if aug.ExpectedPaise != rent+500000 {
+		t.Errorf("August expected = %d, want %d (the 20th is still to come)", aug.ExpectedPaise, rent+500000)
+	}
+	if aug.DuePaise != 500000 {
+		t.Errorf("August due = %d, want 500000 (only the 1st has come)", aug.DuePaise)
+	}
+
+	dash := computeRevenue([]stayRevenueRow{
+		{RentAmount: rent, RentCycle: "monthly", StartDate: date(2026, time.May, 20)},
+		{RentAmount: 500000, RentCycle: "monthly", StartDate: date(2026, time.May, 1)},
+	}, 0, insightsToday)
+	if dash.ExpectedThisMonth != aug.ExpectedPaise || dash.DueThisMonth != aug.DuePaise {
+		t.Errorf("dashboard %d/%d, Insights %d/%d — they must agree",
+			dash.ExpectedThisMonth, dash.DueThisMonth, aug.ExpectedPaise, aug.DuePaise)
+	}
+}
+
 // ── Occupancy series ─────────────────────────────────────────────────────────
 
 // A bed occupied for the whole month is 100%; a mid-month move-in is worth its

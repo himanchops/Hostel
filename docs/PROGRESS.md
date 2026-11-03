@@ -4028,6 +4028,63 @@ account that was every stay and payment the hostel had. No migration.
 Vercel and Render both reported success, `/health` answers and `/api/sites`
 answers 401 without a sign-in, as it should.
 
+## Expected means the whole month (Nov 2026)
+
+Owner, 3 Nov 2026, looking at Insights on the real account: "₹10,000 billed
+in these months · 0% of it paid" beside ₹6,000 collected, for a hostel of
+twenty tenants. "Billed" was rent that had fallen due by today, so on the 3rd
+it held only the tenants whose rent day is the 1st to the 3rd. The table row
+said 60% for the same month (₹6,000 ÷ ₹10,000, pooled) while the tile said
+0% (tenant by tenant: the one payment went to an earlier or later rent day
+than the ones due 1–3 Nov). He
+picked "add expected this month, in plain words" from three options.
+
+- **Expected is the whole month**, rent days still to come included
+  (`expectedCycles`, `insights.go`): what the month brings in if everyone
+  stays. Someone with a leaving date is not counted for a rent day on or
+  after it. Someone whose date has passed and who is still here bills as
+  usual, because only a human ends a stay. Past months are unchanged:
+  nothing is still to come in them.
+- **Due is the old figure, kept beside it**: `RevenuePoint.due_paise` and
+  the dashboard's `due_this_month`. They differ only for the month under way.
+- **The tile:** "₹40,700 · of ₹1,04,800 expected · ₹83,500 due so far ·
+  63% paid" (demo). A first version said "expected in November" and "63% of
+  it paid"; the owner found it crowded, and the page's subtitle already names
+  the months. The % is still tenant by tenant against rent due
+  (`computePaidShare`, his October choice). "Due so far" drops out once
+  nothing is still to come; before the first rent day it says "nothing due
+  yet".
+- **The three tiles are one height.** "Still owed now" is a link when anyone
+  owes, and its card stopped short of the others; `Tile`'s card is `h-full`
+  now. `insights.test.ts` measures them in a fixture where someone owes (in
+  one where nobody does, the tile is no link and was never short).
+- **All money's first tile says "rent and deposits, minus what went back"**,
+  not "rent and deposits, cash and UPI, less refunds" (owner: wordy).
+- **The table:** "Billed" is now "Expected". The month under way shows the
+  whole month with "₹83,500 due so far" under it and no %. The tile already
+  says "of ₹X expected", so the screen has one percentage for that month,
+  not two that disagree. A finished month keeps its %.
+- **The dashboard's "of ₹X expected"** is the whole month too, so its meter
+  is how far through the month's rent you are, and it still equals Insights'
+  row.
+- **`seed-demo.py` skips payments dated after today.** It paid every cycle a
+  few days after its rent day, this month's included, and the server refuses
+  a future date, so `make seed-demo-reset` failed on the 1st to the 12th of
+  every month.
+
+### Verification
+- `go test ./internal/handlers`: `TestComputeRevenue_LeavingDateTrimsExpectedNotDue`
+  (a leaving date before the rent day, after it, passed with them still
+  here, a daily guest's nights), `TestComputeRevenueSeries_ThisMonthExpectsRentDaysStillToCome`
+  (agrees with the dashboard). The dashboard's anchor-day, weekly/daily and
+  mixed-portfolio tests now pin both figures. Removing the "still here"
+  clamp fails the leaving-date test.
+- `owner/insights.test.ts`: a new test with rent days on the 1st and
+  tomorrow ("of ₹14,000 expected in <month>", "₹8,000 due so far · 100% of
+  it paid", no % on the row, the dashboard's "of ₹14,000 expected"). It
+  skips on a month's last day, when no rent day is still to come.
+- Screenshots on the demo at 375, 768 and 1024 with touch.
+
 ---
 
 ## Architecture Notes
