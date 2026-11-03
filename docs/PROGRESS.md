@@ -4124,7 +4124,9 @@ a portal he wants stashed, not removed. He picked the layout from a mockup.
 - Server (#73): `POST /public/register` no longer needs a password. Without
   one the tenant has no portal login, like one the owner adds by hand, and
   "Set portal password" on the tenant page still gives them one. A password
-  that is sent is still checked and kept.
+  that is sent is still checked and kept. Live 3 Nov 2026: Render and
+  Vercel deployed, `/health` ok, and a live registration with no password
+  is refused for the missing ID photo, not the password.
 - Form: three numbered steps, each about one thing. **About you** (name,
   phone number, workplace, address), **Emergency contact** (their name,
   their phone number, always stacked), **Your ID** (Aadhaar, photo of the
