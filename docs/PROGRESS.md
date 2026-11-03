@@ -4164,6 +4164,11 @@ because nothing is billed before the start date.
   10 Nov" stays as it was.
 - Tenant page: the stay's badge says "Arrives 10 Nov 2026", not "Active".
 - Dashboard: a site's row adds "· 1 arriving".
+- Legend order is now a rule, `BED_LIFE` (`StatusPill.tsx`): a bed's life,
+  left to right. Vacant and Arriving, then Paid, Partial and Overdue, then
+  Vacating and Confirm departure, with a divider between the groups. A group
+  wraps as one, so on a phone each takes its own line. `tests/unit/bed-life.test.ts`
+  fails if a status is left out of it.
 
 The bed is still taken: one open stay to a bed, unchanged. Lending it to
 someone else until the arrival is on the board, parked as rare.

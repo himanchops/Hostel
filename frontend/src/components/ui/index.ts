@@ -14,7 +14,7 @@ export { Avatar, EmptyAvatar, avatarColor, initials } from "./Avatar";
 export { Badge, CountBadge } from "./Badge";
 export { Banner } from "./Banner";
 export type { BadgeTone } from "./Badge";
-export { StatusPill, STATUS_STYLES } from "./StatusPill";
+export { BED_LIFE, StatusPill, STATUS_STYLES } from "./StatusPill";
 export { Drawer } from "./Drawer";
 export { Modal } from "./Modal";
 export { ConfirmProvider, useConfirm } from "./ConfirmDialog";

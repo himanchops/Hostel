@@ -30,6 +30,7 @@ import {
   PageHeader,
   NotFound,
   PageLoader,
+  BED_LIFE,
   STATUS_STYLES,
   Select,
   Skeleton,
@@ -255,14 +256,22 @@ export default function GridPage() {
           >
             All {totalBeds}
           </button>
-          {(Object.keys(STATUS_STYLES) as BedStatus[]).map((status) => (
-            <StatusPill
-              key={status}
-              status={status}
-              count={statusCounts[status] ?? 0}
-              active={filter === status}
-              onClick={() => setFilter(filter === status ? "all" : status)}
-            />
+          {/* A bed's life, in three groups (BED_LIFE). A group wraps as one,
+              so "leaving" never splits across lines, and its divider travels
+              with it rather than stranding at the end of a line. */}
+          {BED_LIFE.map((group, g) => (
+            <span key={group[0]} className="inline-flex items-center gap-2">
+              {g > 0 && <span aria-hidden className="mx-1 h-4 w-px bg-stone-300" />}
+              {group.map((status) => (
+                <StatusPill
+                  key={status}
+                  status={status}
+                  count={statusCounts[status] ?? 0}
+                  active={filter === status}
+                  onClick={() => setFilter(filter === status ? "all" : status)}
+                />
+              ))}
+            </span>
           ))}
           {/* The divider travels with the chip, so a wrap never strands it. */}
           <span className="inline-flex items-center gap-2">

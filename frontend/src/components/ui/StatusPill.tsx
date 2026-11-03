@@ -45,6 +45,18 @@ export const STATUS_STYLES: Record<
   },
 };
 
+/**
+ * The legend's order: a bed's life, left to right. Empty, someone coming;
+ * someone living there, from square to furthest behind; someone leaving, then
+ * someone who should have gone. A new status goes where it falls in that
+ * story, and the grid draws a divider between the three groups.
+ */
+export const BED_LIFE: readonly (readonly BedStatus[])[] = [
+  ["vacant", "arriving"],
+  ["paid", "partial", "overdue"],
+  ["vacating_soon", "departure_due"],
+];
+
 export function StatusPill({
   status,
   label,
