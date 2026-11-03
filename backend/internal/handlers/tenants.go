@@ -319,13 +319,21 @@ func (h *TenantHandler) PublicRegister(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse(errPhone))
 	}
 	req.Phone = phone
-	if msg := validatePassword(req.Password, 6); msg != "" {
-		return c.JSON(http.StatusBadRequest, errorResponse(msg))
-	}
-
-	hash, err := h.authService.HashPassword(req.Password)
-	if err != nil {
-		return serverError(c, err, "failed to process password")
+	// The form no longer asks for a password (Nov 2026): people registering
+	// found it confusing, and the portal is stashed for now. Without one the
+	// tenant has no portal login, the same as one the owner adds by hand,
+	// and the owner can give them one later from the tenant page
+	// (SetPortalPassword). One that is sent is still checked and kept.
+	var hash *string
+	if req.Password != "" {
+		if msg := validatePassword(req.Password, 6); msg != "" {
+			return c.JSON(http.StatusBadRequest, errorResponse(msg))
+		}
+		hashed, err := h.authService.HashPassword(req.Password)
+		if err != nil {
+			return serverError(c, err, "failed to process password")
+		}
+		hash = &hashed
 	}
 
 	// The front of an ID is the one upload registration insists on. The owner
