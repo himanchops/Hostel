@@ -4085,6 +4085,35 @@ picked "add expected this month, in plain words" from three options.
   skips on a month's last day, when no rent day is still to come.
 - Screenshots on the demo at 375, 768 and 1024 with touch.
 
+**Production, 3 Nov 2026: live.** Merged as `61b47f5` (#71), no migration.
+Vercel and Render both reported success, `/health` answers, and
+`/api/insights` and `/api/dashboard` answer 401 without a sign-in.
+
+---
+
+## Pending offers the poster's link (Nov 2026)
+
+Owner, 3 Nov 2026: is the registration link still working? It was. Live,
+`choprahostel.vercel.app/register` and `/register/4` both open "Welcome to
+Chopra Boys Hostel", and the old `hostel-ten-kappa.vercel.app` 307-redirects
+with the path kept. But Pending offered `/register/4` while the poster says
+`/register`, and he asked for the two to match.
+
+- `registrationLink` (`lib/registerOwner.ts`): the owner this deployment is
+  set up for (`NEXT_PUBLIC_REGISTER_OWNER_ID`, owner 4 on Vercel) is offered
+  `<origin>/register`; every other owner keeps `/register/:id`, which always
+  works. Nothing shows until the owner has loaded, where it used to read
+  `/register/undefined` for a moment.
+
+### Verification
+- `tests/unit/registerOwner.test.ts`: the owner it is set up for, another
+  owner, unset, a malformed setting, and no owner loaded yet.
+- `owner/pending-approval.test.ts`: a new owner is offered their own
+  `/register/:id`, whatever the dev server was started with.
+- By hand: a dev server started with the demo owner's id shows
+  `http://localhost:3000/register` on Pending, and `public/register-default`'s
+  configured-owner test passes against it.
+
 ---
 
 ## Architecture Notes
