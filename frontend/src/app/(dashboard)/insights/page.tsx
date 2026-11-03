@@ -42,7 +42,7 @@ const KIND: Record<MoneyEntryKind, { label: string; tone: BadgeTone; out: boolea
   deposit_to_rent: { label: "Paid from deposit", tone: "neutral", out: false },
   advance_returned: { label: "Rent refunded", tone: "warning", out: true },
   // Listed in the Rent view, never added up: no money moved. It is
-  // already out of the month's Billed figure (migration 017).
+  // already out of the month's Expected figure (migration 017).
   waived: { label: "Waived", tone: "neutral", out: false, noMoney: true },
 };
 
@@ -186,6 +186,12 @@ export default function InsightsPage() {
   const thisMonth = data?.occupancy.at(-1);
   const billed = data?.rent_billed_paise ?? 0;
   const paidShare = billed > 0 ? ((data?.rent_paid_paise ?? 0) / billed) * 100 : null;
+  // The whole of each month, rent days still to come included, beside what
+  // has fallen due by today. Expected was once only the second, which on the
+  // 3rd read ₹10,000 for a month worth ten times that.
+  const expectedTotal = sum((r) => r.expected_paise);
+  const stillToCome = revenue.some((r) => r.expected_paise > r.due_paise);
+  const span = revenue.length === 1 ? `in ${LONG_MONTHS[Number(revenue[0].month.slice(5, 7)) - 1]}` : "in these months";
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -234,16 +240,17 @@ export default function InsightsPage() {
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
             {view === "rent" ? (
               <>
-                {/* The % is paid against billed stay by stay, not collected
-                    against billed: pooled, one tenant's advance made up for
+                {/* The % is paid against rent due stay by stay, not collected
+                    against due: pooled, one tenant's advance made up for
                     another's debt, and "99% collected" sat beside ₹6,000
                     still owed (computePaidShare). */}
                 <Tile
                   label="Rent collected"
                   value={formatCurrency(totalCollected)}
-                  note={paidShare !== null
-                    ? `${formatCurrency(billed)} billed in these months · ${Math.floor(paidShare)}% of it paid`
-                    : "nothing billed in this range"}
+                  note={expectedTotal > 0 ? `of ${formatCurrency(expectedTotal)} expected ${span}` : "nothing expected in this range"}
+                  detail={paidShare !== null
+                    ? `${stillToCome ? `${formatCurrency(billed)} due so far · ` : ""}${Math.floor(paidShare)}% of it paid`
+                    : expectedTotal > 0 ? "nothing due yet" : undefined}
                 />
                 <Tile
                   label="Still owed now"
@@ -356,14 +363,16 @@ export default function InsightsPage() {
   );
 }
 
-function Tile({ label, value, note, href, valueClassName }: {
-  label: string; value: string; note?: string; href?: string; valueClassName?: string;
+/** `detail` is a second line under `note`, for a figure that answers a second question. */
+function Tile({ label, value, note, detail, href, valueClassName }: {
+  label: string; value: string; note?: string; detail?: string; href?: string; valueClassName?: string;
 }) {
   const body = (
     <Card>
       <p className="text-[13px] text-stone-500">{label}</p>
       <p className={`mt-1 text-2xl font-bold tabular-nums ${valueClassName ?? "text-stone-900"}`}>{value}</p>
       {note && <p className="mt-1 text-xs text-stone-400">{note}</p>}
+      {detail && <p className="mt-0.5 text-xs text-stone-400">{detail}</p>}
     </Card>
   );
   return href ? (
@@ -412,7 +421,7 @@ function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; t
             <th className={th}>Month</th>
             {view === "rent" ? (
               <>
-                <th className={th}>Billed</th>
+                <th className={th}>Expected</th>
                 <th className={`${th} w-[45%]`}>Collected</th>
               </>
             ) : (
@@ -428,7 +437,11 @@ function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; t
         <tbody>
           {rows.map((r) => {
             const isOpen = open === r.month;
-            const pct = r.expected_paise > 0 ? (r.collected_paise / r.expected_paise) * 100 : null;
+            // No % while rent days are still to come: the tile already says
+            // "₹X of ₹Y expected", and its % is of rent due. Two percentages
+            // for the same month once read 0% in one place and 60% in the other.
+            const underWay = r.due_paise !== r.expected_paise;
+            const pct = r.expected_paise > 0 && !underWay ? (r.collected_paise / r.expected_paise) * 100 : null;
             return (
               <Fragment key={r.month}>
                 <tr
@@ -451,7 +464,12 @@ function MonthTable({ rows, view, token }: { rows: RevenuePoint[]; view: View; t
                     <>
                       <td className={`${td} text-stone-500`}>
                         {r.expected_paise ? formatCurrency(r.expected_paise) : "—"}
-                        {/* Already out of Billed; said once, small, so the
+                        {/* This month only: the whole month is expected, and
+                            this much of it has fallen due by today. */}
+                        {underWay && (
+                          <span className="block whitespace-nowrap text-[11px] text-stone-400">{formatCurrency(Math.max(0, r.due_paise))} due so far</span>
+                        )}
+                        {/* Already out of Expected; said once, small, so the
                             figure explains itself without a column. */}
                         {r.waived_paise > 0 && (
                           <span className="block text-[11px] text-stone-400">{signed(-r.waived_paise)} waived</span>

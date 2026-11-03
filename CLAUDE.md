@@ -166,6 +166,13 @@ Key conventions to carry forward:
   stay's `end_date`, never `created_at`. Anything that reports collected rent
   or money in by month goes through `loadMoneyByMonth`, so the dashboard and
   Insights cannot drift.
+- **"Expected" is the whole month; "due" is what has fallen due by today**
+  (Nov 2026). Insights' `expected_paise` and the dashboard's
+  `expected_this_month` count every rent day in the month, including those
+  still to come (`expectedCycles`), trimmed only by a leaving date that has
+  not passed. `due_paise` / `due_this_month` is the old by-today figure. They
+  differ only for the month under way, which shows no % in its row, so the
+  tile's tenant-by-tenant % is the only one on screen.
 - **When rent is due comes from `dueFor`** (`handlers/due.go`): the oldest
   cycle not fully paid, via `paidThrough`. Screens word it with `lib/due.ts`
   and never work out a due date themselves. "Due soon" is one window,

@@ -90,7 +90,7 @@ test.describe("Waiving what is owed", () => {
     expect(month.expected_paise).toBe(500000);
     expect(month.collected_paise).toBe(0);
 
-    // On the Insights page: under that month's Billed, and in its lines,
+    // On the Insights page: under that month's Expected, and in its lines,
     // where Collected doesn't count it.
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const [y, m] = monthStart(-1).split("-").map(Number);

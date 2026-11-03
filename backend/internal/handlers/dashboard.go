@@ -36,7 +36,11 @@ type OccupancySummary struct {
 }
 
 type RevenueSummary struct {
+	// ExpectedThisMonth is the month's whole rent, rent days still to come
+	// included; DueThisMonth the part due by today. Insights' row for this
+	// month is the same pair.
 	ExpectedThisMonth  int64 `json:"expected_this_month"`
+	DueThisMonth       int64 `json:"due_this_month"`
 	CollectedThisMonth int64 `json:"collected_this_month"`
 	OverdueAmount      int64 `json:"overdue_amount"`
 	// StaysOpen is everyone billed now (open stays, bookings included), and
@@ -133,9 +137,10 @@ type stayRevenueRow struct {
 	StartDate  time.Time `db:"start_date"`
 	// EndDate is set for a stay that ended this month: it was billed this
 	// month, so it counts toward expected, but it no longer owes here.
-	EndDate   *time.Time `db:"end_date"`
-	Booking   bool       `db:"booking"`
-	TotalPaid int64      `db:"total_paid"`
+	EndDate     *time.Time `db:"end_date"`
+	ExpectedEnd *time.Time `db:"expected_end_date"` // see expectedCycles
+	Booking     bool       `db:"booking"`
+	TotalPaid   int64      `db:"total_paid"`
 	// Waiver is rent the owner waived (waivers.go): it covers what they owe,
 	// oldest month first, but is never collected.
 	Waived int64 `db:"waived"`
@@ -150,9 +155,10 @@ type stayRevenueRow struct {
 // the calendar month there) — the other two figures are derived from billing
 // cycles, which are anchored to each stay's start date, not to the calendar:
 //
-//   - ExpectedThisMonth counts only cycles that rolled over during the current
+//   - DueThisMonth counts only cycles that rolled over during the current
 //     calendar month, so a tenant whose anchor day falls later in the month has
-//     not been billed yet and contributes nothing. A stay that ended this month
+//     not been billed yet and contributes nothing. ExpectedThisMonth counts
+//     those later rent days too (expectedCycles). A stay that ended this month
 //     still counts what it was billed before it ended: it is the same figure as
 //     Insights' row for this month (billedCycles). Counting open stays only
 //     once read "₹75,000 of ₹69,500 expected" after two people settled.
@@ -163,6 +169,7 @@ type stayRevenueRow struct {
 func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time.Time) RevenueSummary {
 	firstOfMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
 	endOfLastMonth := firstOfMonth.Add(-24 * time.Hour)
+	lastDay := firstOfMonth.AddDate(0, 1, -1)
 
 	summary := RevenueSummary{CollectedThisMonth: collectedThisMonth}
 	for _, row := range stays {
@@ -170,12 +177,16 @@ func computeRevenue(stays []stayRevenueRow, collectedThisMonth int64, today time
 		if len(sched) == 0 {
 			sched = flatSchedule(row.StartDate, row.RentAmount)
 		}
-		// Expected this month: cycles billed by today, less those billed by
-		// the end of last month.
-		stay := insightStay{RentCycle: row.RentCycle, StartDate: row.StartDate, EndDate: row.EndDate, Booking: row.Booking}
+		// Due this month: cycles billed by today, less those billed by the end
+		// of last month. Expected: the same to the month's last day.
+		stay := insightStay{RentCycle: row.RentCycle, StartDate: row.StartDate, EndDate: row.EndDate,
+			ExpectedEnd: row.ExpectedEnd, Booking: row.Booking}
 		upTo, before := billedCycles(stay, today), billedCycles(stay, endOfLastMonth)
 		if upTo > before {
-			summary.ExpectedThisMonth += sched.billed(row.StartDate, row.RentCycle, before, upTo)
+			summary.DueThisMonth += sched.billed(row.StartDate, row.RentCycle, before, upTo)
+		}
+		if all := expectedCycles(stay, lastDay, today); all > before {
+			summary.ExpectedThisMonth += sched.billed(row.StartDate, row.RentCycle, before, all)
 		}
 
 		// Overdue: amount owed across all time
@@ -289,6 +300,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 			s.rent_cycle,
 			s.start_date,
 			s.end_date,
+			s.expected_end_date,
 			s.bed_id IS NULL AS booking,
 			COALESCE(SUM(p.amount) FILTER (WHERE p.is_approved = true AND p.kind = 'rent'), 0) AS total_paid,
 			`+waivedBeforeSQL+` AS waived
@@ -297,7 +309,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		LEFT JOIN payments p ON p.stay_id = s.id
 		WHERE t.owner_id = $1
 		  AND (s.end_date IS NULL OR s.end_date >= $2)
-		GROUP BY s.id, s.rent_amount, s.rent_cycle, s.start_date, s.end_date, s.bed_id
+		GROUP BY s.id, s.rent_amount, s.rent_cycle, s.start_date, s.end_date, s.expected_end_date, s.bed_id
 	`, ownerID, firstOfMonth.Format("2006-01-02"))
 	if err != nil {
 		return serverError(c, err, "failed to fetch stay data")
@@ -322,6 +334,7 @@ func (h *DashboardHandler) GetDashboard(c echo.Context) error {
 		return serverError(c, err, "failed to fetch waivers")
 	}
 	revenue.ExpectedThisMonth -= waived[firstOfMonth.Format("2006-01")]
+	revenue.DueThisMonth -= waived[firstOfMonth.Format("2006-01")]
 	revenue.DepositsInThisMonth = thisMonth.DepositsIn
 	revenue.ReturnedThisMonth = thisMonth.Returned
 	revenue.NetInThisMonth = thisMonth.netIn()
