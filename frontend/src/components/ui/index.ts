@@ -17,6 +17,7 @@ export type { BadgeTone } from "./Badge";
 export { BED_LIFE, StatusPill, STATUS_STYLES } from "./StatusPill";
 export { Drawer } from "./Drawer";
 export { Modal } from "./Modal";
+export { PhotoViewer, isPdf } from "./PhotoViewer";
 export { ConfirmProvider, useConfirm } from "./ConfirmDialog";
 export type { ConfirmOptions } from "./ConfirmDialog";
 export { EmptyState } from "./EmptyState";

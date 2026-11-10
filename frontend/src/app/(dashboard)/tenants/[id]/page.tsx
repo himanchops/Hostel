@@ -23,6 +23,9 @@ import {
   Input,
   Modal,
   PageHeader,
+  PhotoViewer,
+  isPdf,
+  TOUCH_TARGET,
   NotFound,
   PageLoader,
   Select,
@@ -65,16 +68,30 @@ function ProfileRow({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
-function IdLink({ label, url }: { label: string; url?: string | null }) {
+/**
+ * An ID scan. A photo opens in the viewer, inside the app; a PDF, which the
+ * viewer cannot draw, still opens in a new tab.
+ */
+function IdLink({ label, url, onView }: { label: string; url?: string | null; onView: (url: string) => void }) {
   if (!url) return null;
+  const className = `${TOUCH_LINK} gap-1 text-xs font-medium text-indigo-600 hover:underline`;
+  if (isPdf(url)) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className={className}>
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+        {label} (PDF)
+      </a>
+    );
+  }
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer"
-      className={`${TOUCH_LINK} gap-1 text-xs font-medium text-indigo-600 hover:underline`}>
+    <button type="button" onClick={() => onView(url)} className={className}>
       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.6-4.6a2 2 0 012.8 0L16 16m-2-2l1.6-1.6a2 2 0 012.8 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
       {label}
-    </a>
+    </button>
   );
 }
 
@@ -393,6 +410,8 @@ export default function TenantDetailPage() {
   // without a word (owner, Oct 2026).
   const [missing, setMissing] = useState<"notfound" | "failed" | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  /** The photo open full screen, with what to call it; null when none is. */
+  const [viewing, setViewing] = useState<{ url: string; caption: string } | null>(null);
 
   // Every stay's payments, loaded with the page, and which ledger is open.
   const [payments, setPayments] = useState<Record<number, Payment[]>>({});
@@ -639,11 +658,20 @@ export default function TenantDetailPage() {
         breadcrumb={[{ label: "Tenants", href: "/tenants" }, { label: tenant?.name ?? "" }]}
         title={
           <span className="flex items-center gap-4">
-            <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-100 text-xl font-bold text-indigo-600">
-              {tenant?.photo_url
-                ? <img src={tenant.photo_url} alt={tenant.name} className="h-full w-full object-cover" />
-                : tenant?.name[0]?.toUpperCase()}
-            </span>
+            {tenant?.photo_url ? (
+              <button
+                type="button"
+                onClick={() => setViewing({ url: tenant.photo_url!, caption: tenant.name })}
+                aria-label={`View ${tenant.name}'s photo`}
+                className={`${TOUCH_TARGET} h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-indigo-100 transition duration-150 ease-out hover:ring-2 hover:ring-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+              >
+                <img src={tenant.photo_url} alt="" className="h-full w-full object-cover" />
+              </button>
+            ) : (
+              <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-100 text-xl font-bold text-indigo-600">
+                {tenant?.name[0]?.toUpperCase()}
+              </span>
+            )}
             <span>
               {tenant?.name}
               <span className="block text-sm font-normal tabular-nums text-stone-500">{tenant?.phone}</span>
@@ -655,6 +683,13 @@ export default function TenantDetailPage() {
             {editingProfile ? "Cancel edit" : "Edit profile"}
           </Button>
         }
+      />
+
+      <PhotoViewer
+        src={viewing?.url ?? null}
+        alt={viewing?.caption ?? ""}
+        caption={viewing?.caption}
+        onClose={() => setViewing(null)}
       />
 
       {/* Profile card */}
@@ -673,8 +708,10 @@ export default function TenantDetailPage() {
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-stone-400">ID proof</p>
                 <div className="mt-1 flex gap-3">
-                  <IdLink label="Front" url={idProofFront} />
-                  <IdLink label="Back" url={idProofBack} />
+                  <IdLink label="Front" url={idProofFront}
+                    onView={(url) => setViewing({ url, caption: `${tenant.name} · ID front` })} />
+                  <IdLink label="Back" url={idProofBack}
+                    onView={(url) => setViewing({ url, caption: `${tenant.name} · ID back` })} />
                 </div>
               </div>
             )}
