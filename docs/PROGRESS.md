@@ -4216,6 +4216,36 @@ Frontend only.
 
 ---
 
+## Photos open full screen (Nov 2026)
+
+Owner, 10 Nov 2026: tapping the photo on a tenant's page did nothing, so
+there was no way to see it bigger. It was never stored small: photos are
+shrunk to 1600px on the long edge before upload (`lib/shrinkImage.ts`),
+and the page drew that in a 56px circle.
+
+- Tapping the photo opens it full screen over the page, on a dark
+  background, named at the top (`components/ui/PhotoViewer.tsx`). ×,
+  Escape, a tap outside the photo or a swipe down closes it. A tap on the
+  photo itself does nothing, so pinching in on small print never closes it.
+- **ID Front and Back open in the same viewer** instead of a new Safari
+  tab, which on the iPad meant leaving the app to look at a card. A PDF
+  scan, which an `<img>` cannot draw, still opens in a tab and says
+  "(PDF)" (`isPdf`).
+- If the photo fails to load, most likely a signed link more than an hour
+  old, the viewer says to reload the page.
+
+Frontend only.
+
+### Verification
+- `owner/photo-viewer.test.ts`: photo and ID front open and load; a tap on
+  the photo keeps it open; outside, × and Escape close it; a PDF back stays
+  a new-tab link; on a touch iPad a swipe down closes it and a short drag
+  does not.
+- Touch-target, layout and tenant-page suites pass; unit suite passes;
+  screenshots at 375×812, 768×1024 and 1024×768.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
