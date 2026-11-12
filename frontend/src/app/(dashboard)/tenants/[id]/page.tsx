@@ -48,6 +48,7 @@ import { PortalPasswordDialog } from "@/components/PortalPasswordDialog";
 import { RulesAgreed } from "@/components/HouseRules";
 import { RecordNoticeDialog } from "@/components/RecordNoticeDialog";
 import { ChangeRentDialog } from "@/components/ChangeRentDialog";
+import { ChangeMoveInDialog } from "@/components/ChangeMoveInDialog";
 import { MoveBedDialog } from "@/components/MoveBedDialog";
 import { NewStayDialog } from "@/components/NewStayDialog";
 import { MoveOutSheet } from "@/components/MoveOutSheet";
@@ -440,6 +441,7 @@ export default function TenantDetailPage() {
   // Recording (or amending) a notice — the plan to leave, not the leaving.
   const [noticeStay, setNoticeStay] = useState<Stay | null>(null);
   const [rentStay, setRentStay] = useState<Stay | null>(null);
+  const [moveInStay, setMoveInStay] = useState<Stay | null>(null);
   const [movingStay, setMovingStay] = useState<Stay | null>(null);
   const [startingStay, setStartingStay] = useState(false);
 
@@ -929,7 +931,19 @@ export default function TenantDetailPage() {
                       )}
                     </div>
                     <p className="mt-1 text-xs tabular-nums text-stone-400">
-                      {formatDay(stay.start_date)}
+                      {/* Rare, so the date itself is the control rather than
+                          another button in the row below. It is also the
+                          rent day, which is usually why it moves. */}
+                      {active ? (
+                        <button
+                          type="button"
+                          onClick={() => setMoveInStay(stay)}
+                          aria-label={`Change move-in date, ${formatDay(stay.start_date)}`}
+                          className={`${TOUCH_LINK} underline decoration-dotted underline-offset-2 hover:text-stone-600`}
+                        >
+                          {formatDay(stay.start_date)}
+                        </button>
+                      ) : formatDay(stay.start_date)}
                       {stay.end_date ? ` → ${formatDay(stay.end_date)}` : " → present"}
                       {" · "}
                       {stay.rent_changes && stay.rent_changes.length > 1
@@ -1307,6 +1321,22 @@ export default function TenantDetailPage() {
             loadSummary();
           }}
           onClose={() => setRentStay(null)}
+        />
+      )}
+
+      {token && (
+        <ChangeMoveInDialog
+          open={moveInStay !== null}
+          stay={moveInStay}
+          token={token}
+          tenantName={tenant?.name}
+          onSaved={(updated) => {
+            setStays((prev) => prev.map((s) => (s.id === updated.id ? withPlace(updated, s) : s)));
+            setMoveInStay(null);
+            // The rent day moved, so what is due and when moved with it.
+            loadSummary();
+          }}
+          onClose={() => setMoveInStay(null)}
         />
       )}
 

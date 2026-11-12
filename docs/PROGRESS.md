@@ -4246,6 +4246,38 @@ Frontend only.
 
 ---
 
+## Changing a stay's move-in date (Nov 2026)
+
+Owner, 12 Nov 2026: two tenants were written down as moving in on the 10th
+when their month really runs from the 15th, and no screen could change it.
+`PUT /api/stays/:id` had taken a `start_date` since S1, moving the rent
+schedule's first step with it. The only screen that sent one was "Rent
+from" in Assign bed, for a booking. Another case of a capability the
+backend had and no screen offered.
+
+- **The date on an open stay's card is the control** (dotted underline,
+  44px under a finger). It opens `components/ChangeMoveInDialog.tsx`: one
+  date, and a line saying what it will mean before saving. Monthly rent
+  falls due on that day of the month, a weekly rent on that weekday, and a
+  day still to come makes the bed read arriving. A rare action, so no fifth
+  button in the stay's row. An ended stay's date stays plain text.
+- **The server refuses a move-in day after a recorded bed move**, which
+  would have a stay change beds before it began and start the history by
+  room (`roomSpans`) in the wrong bed.
+- Payments recorded before the new day still count; nothing refuses them,
+  because a booking is often paid before arrival.
+
+### Verification
+- `owner/change-move-in.test.ts`: on a touch iPad, tapping the date and
+  moving it 3 days ahead shows the rent-day and arriving lines, saves, and
+  the bed reads arriving with the earlier payment still counted, nothing
+  owed. Through the API, a date after a move is refused and one on or before it is
+  accepted.
+- Touch-target, booking and tenant-ledger suites pass; screenshots at
+  375×812, 768×1024 and 1024×768.
+
+---
+
 ## Architecture Notes
 
 - **Amounts**: stored in paise (1 INR = 100 paise), displayed via `formatCurrency()`
