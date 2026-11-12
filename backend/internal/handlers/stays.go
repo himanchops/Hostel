@@ -309,6 +309,22 @@ func (h *StayHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, errorResponse("expected_end_date cannot be before start_date"))
 	}
 
+	// A bed move dated before the new move-in day would say they changed beds
+	// before they arrived, and the history by room (roomSpans) would start
+	// in the wrong bed.
+	if patch.has("start_date") && next.StartDate.After(current.StartDate) {
+		var earlyMoves int
+		if err := h.db.Get(&earlyMoves,
+			`SELECT COUNT(*) FROM stay_moves WHERE stay_id = $1 AND moved_on < $2`,
+			stayID, next.StartDate,
+		); err != nil {
+			return serverError(c, err, "failed to update stay")
+		}
+		if earlyMoves > 0 {
+			return c.JSON(http.StatusBadRequest, errorResponse("They changed beds before that date. Pick a move-in date on or before the move."))
+		}
+	}
+
 	// Reopening a stay (clearing end_date) must not collide with whoever is in
 	// the bed now.
 	if current.EndDate != nil && next.EndDate == nil && next.BedID != nil {
