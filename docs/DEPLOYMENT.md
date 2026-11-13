@@ -793,6 +793,50 @@ can read.
 
 ---
 
+## Backups (Nov 2026)
+
+Neon keeps its own short restore history. `make backup` is the copy that is
+yours: a `pg_dump` of production on this laptop, checked by restoring it.
+Run it in your own terminal, since the Neon URL is never stored here:
+
+```bash
+export NEON_URL='postgres://USER:PASSWORD@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require'
+make backup
+```
+
+What it does (`scripts/backup-db.sh`):
+- Dumps to `~/Backups/hostel/hostel-YYYY-MM-DD-HHMM.dump` (or `$BACKUP_DIR`),
+  in a folder only you can read. It's outside the repo because the repo is public
+  and the dump holds every tenant's Aadhaar and phone number. The files are plain,
+  by choice; FileVault (System Settings → Privacy & Security) is how to
+  encrypt them if that changes.
+- Restores the file into a scratch local database (`hostel_backup_check`,
+  dropped after) and compares every table's row count with production. It
+  prints "Checked" only when they all match. A mismatch, or local Postgres
+  not running, keeps the file but says **NOT verified** and exits non-zero.
+- Reads only `$NEON_URL`, never `DATABASE_URL`, and never prints or saves it.
+- Deletes nothing. Old dumps stay until you remove them.
+
+When to run it: before any migration, and every week or two otherwise.
+
+### Restoring one (read before you need it)
+
+Never restore over the live database. Restore into a new, empty one, look
+at it, and only then point the backend at it:
+
+1. Create an empty database: in Neon, a new branch or a new database on the
+   project, and copy its connection string.
+2. Load the dump into it:
+   ```bash
+   pg_restore --no-owner --no-acl --dbname="$NEW_URL" ~/Backups/hostel/hostel-YYYY-MM-DD-HHMM.dump
+   ```
+3. Check it: `psql "$NEW_URL" -c "SELECT count(*) FROM tenants"`, and log in
+   against a local backend pointed at it (`DATABASE_URL="$NEW_URL" make backend`).
+4. Only then change `DATABASE_URL` on Render to the new connection string.
+
+Uploads (photos, ID scans) live in R2, not in the database, and are not in
+the dump. A restored database points at the same files by key.
+
 ## Things deliberately not automated yet
 
 - **Migrations** are still run manually from your laptop against the Neon URL.
@@ -800,5 +844,6 @@ can read.
 - **Email** (password reset, verification) is not set up. Skip until you have
   a second user asking for it — but read "Password recovery" above first, so
   the manual path is one you have seen before you need it.
-- **Backups.** Neon takes its own snapshots on the free tier. If you want
-  an off-site copy, add a daily `pg_dump` cron from your laptop.
+- **Backups** are taken by hand with `make backup` (see "Backups" above).
+  A daily job would need the Neon URL stored on the laptop, and you chose
+  not to (Nov 2026).

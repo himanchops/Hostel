@@ -19,6 +19,9 @@ make frontend
 
 # Build backend binary
 make build-backend
+
+# Back up production (NEON_URL from your own shell) — docs/DEPLOYMENT.md → "Backups"
+make backup
 ```
 
 ## Project Structure

@@ -14,7 +14,7 @@ LOCAL_DB := postgres://hostel:hostel_dev@localhost:5432/hostel?sslmode=disable
 # See docs/DEPLOYMENT.md, "Future migrations".
 DATABASE_URL ?= $(LOCAL_DB)
 
-.PHONY: board dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset seed-hostel seed-hostel-dry verify-backend verify-frontend import-notebook import-notebook-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
+.PHONY: backup board dev setup db-up db-down migrate backend frontend seed-demo seed-demo-reset seed-hostel seed-hostel-dry verify-backend verify-frontend import-notebook import-notebook-dry storage-check playwright-install test-e2e test-e2e-ui test-e2e-debug fix-tests clean-e2e-data
 
 # One-shot setup: install deps, start DB, migrate, then run backend + frontend in parallel
 setup:
@@ -223,3 +223,9 @@ BOARD ?= $(HOME)/Projects/board
 board:
 	@test -f "$(BOARD)/board.py" || (echo "No board at $(BOARD). Set BOARD=/path/to/board." && exit 1)
 	@python3 "$(BOARD)/board.py"
+
+# Backs up production to ~/Backups/hostel and restores the copy into a scratch
+# local database to prove it. Reads $NEON_URL from your own shell, never from
+# DATABASE_URL, and never writes the URL down. docs/DEPLOYMENT.md → "Backups".
+backup:
+	@./scripts/backup-db.sh
