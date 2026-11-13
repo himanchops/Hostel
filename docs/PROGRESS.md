@@ -4246,7 +4246,7 @@ Frontend only.
 
 ---
 
-## Changing a stay's move-in date (Nov 2026)
+## Changing a stay's move-in date (Nov 2026) — live 12 Nov 2026 (#78)
 
 Owner, 12 Nov 2026: two tenants were written down as moving in on the 10th
 when their month really runs from the 15th, and no screen could change it.
@@ -4275,6 +4275,36 @@ backend had and no screen offered.
   accepted.
 - Touch-target, booking and tenant-ledger suites pass; screenshots at
   375×812, 768×1024 and 1024×768.
+
+---
+
+## Backing up the database (Nov 2026)
+
+Production had held real tenants and money since 21 Oct with no copy
+anywhere but Neon. `make backup` (`scripts/backup-db.sh`) dumps it to
+`~/Backups/hostel` and proves the file by restoring it into a scratch local
+database and comparing every table's row count.
+
+Two choices the owner made (13 Nov 2026):
+- **By hand, not on a schedule.** A daily job needs the Neon URL kept on
+  the laptop, and it never has been. The script reads `$NEON_URL` from the
+  owner's own shell, as migrations do.
+- **Plain files.** FileVault is off on this laptop, so the dumps (Aadhaar
+  numbers included) are protected only by a 700 folder outside the public
+  repo. Encrypting them was offered and declined for now.
+
+Uploads in R2 are not covered; the dump keeps the keys that point at them.
+Restoring is a runbook in `docs/DEPLOYMENT.md` → "Backups": always into a
+new database first, never over the live one.
+
+### Verification
+- Run against the local database standing in for production: dump saved
+  with mode 600 in a 700 folder; 13 tables, 76,136 rows restored and
+  matching; scratch database gone afterwards.
+- With `NEON_URL` unset it says how to set it and exits 1. With a restored
+  count forced to differ, it prints the differing table, says NOT verified
+  and exits 1.
+- Not yet run against production: that is the owner's first `make backup`.
 
 ---
 
